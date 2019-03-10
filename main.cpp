@@ -1,6 +1,9 @@
 #include <iostream>
 #include <random>
 #include <chrono>
+#include <cassert>
+#include <algorithm>
+#include <cstring>
 
 /****************************
 *  SIMD definitions
