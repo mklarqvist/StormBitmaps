@@ -29,7 +29,8 @@
 #endif
 
 //temp
-#define __AVX2__ 1
+//#define __AVX512F__ 1
+//#define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -74,7 +75,7 @@
 #define PIL_POPCOUNT __builtin_popcountll
 #endif
 
-#if SIMD_AVAILABLE
+#if SIMD_VERSION >= 3
 __attribute__((always_inline))
 static inline void PIL_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
     a += PIL_POPCOUNT(_mm_cvtsi128_si64(n)) + PIL_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n)));
@@ -120,6 +121,7 @@ uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const
     return(count);
 }
 
+#if SIMD_VERSION >= 3
 uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
     const __m128i* r1 = (__m128i*)b1;
@@ -150,6 +152,10 @@ uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint
     }
     return(count);
 }
+#else
+uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
+uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
+#endif // sse4 available
 
 #if SIMD_VERSION >= 5
 
@@ -193,7 +199,46 @@ uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint
     return(count);
 }
 
-#endif
+#else
+uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
+uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
+#endif // endif avx2
+
+#if SIMD_VERSION >= 6
+
+__attribute__((always_inline))
+static inline __m512i avx512_popcount(const __m512i v) {
+    const __m512i m1 = _mm512_set1_epi8(0x55);
+    const __m512i m2 = _mm512_set1_epi8(0x33);
+    const __m512i m4 = _mm512_set1_epi8(0x0F);
+
+    const __m512i t1 = _mm512_sub_epi8(v,       (_mm512_srli_epi16(v,  1) & m1));
+    const __m512i t2 = _mm512_add_epi8(t1 & m2, (_mm512_srli_epi16(t1, 2) & m2));
+    const __m512i t3 = _mm512_add_epi8(t2, _mm512_srli_epi16(t2, 4)) & m4;
+    return _mm512_sad_epu8(t3, _mm512_setzero_si512());
+}
+
+uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count = 0;
+    const __m512i* r1 = (__m512i*)b1;
+    const __m512i* r2 = (__m512i*)b2;
+    const uint32_t n_cycles = n_ints / 8;
+    __m512i sum = _mm512_set1_epi32(0);
+
+    for(int i = 0; i < n_cycles; ++i) {
+        sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[i], r2[i])));
+    }
+
+    uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
+    for(int i = 0; i < 16; ++i)
+        count += v[i];
+
+    return(count);
+}
+
+#else
+uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
+#endif // endif avx2
 
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
     struct control_word {
@@ -335,7 +380,7 @@ bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_
     uint32_t inner_offset = 0;
     uint64_t total = 0;
     for(int i = 0; i < n_variants; ++i) {
-       inner_offset = offset + n_ints;
+        inner_offset = offset + n_ints;
        for(int j = i + 1; j < n_variants; ++j, inner_offset += n_ints) {
            total += (*f)(&vals[offset], &vals[inner_offset], pos[i], pos[j]);
        }
@@ -361,125 +406,137 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
     //uint64_t times_local[9];
 
     // Setup
-    uint32_t n_samples = 8192;
-    uint32_t n_ints_sample = 8192 / 64;
-    uint32_t n_variants = 5000;
+    std::vector<uint32_t> samples = {256, 2048, 8192, 32768};
+    for(int s = 0; s < samples.size(); ++s) {
+        uint32_t n_ints_sample = samples[s] / 64;
+        uint32_t n_variants = 5000;
 
-    std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
-    std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint32_t) << std::endl;
-    uint64_t* vals;
-    assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
+        std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
+        std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint32_t) << std::endl;
+        uint64_t* vals;
+        assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
-    std::vector<uint32_t> n_alts = {3, 10, 50, 100, n_samples/10, n_samples/4, n_samples/2};
+        std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
 
-    for(int a = 0; a < n_alts.size(); ++a) {
-        // Allocation
-        memset(vals, 0, n_ints_sample*n_variants*sizeof(uint32_t));
+        for(int a = 0; a < n_alts.size(); ++a) {
+            if(n_alts[a] == 0) continue;
+            // Allocation
+            memset(vals, 0, n_ints_sample*n_variants*sizeof(uint64_t));
 
-        // PRNG
-        std::uniform_int_distribution<uint32_t> distr(0, n_samples-1); // right inclusive
+            // PRNG
+            std::uniform_int_distribution<uint32_t> distr(0, samples[s]-1); // right inclusive
 
-        // Positional information
-        std::vector< std::vector<uint32_t> > pos;
-        std::vector< std::vector<uint32_t> > pos_integer;
-        std::vector< std::vector<uint32_t> > pos_reg128;
-        std::vector< std::vector<uint32_t> > pos_reg256;
+            // Positional information
+            std::vector< std::vector<uint32_t> > pos(n_variants, std::vector<uint32_t>());
+            std::vector< std::vector<uint32_t> > pos_integer(n_variants, std::vector<uint32_t>());
+            std::vector< std::vector<uint32_t> > pos_reg128(n_variants, std::vector<uint32_t>());
+            std::vector< std::vector<uint32_t> > pos_reg256(n_variants, std::vector<uint32_t>());
 
-        // Draw
-        //uint32_t offset = 0;
-        uint64_t* vals2 = vals;
-        for(uint32_t j = 0; j < n_variants; ++j) {
-            pos.push_back(std::vector<uint32_t>());
-            for(uint32_t i = 0; i < n_alts[a]; ++i) {
-                //vals[(offset + i) / 32] |= 1 << distr(eng);
-                uint32_t val = distr(eng);
-                if((vals2[val / 64] & (1L << (val % 64))) == 0) {
-                    pos.back().push_back(val);
+            // Draw
+            //uint32_t offset = 0;
+            uint64_t* vals2 = vals;
+            for(uint32_t j = 0; j < n_variants; ++j) {
+                //pos.push_back(std::vector<uint32_t>());
+                for(uint32_t i = 0; i < n_alts[a]; ++i) {
+                    //vals[(offset + i) / 32] |= 1 << distr(eng);
+                    uint32_t val = distr(eng);
+                    if((vals2[val / 64] & (1L << (val % 64))) == 0) {
+                        pos[j].push_back(val);
+                    }
+                    //std::cerr << "setting=" << offset+i << std::endl;
+                    vals2[val / 64] |= (1L << (val % 64));
                 }
-                //std::cerr << "setting=" << offset+i << std::endl;
-                vals2[val / 64] |= (1L << (val % 64));
+                vals2 += n_ints_sample;
+
+                // Sort to simplify
+                std::sort(pos[j].begin(), pos[j].end());
+                //for(int p = 0; p < pos.back().size(); ++p) std::cerr << " " << pos.back()[p];
+                //std::cerr << std::endl;
+
+                // Todo
+                // Collapse positions into integers
+               // pos_integer.push_back(std::vector<uint32_t>());
+                pos_integer[j].push_back(pos[j][0] / 64);
+
+                for(int p = 1; p < pos[j].size(); ++p) {
+                    uint32_t idx = pos[j][p] / 64;
+                    if(pos_integer[j].back() != idx) pos_integer[j].push_back(idx);
+                }
+
+                //for(int p = 0; p < pos_integer.back().size(); ++p) std::cerr << " " << pos_integer.back()[p];
+                //std::cerr << std::endl;
+
+                // Todo
+                // Collapse positions into registers
+                //pos_reg128.push_back(std::vector<uint32_t>());
+                pos_reg128[j].push_back(pos[j][0] / 128);
+
+                for(int p = 1; p < pos[j].size(); ++p) {
+                    uint32_t idx = pos[j][p] / 128;
+                    if(pos_reg128[j].back() != idx) pos_reg128[j].push_back(idx);
+                }
+
+                // Todo
+                // Collapse positions into 256-registers
+                //pos_reg256.push_back(std::vector<uint32_t>());
+                pos_reg256[j].push_back(pos[j][0] / 256);
+
+                for(int p = 1; p < pos[j].size(); ++p) {
+                    uint32_t idx = pos[j][p] / 256;
+                    if(pos_reg256[j].back() != idx) pos_reg256[j].push_back(idx);
+                }
+
+                // Todo print averages
+                //std::cerr << pos.back().size() << "->" << pos_integer.back().size() << "->" << pos_reg128.back().size() << std::endl;
             }
-            vals2 += n_ints_sample;
 
-            // Sort to simplify
-            std::sort(pos.back().begin(), pos.back().end());
-            //for(int p = 0; p < pos.back().size(); ++p) std::cerr << " " << pos.back()[p];
-            //std::cerr << std::endl;
+            //uint32_t offset = 0;
+            /*for(int i = 0; i < n_variants; ++i) {
+                construct_ewah64(&vals[offset], n_ints_sample);
+                offset += n_ints_sample;
+            }
+            */
 
-            // Todo
-            // Collapse positions into integers
-            pos_integer.push_back(std::vector<uint32_t>());
-            pos_integer.back().push_back(pos.back()[0] / 64);
+            // Scalar 1
+            bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
 
-            for(int p = 1; p < pos.back().size(); ++p) {
-                uint32_t idx = pos.back()[p] / 64;
-                if(pos_integer.back().back() != idx) pos_integer.back().push_back(idx);
+            // Scalar-list
+            if(n_alts[a] < 200) {
+                bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
+            } else {
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
 
-            //for(int p = 0; p < pos_integer.back().size(); ++p) std::cerr << " " << pos_integer.back()[p];
-            //std::cerr << std::endl;
+            // Scalar-int-list
+            bench_t m5 = flwrapper<&intersect_bitmaps_scalar_intlist>(n_variants, vals, n_ints_sample, pos_integer);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
 
-            // Todo
-            // Collapse positions into registers
-            pos_reg128.push_back(std::vector<uint32_t>());
-            pos_reg128.back().push_back(pos.back()[0] / 128);
+            // SIMD SSE4
+            bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
 
-            for(int p = 1; p < pos.back().size(); ++p) {
-                uint32_t idx = pos.back()[p] / 128;
-                if(pos_reg128.back().back() != idx) pos_reg128.back().push_back(idx);
-            }
+            // SIMD SSE4-list
+            bench_t m6 = flwrapper<&intersect_bitmaps_sse4_list>(n_variants, vals, n_ints_sample, pos_reg128);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list\t" << m6.milliseconds << "\t" << m6.count << "\t" << m6.throughput << std::endl;
 
-            // Todo
-            // Collapse positions into 256-registers
-            pos_reg256.push_back(std::vector<uint32_t>());
-            pos_reg256.back().push_back(pos.back()[0] / 256);
+            // SIMD AVX2
+            bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
 
-            for(int p = 1; p < pos.back().size(); ++p) {
-                uint32_t idx = pos.back()[p] / 256;
-                if(pos_reg256.back().back() != idx) pos_reg256.back().push_back(idx);
-            }
+            // SIMD AVX2-list
+            bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
 
-            // Todo print averages
-            //std::cerr << pos.back().size() << "->" << pos_integer.back().size() << "->" << pos_reg128.back().size() << std::endl;
+            // SIMD AVX512
+            bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+
         }
 
-        uint32_t offset = 0;
-        /*for(int i = 0; i < n_variants; ++i) {
-            construct_ewah64(&vals[offset], n_ints_sample);
-            offset += n_ints_sample;
-        }
-        */
-
-        // Scalar 1
-        bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
-        std::cerr << n_alts[a] << "\tscalar-bit\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
-
-        // Scalar-list
-        bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
-        std::cerr << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
-
-        // Scalar-int-list
-        bench_t m5 = flwrapper<&intersect_bitmaps_scalar_intlist>(n_variants, vals, n_ints_sample, pos_integer);
-        std::cerr << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
-
-        // SIMD SSE4
-        bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-        std::cerr << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-
-        // SIMD SSE4-list
-        bench_t m6 = flwrapper<&intersect_bitmaps_sse4_list>(n_variants, vals, n_ints_sample, pos_reg128);
-        std::cerr << n_alts[a] << "\tsse4-list\t" << m6.milliseconds << "\t" << m6.count << "\t" << m6.throughput << std::endl;
-
-        // SIMD AVX2
-        bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
-        std::cerr << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
-
-        // SIMD AVX2-list
-        bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
-        std::cerr << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
+        delete[] vals;
     }
-
-    delete[] vals;
 }
 
 int main(int argc, char **argv) {
