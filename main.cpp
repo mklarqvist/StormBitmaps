@@ -240,7 +240,6 @@ uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const ui
     uint64_t count = 0;
     const __m512i* r1 = (__m512i*)b1;
     const __m512i* r2 = (__m512i*)b2;
-    const uint32_t n_cycles = n_ints / 8;
     __m512i sum = _mm512_set1_epi32(0);
 
     if(l1.size() < l2.size()) {
