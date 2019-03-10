@@ -236,8 +236,36 @@ uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_
     return(count);
 }
 
+uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+    uint64_t count = 0;
+    const __m512i* r1 = (__m512i*)b1;
+    const __m512i* r2 = (__m512i*)b2;
+    const uint32_t n_cycles = n_ints / 8;
+    __m512i sum = _mm512_set1_epi32(0);
+
+    if(l1.size() < l2.size()) {
+        for(int i = 0; i < l1.size(); ++i) {
+            sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[l1[i]], r2[l1[i]])));
+            //PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+        }
+    } else {
+        for(int i = 0; i < l2.size(); ++i) {
+            sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[l2[i]], r2[l2[i]])));
+            //PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+        }
+    }
+
+    uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
+    for(int i = 0; i < 16; ++i)
+        count += v[i];
+
+    return(count);
+}
+
+
 #else
 uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
+uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
 #endif // endif avx2
 
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
@@ -398,7 +426,6 @@ bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_
 }
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
-
     std::random_device rd; // obtain a random number from hardware
     std::mt19937 eng(rd()); // seed the generator
 
@@ -431,6 +458,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             std::vector< std::vector<uint32_t> > pos_integer(n_variants, std::vector<uint32_t>());
             std::vector< std::vector<uint32_t> > pos_reg128(n_variants, std::vector<uint32_t>());
             std::vector< std::vector<uint32_t> > pos_reg256(n_variants, std::vector<uint32_t>());
+            std::vector< std::vector<uint32_t> > pos_reg512(n_variants, std::vector<uint32_t>());
 
             // Draw
             //uint32_t offset = 0;
@@ -486,6 +514,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                     if(pos_reg256[j].back() != idx) pos_reg256[j].push_back(idx);
                 }
 
+                // Todo
+                // Collapse positions into 512-registers
+                //pos_reg512.push_back(std::vector<uint32_t>());
+                pos_reg512[j].push_back(pos[j][0] / 512);
+
+                for(int p = 1; p < pos[j].size(); ++p) {
+                    uint32_t idx = pos[j][p] / 512;
+                    if(pos_reg512[j].back() != idx) pos_reg512[j].push_back(idx);
+                }
+
                 // Todo print averages
                 //std::cerr << pos.back().size() << "->" << pos_integer.back().size() << "->" << pos_reg128.back().size() << std::endl;
             }
@@ -533,6 +571,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
 
+            // SIMD AVX512-list
+            bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
         }
 
         delete[] vals;
