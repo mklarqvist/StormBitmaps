@@ -2,8 +2,8 @@
 #include <random>
 #include <chrono>
 #include <cassert>
-#include <algorithm>
 #include <cstring>
+#include <algorithm>
 
 /****************************
 *  SIMD definitions
@@ -27,6 +27,9 @@
      /* GCC-compatible compiler, targeting PowerPC with SPE */
      #include <spe.h>
 #endif
+
+//temp
+#define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -148,6 +151,50 @@ uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint
     return(count);
 }
 
+#if SIMD_VERSION >= 5
+
+#ifndef PIL_POPCOUNT_AVX2
+#define PIL_POPCOUNT_AVX2(A, B) {                  \
+    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+}
+#endif
+
+uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count = 0;
+    const __m256i* r1 = (__m256i*)b1;
+    const __m256i* r2 = (__m256i*)b2;
+    const uint32_t n_cycles = n_ints / 4;
+
+    for(int i = 0; i < n_cycles; ++i) {
+        PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
+    }
+
+    return(count);
+}
+
+uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+    uint64_t count = 0;
+
+    const __m256i* r1 = (__m256i*)b1;
+    const __m256i* r2 = (__m256i*)b2;
+
+    if(l1.size() < l2.size()) {
+        for(int i = 0; i < l1.size(); ++i) {
+            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+        }
+    } else {
+        for(int i = 0; i < l2.size(); ++i) {
+            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+        }
+    }
+    return(count);
+}
+
+#endif
+
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
     struct control_word {
         uint64_t type: 1, symbol: 1, length: 62;
@@ -237,8 +284,75 @@ void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
 
 }
 
+// Convenience wrapper
+struct bench_t {
+    uint64_t count;
+    uint32_t milliseconds;
+    double throughput;
+};
+
+/**<
+ * Upper-triangular component of variant square matrix. This templated function
+ * requires the target function pointer as a template. Example usage:
+ *
+ * fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+ *
+ * @param n_variants Number of input variants.
+ * @param vals       Raw data.
+ * @param n_ints     Number of ints/sample.
+ * @return           Returns a populated bench_t struct.
+ */
+template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints)>
+bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    uint32_t offset = 0;
+    uint32_t inner_offset = 0;
+    uint64_t total = 0;
+    for(int i = 0; i < n_variants; ++i) {
+        inner_offset = offset + n_ints;
+        for(int j = i + 1; j < n_variants; ++j, inner_offset += n_ints) {
+            total += (*f)(&vals[offset], &vals[inner_offset], n_ints);
+        }
+        offset += n_ints;
+    }
+
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+    b.throughput = ((n_comps*n_ints*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+
+    return(b);
+}
+
+template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2)>
+bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints, const std::vector< std::vector<uint32_t> >& pos) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    uint32_t offset = 0;
+    uint32_t inner_offset = 0;
+    uint64_t total = 0;
+    for(int i = 0; i < n_variants; ++i) {
+       inner_offset = offset + n_ints;
+       for(int j = i + 1; j < n_variants; ++j, inner_offset += n_ints) {
+           total += (*f)(&vals[offset], &vals[inner_offset], pos[i], pos[j]);
+       }
+       offset += n_ints;
+    }
+
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+    b.throughput = ((n_comps*n_ints*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+
+    return(b);
+}
+
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
-    std::cerr << "Generating flags: " << n << std::endl;
 
     std::random_device rd; // obtain a random number from hardware
     std::mt19937 eng(rd()); // seed the generator
@@ -249,13 +363,14 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
     uint32_t n_samples = 8192;
     uint32_t n_ints_sample = 8192 / 64;
-    uint32_t n_variants = 50000;
+    uint32_t n_variants = 5000;
 
+    std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
     std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint32_t) << std::endl;
     uint64_t* vals;
-    assert(!posix_memalign((void**)&vals, 16, n_ints_sample*n_variants*sizeof(uint64_t)));
+    assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
-    std::vector<uint32_t> n_alts = {10, 100, 1000, 4000};
+    std::vector<uint32_t> n_alts = {3, 10, 50, 100, n_samples/10, n_samples/4, n_samples/2};
 
     for(int a = 0; a < n_alts.size(); ++a) {
         // Allocation
@@ -268,6 +383,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         std::vector< std::vector<uint32_t> > pos;
         std::vector< std::vector<uint32_t> > pos_integer;
         std::vector< std::vector<uint32_t> > pos_reg128;
+        std::vector< std::vector<uint32_t> > pos_reg256;
 
         // Draw
         //uint32_t offset = 0;
@@ -313,111 +429,54 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 if(pos_reg128.back().back() != idx) pos_reg128.back().push_back(idx);
             }
 
+            // Todo
+            // Collapse positions into 256-registers
+            pos_reg256.push_back(std::vector<uint32_t>());
+            pos_reg256.back().push_back(pos.back()[0] / 256);
+
+            for(int p = 1; p < pos.back().size(); ++p) {
+                uint32_t idx = pos.back()[p] / 256;
+                if(pos_reg256.back().back() != idx) pos_reg256.back().push_back(idx);
+            }
+
             // Todo print averages
             //std::cerr << pos.back().size() << "->" << pos_integer.back().size() << "->" << pos_reg128.back().size() << std::endl;
         }
 
         uint32_t offset = 0;
-        for(int i = 0; i < n_variants; ++i) {
+        /*for(int i = 0; i < n_variants; ++i) {
             construct_ewah64(&vals[offset], n_ints_sample);
             offset += n_ints_sample;
         }
+        */
 
         // Scalar 1
-        std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+        bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
+        std::cerr << n_alts[a] << "\tscalar-bit\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
 
-        offset = 0;
-        uint32_t inner_offset = 0;
-        uint64_t total = 0;
-        for(int i = 0; i < n_samples; ++i) {
-            inner_offset = offset + n_ints_sample;
-            for(int j = i + 1; j < n_samples; ++j, inner_offset += n_ints_sample) {
-                total += intersect_bitmaps_scalar(&vals[offset], &vals[inner_offset], n_ints_sample);
-            }
-            offset += n_ints_sample;
-        }
+        // Scalar-list
+        bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
+        std::cerr << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
 
-        std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-        auto time_span = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-
-        std::cerr << n_alts[a] << "\tscalar-bit time=" << time_span.count() << " total=" << total << std::endl;
+        // Scalar-int-list
+        bench_t m5 = flwrapper<&intersect_bitmaps_scalar_intlist>(n_variants, vals, n_ints_sample, pos_integer);
+        std::cerr << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
 
         // SIMD SSE4
-        t1 = std::chrono::high_resolution_clock::now();
+        bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+        std::cerr << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
 
-        offset = 0;
-        inner_offset = 0;
-        total = 0;
-        for(int i = 0; i < n_samples; ++i) {
-            inner_offset = offset + n_ints_sample;
-            for(int j = i + 1; j < n_samples; ++j, inner_offset += n_ints_sample) {
-                total += intersect_bitmaps_sse4(&vals[offset], &vals[inner_offset], n_ints_sample);
-            }
-            offset += n_ints_sample;
-        }
+        // SIMD SSE4-list
+        bench_t m6 = flwrapper<&intersect_bitmaps_sse4_list>(n_variants, vals, n_ints_sample, pos_reg128);
+        std::cerr << n_alts[a] << "\tsse4-list\t" << m6.milliseconds << "\t" << m6.count << "\t" << m6.throughput << std::endl;
 
-        t2 = std::chrono::high_resolution_clock::now();
-        time_span = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+        // SIMD AVX2
+        bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
+        std::cerr << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
 
-        std::cerr << n_alts[a] << "\tsse4 time=" << time_span.count() << " total=" << total << std::endl;
-
-        // Scalar list
-        t1 = std::chrono::high_resolution_clock::now();
-
-        offset = 0;
-        inner_offset = 0;
-        total = 0;
-        for(int i = 0; i < n_samples; ++i) {
-           inner_offset = offset + n_ints_sample;
-           for(int j = i + 1; j < n_samples; ++j, inner_offset += n_ints_sample) {
-               total += intersect_bitmaps_scalar_list(&vals[offset], &vals[inner_offset], pos[i], pos[j]);
-           }
-           offset += n_ints_sample;
-        }
-
-        t2 = std::chrono::high_resolution_clock::now();
-        time_span = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-
-        std::cerr << n_alts[a] << "\tscalar-list time=" << time_span.count() << " total=" << total << std::endl;
-
-        // Scalar integer list
-        t1 = std::chrono::high_resolution_clock::now();
-
-        offset = 0;
-        inner_offset = 0;
-        total = 0;
-        for(int i = 0; i < n_samples; ++i) {
-           inner_offset = offset + n_ints_sample;
-           for(int j = i + 1; j < n_samples; ++j, inner_offset += n_ints_sample) {
-               total += intersect_bitmaps_scalar_intlist(&vals[offset], &vals[inner_offset], pos_integer[i], pos_integer[j]);
-           }
-           offset += n_ints_sample;
-        }
-
-        t2 = std::chrono::high_resolution_clock::now();
-        time_span = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-
-        std::cerr << n_alts[a] << "\tscalar-intlist time=" << time_span.count() << " total=" << total << std::endl;
-
-
-        // SSE4 list
-        t1 = std::chrono::high_resolution_clock::now();
-
-        offset = 0;
-        inner_offset = 0;
-        total = 0;
-        for(int i = 0; i < n_samples; ++i) {
-           inner_offset = offset + n_ints_sample;
-           for(int j = i + 1; j < n_samples; ++j, inner_offset += n_ints_sample) {
-               total += intersect_bitmaps_sse4_list(&vals[offset], &vals[inner_offset], pos_reg128[i], pos_reg128[j]);
-           }
-           offset += n_ints_sample;
-        }
-
-        t2 = std::chrono::high_resolution_clock::now();
-        time_span = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-
-        std::cerr << n_alts[a] << "\tsse4-list time=" << time_span.count() << " total=" << total << std::endl;
+        // SIMD AVX2-list
+        bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
+        std::cerr << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
     }
 
     delete[] vals;
