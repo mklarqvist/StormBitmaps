@@ -32,7 +32,7 @@
 
 //temp
 //#define __AVX512F__ 1
-#define __AVX2__ 1
+//#define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -72,22 +72,22 @@
 #endif
 
 #ifdef _mm_popcnt_u64
-#define PIL_POPCOUNT _mm_popcnt_u64
+#define TWK_POPCOUNT _mm_popcnt_u64
 #else
-#define PIL_POPCOUNT __builtin_popcountll
+#define TWK_POPCOUNT __builtin_popcountll
 #endif
 
 #if SIMD_VERSION >= 3
 __attribute__((always_inline))
-static inline void PIL_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
-    a += PIL_POPCOUNT(_mm_cvtsi128_si64(n)) + PIL_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n)));
+static inline void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
+    a += TWK_POPCOUNT(_mm_cvtsi128_si64(n)) + TWK_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n)));
 }
 #endif
 
 uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
     for(int i = 0; i < n_ints; ++i) {
-        count += PIL_POPCOUNT(b1[i] & b2[i]);
+        count += TWK_POPCOUNT(b1[i] & b2[i]);
     }
 
     return(count);
@@ -113,11 +113,11 @@ uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            count += PIL_POPCOUNT(b1[l1[i]] & b2[l1[i]]);
+            count += TWK_POPCOUNT(b1[l1[i]] & b2[l1[i]]);
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            count += PIL_POPCOUNT(b1[l2[i]] & b2[l2[i]]);
+            count += TWK_POPCOUNT(b1[l2[i]] & b2[l2[i]]);
         }
     }
     return(count);
@@ -131,7 +131,7 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t*
     const uint32_t n_cycles = n_ints / 2;
 
     for(int i = 0; i < n_cycles; ++i) {
-        PIL_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
+        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
     }
 
     return(count);
@@ -145,11 +145,11 @@ uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            PIL_POPCOUNT_SSE(count, _mm_and_si128(r1[l1[i]], r2[l1[i]]));
+            TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[l1[i]], r2[l1[i]]));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            PIL_POPCOUNT_SSE(count, _mm_and_si128(r1[l2[i]], r2[l2[i]]));
+            TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[l2[i]], r2[l2[i]]));
         }
     }
     return(count);
@@ -169,7 +169,7 @@ uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const ui
     const uint32_t n_cycles = n_ints / 2;
 
     for(int i = 0; i < n_cycles; ++i) {
-        PIL_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
+        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
     }
 
     return(count);
@@ -182,12 +182,12 @@ uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const ui
 
 #if SIMD_VERSION >= 5
 
-#ifndef PIL_POPCOUNT_AVX2
-#define PIL_POPCOUNT_AVX2(A, B) {                  \
-    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 0)); \
-    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 1)); \
-    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 2)); \
-    A += PIL_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+#ifndef TWK_POPCOUNT_AVX2
+#define TWK_POPCOUNT_AVX2(A, B) {                  \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 3)); \
 }
 #endif
 
@@ -198,7 +198,7 @@ uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t*
     const uint32_t n_cycles = n_ints / 4;
 
     for(int i = 0; i < n_cycles; ++i) {
-        PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
+        TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
     }
 
     return(count);
@@ -212,11 +212,11 @@ uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
         }
     }
     return(count);
@@ -236,7 +236,7 @@ uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const ui
     const uint32_t n_cycles = n_ints / 4;
 
     for(int i = 0; i < n_cycles; ++i) {
-        PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
+        TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
     }
 
     return(count);
@@ -257,11 +257,11 @@ uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, con
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
         }
     }
     return(count);
@@ -277,7 +277,7 @@ uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, con
 #if SIMD_VERSION >= 6
 
 __attribute__((always_inline))
-static inline __m512i avx512_popcount(const __m512i v) {
+static inline __m512i TWK_AVX512_POPCNT(const __m512i v) {
     const __m512i m1 = _mm512_set1_epi8(0x55);
     const __m512i m2 = _mm512_set1_epi8(0x33);
     const __m512i m4 = _mm512_set1_epi8(0x0F);
@@ -296,7 +296,7 @@ uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_
     __m512i sum = _mm512_set1_epi32(0);
 
     for(int i = 0; i < n_cycles; ++i) {
-        sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[i], r2[i])));
+        sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[i], r2[i])));
     }
 
     uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
@@ -314,13 +314,11 @@ uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const ui
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[l1[i]], r2[l1[i]])));
-            //PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+            sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[l1[i]], r2[l1[i]])));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[l2[i]], r2[l2[i]])));
-            //PIL_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+            sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[l2[i]], r2[l2[i]])));
         }
     }
 
@@ -347,7 +345,7 @@ uint64_t intersect_bitmaps_avx512_squash(const uint64_t* __restrict__ b1, const 
     __m512i sum = _mm512_set1_epi32(0);
 
     for(int i = 0; i < n_cycles; ++i) {
-        sum = _mm512_add_epi32(sum, avx512_popcount(_mm512_and_si512(r1[i], r2[i])));
+        sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[i], r2[i])));
     }
 
     uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
@@ -461,9 +459,7 @@ std::vector<int_t> construct_rle(const uint64_t* input, const uint32_t n_vals) {
     std::vector<int_t> vals;
 
     for(int i = 1; i < n_vals*sizeof(uint64_t)*8; ++i) {
-        //std::cerr << std::bitset<sizeof(int_t)*8>(ref) << " " << std::bitset<sizeof(int_t)*8>((input[i] & (1L << (i % 64))) >> (i % 64)) << std::endl;
         if(((input[i / 64] & (1L << (i % 64))) >> (i % 64)) != ref || l_run == n_limit) {
-            //std::cerr << "not ref" << std::endl;
             vals.push_back(((int_t)l_run << 1) | ref);
             ++n_runs;
             l_run = 0;
@@ -474,16 +470,6 @@ std::vector<int_t> construct_rle(const uint64_t* input, const uint32_t n_vals) {
     ++n_runs;
     vals.push_back(((int_t)l_run << 1) | ref);
     assert(vals.size() == n_runs);
-    /*
-    uint32_t n_samples = 0;
-    std::cerr << "n_runs=" << n_runs << std::endl;
-    for(int i = 0; i < vals.size(); ++i) {
-        std::cerr << " " << ((uint32_t)vals[i] & 1) << "|" << (uint32_t)(vals[i] >> 1);
-        n_samples += (vals[i] >> 1);
-    }
-    assert(n_samples == n_vals*sizeof(uint64_t)*8);
-    std::cerr << std::endl;
-    */
     vals.push_back(0); // 1 value of nonsense for algorithm
     return(vals);
 }
@@ -532,17 +518,20 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
 
     int_t lA = 0, lB = 0;
     int64_t ltot = 0;
+    bool predicate1 = false, predicate2 = false;
     while(true) {
         lA = lenA, lB = lenB;
-        ltot += ((lA >= lB) * lB + (lA < lB) * lA) * ((rle1[offsetA] & 1) & (rle2[offsetB] & 1));
+        predicate1 = (lA >= lB);
+        predicate2 = (lB >= lA);
+        ltot += (predicate1 * lB + !predicate1 * lA) * ((rle1[offsetA] & 1) & (rle2[offsetB] & 1));
 
-        offsetB += (lA >= lB);
-        offsetA += (lB >= lA);
+        offsetB += predicate1;
+        offsetA += predicate2;
 
-        lenA -= (lA >= lB) * lB + (lA < lB) * lA;
-        lenB -= (lB >= lA) * lA + (lB < lA) * lB;
-        lenA += (lB >= lA) * (rle1[offsetA] >> 1);
-        lenB += (lA >= lB) * (rle2[offsetB] >> 1);
+        lenA -= predicate1 * lB + !predicate1 * lA;
+        lenB -= predicate2 * lA + !predicate2 * lB;
+        lenA += predicate2 * (rle1[offsetA] >> 1);
+        lenB += predicate1 * (rle2[offsetB] >> 1);
 
         if(offsetA == limA && offsetB == limB) break;
     }
@@ -699,8 +688,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
     for(int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
 
-        // Limit memory usage to 5e6 but no more than 10k records.
-        uint32_t desired_mem = 5 * 1024 * 1024;
+        // Limit memory usage to 10e6 but no more than 10k records.
+        uint32_t desired_mem = 10 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
         uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
 
@@ -839,6 +828,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
                 //bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
                 //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.milliseconds << "\t" << mrle64_b.count << "\t" << mrle64_b.throughput << std::endl;
+
+                rle_32.clear(); rle_64.clear();
 
             } else {
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
