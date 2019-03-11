@@ -559,7 +559,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
     //uint64_t times_local[9];
 
     // Setup
-    std::vector<uint32_t> samples = {256, 2048, 8192, 32768, 131072, 196608};
+    std::vector<uint32_t> samples = {512, 2048, 8192, 32768, 131072, 196608};
     for(int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
 
