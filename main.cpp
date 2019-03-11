@@ -93,6 +93,66 @@ uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_
     return(count);
 }
 
+uint64_t intersect_bitmaps_scalar_4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count[4] = {0};
+    for(int i = 0; i < n_ints; i += 4) {
+        count[0] += TWK_POPCOUNT(b1[i] & b2[i]);
+        count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count[3] += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+    }
+
+    uint64_t tot_count = count[0] + count[1] + count[2] + count[3];
+
+    return(tot_count);
+}
+
+uint64_t intersect_bitmaps_scalar_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count = 0;
+    for(int i = 0; i < n_ints; i += 4) {
+        count += TWK_POPCOUNT(b1[i] & b2[i]);
+        count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+    }
+
+    return(count);
+}
+
+uint64_t intersect_bitmaps_scalar_8way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count[8] = {0};
+    for(int i = 0; i < n_ints; i += 8) {
+        count[0] += TWK_POPCOUNT(b1[i] & b2[i]);
+        count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count[3] += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+        count[4] += TWK_POPCOUNT(b1[i+4] & b2[i+4]);
+        count[5] += TWK_POPCOUNT(b1[i+5] & b2[i+5]);
+        count[6] += TWK_POPCOUNT(b1[i+6] & b2[i+6]);
+        count[7] += TWK_POPCOUNT(b1[i+7] & b2[i+7]);
+    }
+
+    uint64_t tot_count = count[0] + count[1] + count[2] + count[3] + count[4] + count[5] + count[6] + count[7];
+
+    return(tot_count);
+}
+
+uint64_t intersect_bitmaps_scalar_1x8way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count = 0;
+    for(int i = 0; i < n_ints; i += 8) {
+        count += TWK_POPCOUNT(b1[i] & b2[i]);
+        count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+        count += TWK_POPCOUNT(b1[i+4] & b2[i+4]);
+        count += TWK_POPCOUNT(b1[i+5] & b2[i+5]);
+        count += TWK_POPCOUNT(b1[i+6] & b2[i+6]);
+        count += TWK_POPCOUNT(b1[i+7] & b2[i+7]);
+    }
+
+    return(count);
+}
+
 uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
     uint64_t count = 0;
 
@@ -781,6 +841,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             */
 
+            /*
             if(n_alts[a] <= 20) {
                 std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
                 std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
@@ -812,10 +873,28 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
+            */
 
             // Scalar 1
             bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
+
+            // Scalar 4-way
+            bench_t m4_way = fwrapper<&intersect_bitmaps_scalar_4way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit-4way\t" << m4_way.milliseconds << "\t" << m4_way.count << "\t" << m4_way.throughput << std::endl;
+
+            // Scalar 8-way
+            bench_t m8_way = fwrapper<&intersect_bitmaps_scalar_8way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit-8way\t" << m8_way.milliseconds << "\t" << m8_way.count << "\t" << m8_way.throughput << std::endl;
+
+            // Scalar 1x4-way
+            bench_t m1x4_way = fwrapper<&intersect_bitmaps_scalar_1x4way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit-1x4way\t" << m1x4_way.milliseconds << "\t" << m1x4_way.count << "\t" << m1x4_way.throughput << std::endl;
+
+            // Scalar 1x8-way
+            bench_t m1x8_way = fwrapper<&intersect_bitmaps_scalar_1x8way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-bit-1x8way\t" << m1x8_way.milliseconds << "\t" << m1x8_way.count << "\t" << m1x8_way.throughput << std::endl;
+
 
             // Scalar-list
             if(n_alts[a] < 200 || (double)n_alts[a]/samples[a] < 0.05) {

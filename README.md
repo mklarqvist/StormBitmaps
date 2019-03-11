@@ -30,7 +30,7 @@ This simple code will optimize extremely well on most machines. Knowledge of the
 
 ### Approach 1: SIMD-acceleration of bitmaps
 
-Set intersections of bitmapcan be trivially vectorized with all available SIMD-instruction sets. The bit-wise population count (`popcnt`) operation consumes most of the elapsed time.
+Set intersections of bitmaps can be trivially vectorized with all available SIMD-instruction sets. The bit-wise population count (`popcnt`) operation consumes most of the elapsed time.
 
 Example C++ implementation using SSE4.1 instructions:
 ```c++
