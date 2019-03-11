@@ -163,21 +163,24 @@ uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const ui
     }
     if(count == 0) return 0;
 
-    count = 0;
-    const __m128i* r1 = (__m128i*)b1;
-    const __m128i* r2 = (__m128i*)b2;
-    const uint32_t n_cycles = n_ints / 2;
+    return(intersect_bitmaps_sse4(b1,b2,n_ints));
+}
 
-    for(int i = 0; i < n_cycles; ++i) {
-        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
+uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+    uint64_t count = 0;
+
+    for(int i = 0; i < n_squash; ++i) {
+        count += ((sq1[i] & sq2[i]) != 0);
     }
+    if(count == 0) return 0;
 
-    return(count);
+    return(intersect_bitmaps_sse4_list(b1,b2,l1,l2));
 }
 #else
 uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
 uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
 uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
+uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
 #endif // sse4 available
 
 #if SIMD_VERSION >= 5
@@ -230,16 +233,7 @@ uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const ui
     }
     if(count == 0) return 0;
 
-    count = 0;
-    const __m256i* r1 = (__m256i*)b1;
-    const __m256i* r2 = (__m256i*)b2;
-    const uint32_t n_cycles = n_ints / 4;
-
-    for(int i = 0; i < n_cycles; ++i) {
-        TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
-    }
-
-    return(count);
+    return(intersect_bitmaps_avx2(b1,b2,n_ints));
 }
 
 uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
@@ -250,21 +244,7 @@ uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, con
     }
     if(count == 0) return 0;
 
-    count = 0;
-
-    const __m256i* r1 = (__m256i*)b1;
-    const __m256i* r2 = (__m256i*)b2;
-
-    if(l1.size() < l2.size()) {
-        for(int i = 0; i < l1.size(); ++i) {
-            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
-        }
-    } else {
-        for(int i = 0; i < l2.size(); ++i) {
-            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
-        }
-    }
-    return(count);
+    return(intersect_bitmaps_avx2_list(b1,b2,l1,l2));
 }
 
 #else
@@ -337,22 +317,18 @@ uint64_t intersect_bitmaps_avx512_squash(const uint64_t* __restrict__ b1, const 
     }
     if(count == 0) return 0;
 
-    count = 0;
+    return(intersect_bitmaps_avx512_list(b1, b2, n_ints));
+}
 
-    const __m512i* r1 = (__m512i*)b1;
-    const __m512i* r2 = (__m512i*)b2;
-    const uint32_t n_cycles = n_ints / 8;
-    __m512i sum = _mm512_set1_epi32(0);
+uint64_t intersect_bitmaps_avx512_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+    uint64_t count = 0;
 
-    for(int i = 0; i < n_cycles; ++i) {
-        sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[i], r2[i])));
+    for(int i = 0; i < n_squash; ++i) {
+        count += ((sq1[i] & sq2[i]) != 0);
     }
+    if(count == 0) return 0;
 
-    uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
-    for(int i = 0; i < 16; ++i)
-        count += v[i];
-
-    return(count);
+    return(intersect_bitmaps_512_list(b1,b2,l1,l2));
 }
 
 
@@ -360,6 +336,7 @@ uint64_t intersect_bitmaps_avx512_squash(const uint64_t* __restrict__ b1, const 
 uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
 uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
 uint64_t intersect_bitmaps_avx512_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
+uint64_t intersect_bitmaps_avx512_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
 #endif // endif avx2
 
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
@@ -476,7 +453,6 @@ std::vector<int_t> construct_rle(const uint64_t* input, const uint32_t n_vals) {
 
 template <class int_t>
 uint64_t intersect_rle(const std::vector<int_t>& rle1, const std::vector<int_t>& rle2) {
-
     int_t lenA = (rle1[0] >> 1);
     int_t lenB = (rle2[0] >> 1);
     uint32_t offsetA = 0;
@@ -508,7 +484,6 @@ uint64_t intersect_rle(const std::vector<int_t>& rle1, const std::vector<int_t>&
 
 template <class int_t>
 uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vector<int_t>& rle2) {
-
     int_t lenA = (rle1[0] >> 1);
     int_t lenB = (rle2[0] >> 1);
     uint32_t offsetA = 0;
@@ -866,6 +841,11 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m13 = fsqwrapper<&intersect_bitmaps_sse4_squash>(n_variants, vals, n_ints_sample, squash_4096);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-squash\t" << m13.milliseconds << "\t" << m13.count << "\t" << m13.throughput << std::endl;
 
+            // SIMD SSE4-list-squash
+            bench_t m14 = flsqwrapper<&intersect_bitmaps_sse4_list_squash>(n_variants, vals, n_ints_sample, pos_reg128, squash_4096);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list-squash\t" << m14.milliseconds << "\t" << m14.count << "\t" << m14.throughput << std::endl;
+
+
             // SIMD AVX2
             bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
@@ -879,8 +859,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-squash\t" << m10.milliseconds << "\t" << m10.count << "\t" << m10.throughput << std::endl;
 
             // SIMD AVX2-list-squash
-           bench_t m12 = flsqwrapper<&intersect_bitmaps_avx2_list_squash>(n_variants, vals, n_ints_sample, pos_reg256, squash_4096);
-           std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
+            bench_t m12 = flsqwrapper<&intersect_bitmaps_avx2_list_squash>(n_variants, vals, n_ints_sample, pos_reg256, squash_4096);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
 
             // SIMD AVX512
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
@@ -894,7 +874,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m11 = fsqwrapper<&intersect_bitmaps_avx512_squash>(n_variants, vals, n_ints_sample, squash_4096);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-squash\t" << m11.milliseconds << "\t" << m11.count << "\t" << m11.throughput << std::endl;
 
-
+            // SIMD AVX512-list-squash
+            bench_t m15 = flsqwrapper<&intersect_bitmaps_avx512_list_squash>(n_variants, vals, n_ints_sample, pos_reg512, squash_4096);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
         }
 
         delete[] vals;
