@@ -508,6 +508,39 @@ uint64_t insersect_reduced_sse4(const uint64_t* __restrict__ b1, const uint64_t*
     return(count);
 }
 
+uint64_t insersect_reduced_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2) {
+    uint64_t count = 0; // helper
+
+    if(l1.size() < l2.size()) {
+        for(int i = 0; i < l1.size(); ++i) {
+            for(int j = 0; j < l2.size(); ++j) {
+                if(l2[j] > l1[i]) break;
+
+                if(l1[i] == l2[j]) {
+                    count += TWK_POPCOUNT(b1[i] & b2[j]);
+                    break;
+                }
+            }
+            continue;
+        }
+
+    } else {
+        for(int i = 0; i < l2.size(); ++i) {
+            for(int j = 0; j < l1.size(); ++j) {
+                if(l1[j] > l2[i]) break;
+
+                if(l2[i] == l1[j]) {
+                    count += TWK_POPCOUNT(b2[i] & b1[j]);
+                    break;
+                }
+            }
+            continue;
+        }
+    }
+
+    return(count);
+}
+
 #else
 uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
 uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
@@ -1199,6 +1232,10 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // Reduced
             bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
             std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-popcnt\t" << red1.milliseconds << "\t" << red1.count << "\t" << red1.throughput << std::endl;
+
+            bench_t red2 = fredwrapper<&insersect_reduced_scalar>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-popcnt-scalar\t" << red2.milliseconds << "\t" << red2.count << "\t" << red2.throughput << std::endl;
+
 
             // Scalar 1
             bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
