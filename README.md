@@ -265,5 +265,68 @@ while(true) {
 return(ltot);
 ```
 
+### Approach 5: Integer-set intersection
+
+
 ### Results
 
+
+
+### Host machine information
+
+MacBook Air
+```bash
+$ sysctl -n machdep.cpu.brand_string
+Intel(R) Core(TM) i5-3427U CPU @ 1.80GHz
+
+$ sysctl -a | grep cpu.feat
+machdep.cpu.feature_bits: 9203919476061109247
+machdep.cpu.features: FPU VME DE PSE TSC MSR PAE MCE CX8 APIC SEP MTRR PGE MCA CMOV PAT PSE36 CLFSH DS ACPI MMX FXSR SSE SSE2 SS HTT TM PBE SSE3 PCLMULQDQ DTES64 MON DSCPL VMX SMX EST TM2 SSSE3 CX16 TPR PDCM SSE4.1 SSE4.2 x2APIC POPCNT AES PCID XSAVE OSXSAVE TSCTMR AVX1.0 RDRAND F16C
+```
+
+```bash
+$ system_profiler SPSoftwareDataType
+Software:
+
+    System Software Overview:
+
+      System Version: macOS 10.14.3 (18D109)
+      Kernel Version: Darwin 18.2.0
+```
+
+Intel Xeon Skylake
+```bash
+$ lscpu
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                60
+On-line CPU(s) list:   0-59
+Thread(s) per core:    1
+Core(s) per socket:    1
+Socket(s):             60
+NUMA node(s):          1
+Vendor ID:             GenuineIntel
+CPU family:            6
+Model:                 85
+Model name:            Intel Xeon Processor (Skylake, IBRS)
+Stepping:              4
+CPU MHz:               2599.998
+BogoMIPS:              5199.99
+Hypervisor vendor:     KVM
+Virtualization type:   full
+L1d cache:             32K
+L1i cache:             32K
+L2 cache:              4096K
+L3 cache:              16384K
+NUMA node0 CPU(s):     0-59
+Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology eagerfpu pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single spec_ctrl ibpb_support fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 arat
+```
+```bash
+$ hostnamectl
+    Virtualization: kvm
+  Operating System: Red Hat Enterprise Linux
+       CPE OS Name: cpe:/o:redhat:enterprise_linux:7.4:GA:server
+            Kernel: Linux 3.10.0-693.21.1.el7.x86_64
+      Architecture: x86-64
+```
