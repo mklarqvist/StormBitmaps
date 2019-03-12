@@ -168,6 +168,97 @@ uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const ui
     return(count);
 }
 
+uint64_t intersect_bitmaps_scalar_list_4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+    uint64_t count[4] = {0};
+
+    if(l1.size() < l2.size()) {
+        int i = 0;
+
+        for(; i + 4 < l1.size(); i += 4) {
+            count[0] += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            count[1] += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+            count[2] += ((b2[l1[i+2] / 64] & (1L << (l1[i+2] % 64))) != 0);
+            count[3] += ((b2[l1[i+3] / 64] & (1L << (l1[i+3] % 64))) != 0);
+        }
+
+
+        for(; i + 2 < l1.size(); i += 2) {
+            count[0] += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            count[1] += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+        }
+
+
+        for(; i < l1.size(); ++i) {
+            count[0] += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+        }
+    } else {
+        int i = 0;
+
+        for(; i + 4 < l2.size(); i += 4) {
+            count[0] += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            count[1] += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+            count[2] += ((b1[l2[i+2] / 64] & (1L << (l2[i+2] % 64))) != 0);
+            count[3] += ((b1[l2[i+3] / 64] & (1L << (l2[i+3] % 64))) != 0);
+        }
+
+        for(; i + 2 < l2.size(); i += 2) {
+            count[0] += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            count[1] += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+        }
+
+
+        for(; i < l2.size(); ++i) {
+            count[0] += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+        }
+    }
+    return(count[0] + count[1] + count[2] + count[3]);
+}
+
+uint64_t intersect_bitmaps_scalar_list_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+    uint64_t count = 0;
+
+    if(l1.size() < l2.size()) {
+        int i = 0;
+
+        for(; i + 4 < l1.size(); i += 4) {
+            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+            count += ((b2[l1[i+2] / 64] & (1L << (l1[i+2] % 64))) != 0);
+            count += ((b2[l1[i+3] / 64] & (1L << (l1[i+3] % 64))) != 0);
+        }
+
+        for(; i + 2 < l1.size(); i += 2) {
+            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+        }
+
+
+        for(; i < l1.size(); ++i) {
+            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+        }
+    } else {
+        int i = 0;
+
+        for(; i + 4 < l2.size(); i += 4) {
+            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+            count += ((b1[l2[i+2] / 64] & (1L << (l2[i+2] % 64))) != 0);
+            count += ((b1[l2[i+3] / 64] & (1L << (l2[i+3] % 64))) != 0);
+        }
+
+        for(; i + 2 < l2.size(); i += 2) {
+            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+        }
+
+
+        for(; i < l2.size(); ++i) {
+            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+        }
+    }
+    return(count);
+}
+
 uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
     uint64_t count = 0;
 
@@ -191,6 +282,44 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t*
     const uint32_t n_cycles = n_ints / 2;
 
     for(int i = 0; i < n_cycles; ++i) {
+        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
+    }
+
+    return(count);
+}
+
+uint64_t intersect_bitmaps_sse4_2way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count[2] = {0};
+    const __m128i* r1 = (__m128i*)b1;
+    const __m128i* r2 = (__m128i*)b2;
+    const uint32_t n_cycles = n_ints / 2;
+
+    int i = 0;
+    for(; i+2 < n_cycles; i += 2) {
+        TWK_POPCOUNT_SSE(count[0], _mm_and_si128(r1[i+0], r2[i+0]));
+        TWK_POPCOUNT_SSE(count[1], _mm_and_si128(r1[i+1], r2[i+1]));
+    }
+
+    for(; i < n_cycles; ++i) {
+        TWK_POPCOUNT_SSE(count[0], _mm_and_si128(r1[i], r2[i]));
+    }
+
+    return(count[0] + count[1]);
+}
+
+uint64_t intersect_bitmaps_sse4_1x2way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+    uint64_t count = 0;
+    const __m128i* r1 = (__m128i*)b1;
+    const __m128i* r2 = (__m128i*)b2;
+    const uint32_t n_cycles = n_ints / 2;
+
+    int i = 0;
+    for(; i+2 < n_cycles; i += 2) {
+        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i+0], r2[i+0]));
+        TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i+1], r2[i+1]));
+    }
+
+    for(; i < n_cycles; ++i) {
         TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[i], r2[i]));
     }
 
@@ -900,8 +1029,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             if(n_alts[a] < 200 || (double)n_alts[a]/samples[a] < 0.05) {
                 bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
                 std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
+
+                bench_t m4_4way = flwrapper<&intersect_bitmaps_scalar_list_4way>(n_variants, vals, n_ints_sample, pos);
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << m4_4way.milliseconds << "\t" << m4_4way.count << "\t" << m4_4way.throughput << std::endl;
+
+                bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << m4_1x4way.milliseconds << "\t" << m4_1x4way.count << "\t" << m4_1x4way.throughput << std::endl;
             } else {
                 std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
 
             // Scalar-int-list
@@ -911,6 +1048,15 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // SIMD SSE4
             bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
             std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+
+            // SIMD SSE 2-way
+            bench_t m2_2way = fwrapper<&intersect_bitmaps_sse4_2way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-2way\t" << m2_2way.milliseconds << "\t" << m2_2way.count << "\t" << m2_2way.throughput << std::endl;
+
+            // SIMD SSE 2-way
+            bench_t m2_1x2way = fwrapper<&intersect_bitmaps_sse4_1x2way>(n_variants, vals, n_ints_sample);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-1x2way\t" << m2_1x2way.milliseconds << "\t" << m2_1x2way.count << "\t" << m2_1x2way.throughput << std::endl;
+
 
             // SIMD SSE4-list
             bench_t m6 = flwrapper<&intersect_bitmaps_sse4_list>(n_variants, vals, n_ints_sample, pos_reg128);
