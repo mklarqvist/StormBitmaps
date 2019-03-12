@@ -1,8 +1,12 @@
 # FastIntersectCount
 
-These functions compute the set intersection count of pairs of **equal-sized** integer sets. Several functions exploit set sparsity by using additional information such as integer indices or reduction preprocessors.  
+These functions compute the set intersection count of pairs of integer sets with equal upper bounds [0, ..., m). Several functions exploit possible set sparsity by using additional information such as positional indices or reduction preprocessors.  
 
 Compile test suite with: `make` and run `./fast_intersect_count`
+
+### History
+
+These functions were originally developed for [Tomahawk](https://github.com/mklarqvist/Tomahawk) for computing genome-wide linkage-disequilibrium but can be applied to any intersect-count problem.
 
 ## Computing set intersections
 
@@ -16,7 +20,7 @@ Compile test suite with: `make` and run `./fast_intersect_count`
 
 In all the methods below, `b1` and `b2` are pointers to the start of each `uint64_t` vector and `n_ints` is the length of the vectors.
 
-### Approach 0: Naive bitmap iterator (scalar)
+### Approach 0: Naive bitmap accumulator (scalar)
 
 We compare our proposed algorithms to a naive implementation using standard incrementors:
 
@@ -28,7 +32,7 @@ for i in 1..n # n -> n_records
 
 This simple code will optimize extremely well on most machines. Knowledge of the host-architecture by the compiler makes this codes difficult to outperform on average.
 
-### Approach 1: SIMD-acceleration of bitmaps
+### Approach 1: SIMD-acceleration of bitmap accumulator
 
 Set intersections of bitmaps can be trivially vectorized with all available SIMD-instruction sets. The bit-wise population count (`popcnt`) operation consumes most of the elapsed time.
 
@@ -79,7 +83,7 @@ for(int i = 0; i < 16; ++i)
 return(count);
 ```
 
-### Approach 2: Bitmap and positional index
+### Approach 2: Bitmap accumulator with a positional index
 
 For sparse set comparisons we can apply a form of search space reduction by storing an additional positional index for each set storing the offsets for set bits, enabling O(1)-time random-access lookups. Let `l1` and `l2` be vectors of positional indices. Logically, we can further limit our search space by using the positions in the smallest index to query intersections.
 

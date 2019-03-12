@@ -356,7 +356,7 @@ uint64_t intersect_bitmaps_sse4_2way(const uint64_t* __restrict__ b1, const uint
     for(; i + 2 < n_cycles; i += 2) {
         __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
         TWK_POPCOUNT_SSE4(count[0], v1);
-        v1 = _mm_and_si128(r1[i+1], r2[i+2]);
+        v1 = _mm_and_si128(r1[i+1], r2[i+1]);
         TWK_POPCOUNT_SSE4(count[1], v1);
     }
 
