@@ -1,6 +1,6 @@
 # FastIntersectCount
 
-These functions compute the set intersection count of pairs of integer sets with equal upper bounds [0, ..., m). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors.  
+These functions compute the set intersection count of pairs of integer sets with equal upper bounds [0,m). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors. There are no union and difference functionality in this repository. If this is required then replace all bitwise AND operations with OR or ANDNOT operations.  
 
 Compile test suite with: `make` and run `./fast_intersect_count`
 
@@ -8,19 +8,24 @@ Compile test suite with: `make` and run `./fast_intersect_count`
 
 These functions were originally developed for [Tomahawk](https://github.com/mklarqvist/Tomahawk) for computing genome-wide linkage-disequilibrium but can be applied to any intersect-count problem.
 
-## Computing set intersections
+---
 
 ## Problem statement
+
+To implement a set of integers, a particularly appealing strategy is the bitmap (also called bitset or bit vector). Using n bits, we can represent any set made of the integers from the range [0,n): it suffices to set the ith bit is set to one if integer i is present in the set. Commodity processors use words of W=32 or W=64 bits. By combining many such words, we can support large values of n. Intersections, unions and differences can then be implemented as bitwise AND, OR and ANDNOT operations.
+
+In [Tomahawk](https://github.com/mklarqvist/Tomahawk), we must compute N!2 set intersections of size M, where N and M are typically in the many millions and thousands, respectively.
 
 ## Goals
 
 * Achieve high-performance on large arrays of values.
+* Support both small and large sets (sparse and dense bitmaps).
 
 ## Technical approach
 
 In all the methods below, `b1` and `b2` are pointers to the start of each `uint64_t` vector and `n_ints` is the length of the vectors.
 
-### Approach 0: Naive bitmap accumulator (scalar)
+### Approach 0a: Scalar bitmap accumulator
 
 We compare our proposed algorithms to a naive implementation using standard incrementors:
 
@@ -31,6 +36,24 @@ for i in 1..n # n -> n_records
 ```
 
 This simple code will optimize extremely well on most machines. Knowledge of the host-architecture by the compiler makes this codes difficult to outperform on average.
+
+### Aproach 0b: Loop unrolled + software pipelined scalar accumulator
+
+Example 1x4 approach
+```c++
+uint64_t count = 0;
+int i = 0;
+for(; i < (n_ints & ~3); i += 4) {
+    count += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
+    count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+    count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+    count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+}
+for(; i < n_ints; ++i)
+    count += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
+
+return(count);
+```
 
 ### Approach 1: SIMD-acceleration of bitmap accumulator
 
@@ -85,7 +108,7 @@ return(count);
 
 ### Approach 2: Bitmap accumulator with a positional index
 
-For sparse set comparisons we can apply a form of search space reduction by storing an additional positional index for each set storing the offsets for set bits, enabling O(1)-time random-access lookups. Let `l1` and `l2` be vectors of positional indices. Logically, we can further limit our search space by using the positions in the smallest index to query intersections.
+For sparse set comparisons we can apply a form of search space reduction by storing an additional positional index for each set storing the offsets for set bits, enabling O(1)-time random-access lookups. Let `l1` and `l2` be vectors of positional indices. Logically, we can further limit our search space by using the positions in the smallest index to query intersections. When operating on the bit-level, the positional index is the input integer set. For the other non-bit-wise approaches, the relationship is input integer / bits per primitive.
 
 Example scalar implementation in C++ using a positional index for individual bits:
 ```c++
@@ -269,39 +292,94 @@ while(true) {
 return(ltot);
 ```
 
-### Approach 5: Integer-set intersection
+### Approach 5: Reduced integer set intersection
 
 Compare 64-bit encoded integer sets directly and perform the set intersection on those bitmaps that overlap.
+
+```c++
+uint64_t count = 0; 
+
+if(l1.size() < l2.size()) {
+    for(int i = 0; i < l1.size(); ++i) {
+        for(int j = 0; j < l2.size(); ++j) {
+            if(l2[j] > l1[i]) break;
+
+            if(l1[i] == l2[j]) {
+                count += TWK_POPCOUNT(b1[i] & b2[j]);
+                break;
+            }
+        }
+        continue;
+    }
+} // else not shown (symmetry of above)
+```
+
+SSE4 version:
+```c++
+const __m128i full_vec = _mm_set1_epi16(0xFFFF);
+const __m128i one_mask = _mm_set1_epi16(1);
+const __m128i range    = _mm_set_epi16(8,7,6,5,4,3,2,1);
+uint64_t count = 0;
+
+if(l1.size() < l2.size()) {
+    const __m128i* y = (const __m128i*)&l2[0];
+    const uint32_t n_y = l2.size() / 8; // 128 / 16 vectors
+
+    for(int i = 0; i < l1.size(); ++i) {
+        const __m128i x = _mm_set1_epi16(l1[i]); // Broadcast single reference value
+        int j = 0;
+        for(; j < n_y; ++j) {
+            if(l2[j*8] > l1[i]) goto done; // if the current value is larger than the reference value break
+            __m128i cmp = _mm_cmpeq_epi16(x, y[j]);
+            // Predicate check for all empty bits
+            if(_mm_testz_si128(cmp, full_vec) == false) {
+                // Compute overlap position by predicate-multiplication
+                const __m128i v = _mm_mullo_epi16(_mm_and_si128(cmp, one_mask), range);
+                const uint16_t* vv = (const uint16_t*)&v;
+                // Horizontal sum of predicate-multiplication
+                const uint32_t pp = (vv[0] + vv[1] + vv[2] + vv[3] + vv[4] + vv[5] + vv[6] + vv[7]) - 1;
+                count += TWK_POPCOUNT(b1[i] & b2[j*8 + pp]);
+                goto done;
+            }
+        }
+
+        // Scalar residual
+        j *= 8;
+        for(; j < l2.size(); ++j) {
+            if(l2[j] > l1[i]) goto done;
+
+            if(l1[i] == l2[j]) {
+                count += TWK_POPCOUNT(b1[i] & b2[j]);
+                goto done;
+            }
+        }
+        done:
+        continue;
+    }
+} // else not shown (symmetry of above)
+```
 
 ### Approach 6: Auxiliary prefix- and suffix-run lengths
 
 Space reduction by limiting the intersection operation to the range [max(prefixA,prefixB), min(suffixA,suffixB)].
 
+```c++
+const uint32_t from = std::max(p1.first, p2.first);
+const uint32_t to   = std::min(p1.second,p2.second);
+
+uint64_t count = 0;
+for(int i = from; i < to; ++i) {
+    count += TWK_POPCOUNT(b1[i] & b2[i]);
+}
+
+return(count);
+```
+
 ### Results
 
 
 
-### Host machine information
-
-MacBook Air
-```bash
-$ sysctl -n machdep.cpu.brand_string
-Intel(R) Core(TM) i5-3427U CPU @ 1.80GHz
-
-$ sysctl -a | grep cpu.feat
-machdep.cpu.feature_bits: 9203919476061109247
-machdep.cpu.features: FPU VME DE PSE TSC MSR PAE MCE CX8 APIC SEP MTRR PGE MCA CMOV PAT PSE36 CLFSH DS ACPI MMX FXSR SSE SSE2 SS HTT TM PBE SSE3 PCLMULQDQ DTES64 MON DSCPL VMX SMX EST TM2 SSSE3 CX16 TPR PDCM SSE4.1 SSE4.2 x2APIC POPCNT AES PCID XSAVE OSXSAVE TSCTMR AVX1.0 RDRAND F16C
-```
-
-```bash
-$ system_profiler SPSoftwareDataType
-Software:
-
-    System Software Overview:
-
-      System Version: macOS 10.14.3 (18D109)
-      Kernel Version: Darwin 18.2.0
-```
+### Reference systems information
 
 Intel Xeon Skylake
 ```bash
@@ -338,4 +416,24 @@ $ hostnamectl
        CPE OS Name: cpe:/o:redhat:enterprise_linux:7.4:GA:server
             Kernel: Linux 3.10.0-693.21.1.el7.x86_64
       Architecture: x86-64
+```
+
+MacBook Air
+```bash
+$ sysctl -n machdep.cpu.brand_string
+Intel(R) Core(TM) i5-3427U CPU @ 1.80GHz
+
+$ sysctl -a | grep cpu.feat
+machdep.cpu.feature_bits: 9203919476061109247
+machdep.cpu.features: FPU VME DE PSE TSC MSR PAE MCE CX8 APIC SEP MTRR PGE MCA CMOV PAT PSE36 CLFSH DS ACPI MMX FXSR SSE SSE2 SS HTT TM PBE SSE3 PCLMULQDQ DTES64 MON DSCPL VMX SMX EST TM2 SSSE3 CX16 TPR PDCM SSE4.1 SSE4.2 x2APIC POPCNT AES PCID XSAVE OSXSAVE TSCTMR AVX1.0 RDRAND F16C
+```
+
+```bash
+$ system_profiler SPSoftwareDataType
+Software:
+
+    System Software Overview:
+
+      System Version: macOS 10.14.3 (18D109)
+      Kernel Version: Darwin 18.2.0
 ```
