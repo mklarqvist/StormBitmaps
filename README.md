@@ -1,6 +1,6 @@
 # FastIntersectCount
 
-These functions compute the set intersection count of pairs of integer sets with equal upper bounds [0,m). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors. There are no union and difference functionality in this repository. If this is required then replace all bitwise AND operations with OR or ANDNOT operations.  
+These functions compute the set intersection count of pairs of integer sets with equal upper bounds [0,m). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors. There are no union and difference routines in this repository.
 
 Compile test suite with: `make` and run `./fast_intersect_count`
 

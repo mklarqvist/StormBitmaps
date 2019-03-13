@@ -100,6 +100,37 @@ static inline void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
 }
 #endif
 
+/****************************
+*  Class definitions
+****************************/
+struct bin {
+    bin() : n_vals(0), bitmap(0), vals(nullptr){}
+    ~bin(){ delete[] vals; }
+
+    void Allocate(const uint8_t n) {
+        delete[] vals;
+        assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n*sizeof(uint64_t)));
+        n_vals = n;
+    }
+
+    inline const uint64_t& operator[](const uint8_t p) const { return(vals[p]); }
+
+    uint8_t n_vals; // limited to 64 uint64_t
+    uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
+    uint64_t* vals;
+};
+
+struct range_bin {
+    range_bin() : bin_bitmap(0){}
+    range_bin(uint32_t n_bins) : bin_bitmap(0){ bins.resize(n_bins); }
+
+    uint64_t bin_bitmap; // what bins are set
+    std::vector< bin > bins;
+};
+
+/****************************
+*  Function definitions
+****************************/
 uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
     for(int i = 0; i < n_ints; ++i) {
@@ -1116,8 +1147,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint64_t* vals_reduced;
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
-        std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
-        //std::vector<uint32_t> n_alts = {3};
+        //std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
+        std::vector<uint32_t> n_alts = {3};
 
         for(int a = 0; a < n_alts.size(); ++a) {
             if(n_alts[a] == 0) continue;
@@ -1141,6 +1172,11 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             std::vector< std::vector<uint64_t> > squash_4096(n_variants, std::vector<uint64_t>(n_squash4096, 0));
 
             std::vector< std::pair<uint32_t, uint32_t> > prefix_suffix_pos(n_variants, std::pair<uint32_t, uint32_t>(0,0));
+
+            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)16);
+            const uint32_t bin_size = std::ceil(n_ints_sample / (float)n_ints_bin);
+            std::cerr << "bin-size=" << bin_size << std::endl;
+            std::vector< range_bin > bins(n_variants, bin_size);
 
             std::random_device rd;  // obtain a random number from hardware
             std::mt19937 eng(rd()); // seed the generator
@@ -1178,6 +1214,17 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 //std::cerr << "0->" << pos_integer[j].front() << " " << pos_integer[j].back()+1 << "<-" << n_ints_sample << std::endl;
                 prefix_suffix_pos[j].first = pos_integer[j].front();
                 prefix_suffix_pos[j].second = pos_integer[j].back()+1;
+
+                for(int p = 0; p < pos[j].size(); ++p) {
+                    const uint32_t target_bin = pos[j][p] / 64 / n_ints_bin;
+                    const uint32_t FOR = (target_bin*64*n_ints_bin); // frame of reference value
+
+                    std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << (pos[j][p] - FOR) << "F=" << (pos[j][p] - FOR) / 64 << "|" << (pos[j][p] - FOR) % 64;
+                    assert(bins[j].bins.size() != 0);
+                    if(bins[j].bins[target_bin].n_vals == 0) bins[j].bins[target_bin].Allocate(n_ints_bin);
+                    bins[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
+                }
+                std::cerr << std::endl;
 
                 pos_integer16[j].push_back(pos[j][0] / 64);
 
