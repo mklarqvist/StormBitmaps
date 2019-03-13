@@ -271,6 +271,11 @@ return(ltot);
 
 ### Approach 5: Integer-set intersection
 
+Compare 64-bit encoded integer sets directly and perform the set intersection on those bitmaps that overlap.
+
+### Approach 6: Auxiliary prefix- and suffix-run lengths
+
+Space reduction by limiting the intersection operation to the range [max(prefixA,prefixB), min(suffixA,suffixB)].
 
 ### Results
 

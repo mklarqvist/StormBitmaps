@@ -170,7 +170,7 @@ uint64_t intersect_bitmaps_scalar_1x8way(const uint64_t* __restrict__ b1, const 
 }
 
 uint64_t intersect_bitmaps_scalar_prefix_suffix(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const std::pair<uint32_t,uint32_t>& p1, const std::pair<uint32_t,uint32_t>& p2) {
-    const uint32_t from = std::min(p1.first, p2.first);
+    const uint32_t from = std::max(p1.first, p2.first);
     const uint32_t to   = std::min(p1.second,p2.second);
 
     uint64_t count = 0;
