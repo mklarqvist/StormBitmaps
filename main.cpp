@@ -104,20 +104,23 @@ static inline void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
 *  Class definitions
 ****************************/
 struct bin {
-    bin() : n_vals(0), bitmap(0), vals(nullptr){}
+    bin() : list(false), n_vals(0), bitmap(0), vals(nullptr){}
     ~bin(){ delete[] vals; }
 
     void Allocate(const uint8_t n) {
         delete[] vals;
         assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n*sizeof(uint64_t)));
+        memset(vals, 0, n*sizeof(uint64_t));
         n_vals = n;
     }
 
     inline const uint64_t& operator[](const uint8_t p) const { return(vals[p]); }
 
+    bool list;
     uint8_t n_vals; // limited to 64 uint64_t
     uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
     uint64_t* vals;
+    std::vector<uint32_t> pos;
 };
 
 struct range_bin {
@@ -127,6 +130,31 @@ struct range_bin {
     uint64_t bin_bitmap; // what bins are set
     std::vector< bin > bins;
 };
+
+uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin) {
+    uint64_t count = 0;
+    if((b1.bin_bitmap & b2.bin_bitmap) == 0) return(0);
+
+    const uint32_t n = b1.bins.size();
+    for(int i = 0; i < n; ++i) {
+        if(b1.bins[i].n_vals && b2.bins[i].n_vals) {
+            // compare values in b
+            int j = 0;
+            for(; j + 4 < n_ints_bin; j += 4) {
+                count += TWK_POPCOUNT(b1.bins[i].vals[j+0] & b2.bins[i].vals[j+0]);
+                count += TWK_POPCOUNT(b1.bins[i].vals[j+1] & b2.bins[i].vals[j+1]);
+                count += TWK_POPCOUNT(b1.bins[i].vals[j+2] & b2.bins[i].vals[j+2]);
+                count += TWK_POPCOUNT(b1.bins[i].vals[j+3] & b2.bins[i].vals[j+3]);
+            }
+
+            for(; j < n_ints_bin; ++j) {
+                count += TWK_POPCOUNT(b1.bins[i].vals[j+0] & b2.bins[i].vals[j+0]);
+            }
+        }
+    }
+
+    return(count);
+}
 
 /****************************
 *  Function definitions
@@ -1129,6 +1157,28 @@ bench_t fredwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, con
     return(b);
 }
 
+template <uint64_t (f)(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin)>
+bench_t frbinswrapper(const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< range_bin >& bins, const uint8_t n_ints_bin) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    uint64_t total = 0;
+
+    for(int k = 0; k < n_variants; ++k) {
+        for(int p = k + 1; p < n_variants; ++p) {
+            total += (*f)(bins[k], bins[p], n_ints_bin);
+        }
+    }
+
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+    b.throughput = ((n_comps*n_vals_actual*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+
+    return(b);
+}
+
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
     std::vector<uint32_t> samples = {512, 2048, 8192, 32768, 131072, 196608};
@@ -1148,7 +1198,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
         //std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
-        std::vector<uint32_t> n_alts = {3};
+        std::vector<uint32_t> n_alts = {3, samples[s]/10};
 
         for(int a = 0; a < n_alts.size(); ++a) {
             if(n_alts[a] == 0) continue;
@@ -1219,12 +1269,12 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                     const uint32_t target_bin = pos[j][p] / 64 / n_ints_bin;
                     const uint32_t FOR = (target_bin*64*n_ints_bin); // frame of reference value
 
-                    std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << (pos[j][p] - FOR) << "F=" << (pos[j][p] - FOR) / 64 << "|" << (pos[j][p] - FOR) % 64;
-                    assert(bins[j].bins.size() != 0);
+                    //std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << (pos[j][p] - FOR) << "F=" << (pos[j][p] - FOR) / 64 << "|" << (pos[j][p] - FOR) % 64;
                     if(bins[j].bins[target_bin].n_vals == 0) bins[j].bins[target_bin].Allocate(n_ints_bin);
                     bins[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
+                    bins[j].bin_bitmap |= (1L << target_bin);
                 }
-                std::cerr << std::endl;
+                //std::cerr << std::endl;
 
                 pos_integer16[j].push_back(pos[j][0] / 64);
 
@@ -1289,7 +1339,15 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             std::cerr << "n_reduced=" << n_vals_reduced << std::endl;
 
-
+            uint32_t mem_bins = 0;
+            for(int i = 0; i < bins.size(); ++i) {
+                mem_bins += sizeof(uint64_t);
+                for(int j = 0; j < bins[i].bins.size(); ++j) {
+                    mem_bins += bins[i].bins[j].n_vals * sizeof(uint64_t);
+                }
+                mem_bins += sizeof(uint8_t);
+            }
+            std::cerr << "mem_bins=" << mem_bins << " (" << (n_ints_sample*n_variants*sizeof(uint64_t)) / (double)mem_bins << ")" << std::endl;
 
             //uint32_t offset = 0;
             /*for(int i = 0; i < n_variants; ++i) {
@@ -1332,12 +1390,17 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             */
 
-            // Reduced
-            bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-sse4-popcnt\t" << red1.milliseconds << "\t" << red1.count << "\t" << red1.throughput << std::endl;
+            //
+            // const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< range_bin >& bins, const uint8_t n_ints_bin
+            bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
+            std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << std::endl;
 
-            bench_t red2 = fredwrapper<&insersect_reduced_scalar>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-scalar-popcnt\t" << red2.milliseconds << "\t" << red2.count << "\t" << red2.throughput << std::endl;
+            // Reduced
+            //bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-sse4-popcnt\t" << red1.milliseconds << "\t" << red1.count << "\t" << red1.throughput << std::endl;
+
+            //bench_t red2 = fredwrapper<&insersect_reduced_scalar>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-scalar-popcnt\t" << red2.milliseconds << "\t" << red2.count << "\t" << red2.throughput << std::endl;
 
             // Scalar 1
             bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
