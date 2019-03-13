@@ -104,7 +104,7 @@ static inline void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
 *  Class definitions
 ****************************/
 struct bin {
-    bin() : list(false), n_vals(0), bitmap(0), vals(nullptr){}
+    bin() : n_vals(0), bitmap(0), vals(nullptr){}
     ~bin(){ delete[] vals; }
 
     void Allocate(const uint8_t n) {
@@ -116,24 +116,49 @@ struct bin {
 
     inline const uint64_t& operator[](const uint8_t p) const { return(vals[p]); }
 
-    bool list;
     uint8_t n_vals; // limited to 64 uint64_t
     uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
     uint64_t* vals;
-    std::vector<uint32_t> pos;
 };
 
 struct range_bin {
-    range_bin() : bin_bitmap(0){}
-    range_bin(uint32_t n_bins) : bin_bitmap(0){ bins.resize(n_bins); }
+    range_bin() : list(false), n_list(std::numeric_limits<uint32_t>::max()), bin_bitmap(0){}
+    range_bin(uint32_t n_bins) : list(false), n_list(std::numeric_limits<uint32_t>::max()), bin_bitmap(0){ bins.resize(n_bins); }
 
+    bool list;
+    uint32_t n_list;
     uint64_t bin_bitmap; // what bins are set
     std::vector< bin > bins;
+    std::shared_ptr< std::vector<uint32_t> > pos;
 };
 
 uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin) {
     uint64_t count = 0;
     if((b1.bin_bitmap & b2.bin_bitmap) == 0) return(0);
+
+    if(b1.list || b2.list) {
+        //std::cerr << "double list" << std::endl;
+        if(b1.n_list < b2.n_list) {
+            for(int i = 0; i < b1.pos->size(); ++i) {
+                if((b1.bins[b1.pos->at(i)].n_vals == 0) || (b2.bins[b1.pos->at(i)].n_vals == 0))
+                    continue;
+
+                for(int j = 0; j < n_ints_bin; ++j) {
+                    count += TWK_POPCOUNT(b1.bins[b1.pos->at(i)].vals[j] & b2.bins[b1.pos->at(i)].vals[j]);
+                }
+            }
+        } else {
+            for(int i = 0; i < b2.n_list; ++i) {
+                if((b1.bins[b2.pos->at(i)].n_vals == 0) || (b2.bins[b2.pos->at(i)].n_vals == 0))
+                    continue;
+
+                for(int j = 0; j < n_ints_bin; ++j) {
+                    count += TWK_POPCOUNT(b1.bins[b2.pos->at(i)].vals[j] & b2.bins[b2.pos->at(i)].vals[j]);
+                }
+            }
+        }
+        return(count);
+    }
 
     const uint32_t n = b1.bins.size();
     for(int i = 0; i < n; ++i) {
@@ -1223,7 +1248,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             std::vector< std::pair<uint32_t, uint32_t> > prefix_suffix_pos(n_variants, std::pair<uint32_t, uint32_t>(0,0));
 
-            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)16);
+            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)4);
             const uint32_t bin_size = std::ceil(n_ints_sample / (float)n_ints_bin);
             std::cerr << "bin-size=" << bin_size << std::endl;
             std::vector< range_bin > bins(n_variants, bin_size);
@@ -1265,6 +1290,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 prefix_suffix_pos[j].first = pos_integer[j].front();
                 prefix_suffix_pos[j].second = pos_integer[j].back()+1;
 
+                //std::cerr << "bin=" << bin_size << std::endl;
                 for(int p = 0; p < pos[j].size(); ++p) {
                     const uint32_t target_bin = pos[j][p] / 64 / n_ints_bin;
                     const uint32_t FOR = (target_bin*64*n_ints_bin); // frame of reference value
@@ -1275,6 +1301,18 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                     bins[j].bin_bitmap |= (1L << target_bin);
                 }
                 //std::cerr << std::endl;
+
+                std::vector< uint32_t > v;
+                for(int p = 0; p < bins[j].bins.size(); ++p) {
+                    if(bins[j].bins[p].n_vals) v.push_back(p);
+                }
+
+                if(v.size() / (float)bin_size < 0.2) {
+                    std::cerr << v.size() << "/" << bin_size << "->" << (v.size() / (float)bin_size) << std::endl;
+                    bins[j].list = true;
+                    bins[j].pos = std::make_shared<std::vector<uint32_t>>(v);
+                    bins[j].n_list = v.size();
+                }
 
                 pos_integer16[j].push_back(pos[j][0] / 64);
 
