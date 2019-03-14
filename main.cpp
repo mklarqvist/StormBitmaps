@@ -4,7 +4,7 @@
 #include <cassert>
 #include <cstring>
 #include <algorithm>
-
+#include <memory>
 #include <bitset>
 
 /*
@@ -136,8 +136,10 @@ struct range_bin {
 };
 
 uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin) {
-    uint64_t count = 0;
+    // Squash
     if((b1.bin_bitmap & b2.bin_bitmap) == 0) return(0);
+
+    uint64_t count = 0;
 
     if(b1.list || b2.list) {
         //std::cerr << "double list" << std::endl;
@@ -199,16 +201,31 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
         const uint32_t n = b1.bins.size();
         for(int i = 0; i < n; ++i) {
             if(b1.bins[i].n_vals && b2.bins[i].n_vals) {
-
                 if(b1.bins[i].list || b2.bins[i].list) {
-                    std::cerr << "in list-full" << std::endl;
+                    //std::cerr << "in list-full" << std::endl;
+                    const bin& bin1 = b1.bins[i];
+                    const bin& bin2 = b2.bins[i];
+
+                    if(bin1.list || bin2.list) {
+                        if(bin1.n_list < bin2.n_list) {
+                            for(int j = 0; j < bin1.n_list; ++j) {
+                                count += TWK_POPCOUNT(bin1.vals[bin1.pos->at(j)] & bin2.vals[bin1.pos->at(j)]);
+                            }
+                        } else {
+                            for(int j = 0; j < bin2.n_list; ++j) {
+                                count += TWK_POPCOUNT(bin1.vals[bin2.pos->at(j)] & bin2.vals[bin2.pos->at(j)]);
+                            }
+                        }
+                    } else {
+                        // all
+                        for(int j = 0; j < n_ints_bin; ++j) {
+                            count += TWK_POPCOUNT(bin1.vals[j] & bin2.vals[j]);
+                        }
+                    }
                 }
 
-
                 // compare values in b
-                int j = 0;
-
-                for(; j < n_ints_bin; ++j) {
+                for( int j = 0; j < n_ints_bin; ++j) {
                     count += TWK_POPCOUNT(b1.bins[i].vals[j+0] & b2.bins[i].vals[j+0]);
                 }
             }
