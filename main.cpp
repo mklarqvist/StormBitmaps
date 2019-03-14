@@ -120,19 +120,20 @@ struct bin {
     uint8_t n_vals; // limited to 64 uint64_t
     uint32_t n_list;
     uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
-    uint64_t* vals;
-    std::shared_ptr< std::vector<uint32_t> > pos;
+    uint64_t* vals; // pointer to data
+    std::shared_ptr< std::vector<uint16_t> > pos;
 };
 
 struct range_bin {
-    range_bin() : list(false), n_list(std::numeric_limits<uint32_t>::max()), bin_bitmap(0){}
-    range_bin(uint32_t n_bins) : list(false), n_list(std::numeric_limits<uint32_t>::max()), bin_bitmap(0){ bins.resize(n_bins); }
+    range_bin() : list(false), n_list(std::numeric_limits<uint32_t>::max()), n_ints(0), bin_bitmap(0){}
+    range_bin(uint32_t n_bins) : list(false), n_list(std::numeric_limits<uint32_t>::max()), n_ints(0), bin_bitmap(0){ bins.resize(n_bins); }
 
     bool list;
-    uint32_t n_list;
+    uint32_t n_list, n_ints;
     uint64_t bin_bitmap; // what bins are set
     std::vector< bin > bins;
-    std::shared_ptr< std::vector<uint32_t> > pos;
+    std::shared_ptr< std::vector<uint16_t> > pos;
+    //uint64_t* vals_con;
 };
 
 uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin) {
@@ -222,11 +223,113 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
                             count += TWK_POPCOUNT(bin1.vals[j] & bin2.vals[j]);
                         }
                     }
+                } else {
+                    // compare values in b
+                    for( int j = 0; j < n_ints_bin; ++j) {
+                        count += TWK_POPCOUNT(b1.bins[i].vals[j] & b2.bins[i].vals[j]);
+                    }
                 }
+            }
+        }
+    }
 
-                // compare values in b
-                for( int j = 0; j < n_ints_bin; ++j) {
-                    count += TWK_POPCOUNT(b1.bins[i].vals[j+0] & b2.bins[i].vals[j+0]);
+    return(count);
+}
+
+uint64_t intersect_range_bins_bit(const range_bin& b1, const range_bin& b2, const uint8_t n_ints_bin) {
+    // Squash
+    if((b1.bin_bitmap & b2.bin_bitmap) == 0) return(0);
+
+    uint64_t count = 0;
+
+    if(b1.list || b2.list) {
+        if(b1.n_list < b2.n_list) {
+            for(int i = 0; i < b1.pos->size(); ++i) {
+                if((b1.bins[b1.pos->at(i)].n_vals == 0) || (b2.bins[b1.pos->at(i)].n_vals == 0))
+                    continue;
+
+                if(b1.bins[b1.pos->at(i)].list || b2.bins[b1.pos->at(i)].list) {
+
+                    const bin& bin1 = b1.bins[b1.pos->at(i)];
+                    const bin& bin2 = b2.bins[b1.pos->at(i)];
+
+                    if(bin1.list || bin2.list) {
+                        if(bin1.n_list < bin2.n_list) {
+                            for(int j = 0; j < bin1.n_list; ++j) {
+                                count += ((bin2.vals[bin1.pos->at(j) / 64] & (1L << (bin1.pos->at(j) % 64))) != 0);
+                            }
+                        } else {
+                            for(int j = 0; j < bin2.n_list; ++j) {
+                                count += ((bin1.vals[bin2.pos->at(j) / 64] & (1L << (bin2.pos->at(j) % 64))) != 0);
+                            }
+                        }
+                    }
+                } else { // no lists available
+                    for(int j = 0; j < n_ints_bin; ++j) {
+                        count += TWK_POPCOUNT(b1.bins[b1.pos->at(i)].vals[j] & b2.bins[b1.pos->at(i)].vals[j]);
+                    }
+                }
+            }
+        } else {
+            for(int i = 0; i < b2.n_list; ++i) {
+                if((b1.bins[b2.pos->at(i)].n_vals == 0) || (b2.bins[b2.pos->at(i)].n_vals == 0))
+                    continue;
+
+                const bin& bin1 = b1.bins[b2.pos->at(i)];
+                const bin& bin2 = b2.bins[b2.pos->at(i)];
+
+                if(bin1.list || bin2.list) {
+                    if(bin1.n_list < bin2.n_list) {
+                        for(int j = 0; j < bin1.n_list; ++j) {
+                            count += ((bin2.vals[bin1.pos->at(j) / 64] & (1L << (bin1.pos->at(j) % 64))) != 0);
+                            //count += TWK_POPCOUNT(bin1.vals[bin1.pos->at(j)] & bin2.vals[bin1.pos->at(j)]);
+                        }
+                    } else {
+                        for(int j = 0; j < bin2.n_list; ++j) {
+                            count += ((bin1.vals[bin2.pos->at(j) / 64] & (1L << (bin2.pos->at(j) % 64))) != 0);
+                            //count += TWK_POPCOUNT(bin1.vals[bin2.pos->at(j)] & bin2.vals[bin2.pos->at(j)]);
+                        }
+                    }
+                } else {
+                    // all
+                    for(int j = 0; j < n_ints_bin; ++j) {
+                        count += TWK_POPCOUNT(bin1.vals[j] & bin2.vals[j]);
+                    }
+                }
+            }
+        }
+    } else { // no lists for either at upper level
+        const uint32_t n = b1.bins.size();
+        for(int i = 0; i < n; ++i) {
+            if(b1.bins[i].n_vals && b2.bins[i].n_vals) {
+                if(b1.bins[i].list || b2.bins[i].list) {
+                    //std::cerr << "in list-full" << std::endl;
+                    const bin& bin1 = b1.bins[i];
+                    const bin& bin2 = b2.bins[i];
+
+                    if(bin1.list || bin2.list) {
+                        if(bin1.n_list < bin2.n_list) {
+                            for(int j = 0; j < bin1.n_list; ++j) {
+                                count += ((bin2.vals[bin1.pos->at(j) / 64] & (1L << (bin1.pos->at(j) % 64))) != 0);
+                                //count += TWK_POPCOUNT(bin1.vals[bin1.pos->at(j)] & bin2.vals[bin1.pos->at(j)]);
+                            }
+                        } else {
+                            for(int j = 0; j < bin2.n_list; ++j) {
+                                count += ((bin1.vals[bin2.pos->at(j) / 64] & (1L << (bin2.pos->at(j) % 64))) != 0);
+                                //count += TWK_POPCOUNT(bin1.vals[bin2.pos->at(j)] & bin2.vals[bin2.pos->at(j)]);
+                            }
+                        }
+                    } else {
+                        // all
+                        for(int j = 0; j < n_ints_bin; ++j) {
+                            count += TWK_POPCOUNT(bin1.vals[j] & bin2.vals[j]);
+                        }
+                    }
+                } else {
+                    // compare values in b
+                    for( int j = 0; j < n_ints_bin; ++j) {
+                        count += TWK_POPCOUNT(b1.bins[i].vals[j] & b2.bins[i].vals[j]);
+                    }
                 }
             }
         }
@@ -250,7 +353,7 @@ uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_
 uint64_t intersect_bitmaps_scalar_4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count[4] = {0};
     for(int i = 0; i < n_ints; i += 4) {
-        count[0] += TWK_POPCOUNT(b1[i] & b2[i]);
+        count[0] += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
         count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
         count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
         count[3] += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
@@ -264,7 +367,7 @@ uint64_t intersect_bitmaps_scalar_4way(const uint64_t* __restrict__ b1, const ui
 uint64_t intersect_bitmaps_scalar_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
     for(int i = 0; i < n_ints; i += 4) {
-        count += TWK_POPCOUNT(b1[i] & b2[i]);
+        count += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
         count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
         count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
         count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
@@ -276,7 +379,7 @@ uint64_t intersect_bitmaps_scalar_1x4way(const uint64_t* __restrict__ b1, const 
 uint64_t intersect_bitmaps_scalar_8way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count[8] = {0};
     for(int i = 0; i < n_ints; i += 8) {
-        count[0] += TWK_POPCOUNT(b1[i] & b2[i]);
+        count[0] += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
         count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
         count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
         count[3] += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
@@ -1269,6 +1372,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint32_t desired_mem = 10 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
         uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
+        //uint32_t n_variants = 10000;
 
         std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
         std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint64_t)/(1024 * 1024.0) << "Mb" << std::endl;
@@ -1277,8 +1381,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint64_t* vals_reduced;
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
-        //std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
-        std::vector<uint32_t> n_alts = {1,5,10,15,20,25,50,100};
+        std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
+        //std::vector<uint32_t> n_alts = {1,5,10,15,20,25,50,100};
 
         for(int a = 0; a < n_alts.size(); ++a) {
             if(n_alts[a] == 0) continue;
@@ -1303,10 +1407,11 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             std::vector< std::pair<uint32_t, uint32_t> > prefix_suffix_pos(n_variants, std::pair<uint32_t, uint32_t>(0,0));
 
-            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)4);
+            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)(SIMD_WIDTH/64));
             const uint32_t bin_size = std::ceil(n_ints_sample / (float)n_ints_bin);
             std::cerr << "bin-size=" << bin_size << std::endl;
             std::vector< range_bin > bins(n_variants, bin_size);
+            std::vector< range_bin > bins_bit(n_variants, bin_size);
 
             std::random_device rd;  // obtain a random number from hardware
             std::mt19937 eng(rd()); // seed the generator
@@ -1346,33 +1451,48 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 prefix_suffix_pos[j].second = pos_integer[j].back()+1;
 
                 //std::cerr << "bin=" << bin_size << std::endl;
-                std::vector< std::vector<uint32_t> > vv(bin_size);
+                bins[j].n_ints     = pos[j].size();
+                bins_bit[j].n_ints = pos[j].size();
+                std::vector< std::vector<uint16_t> > vv(bin_size); // integers
+                std::vector< std::vector<uint16_t> > vv2(bin_size); // bits
                 for(int p = 0; p < pos[j].size(); ++p) {
                     const uint32_t target_bin = pos[j][p] / 64 / n_ints_bin;
                     const uint32_t FOR = (target_bin*64*n_ints_bin); // frame of reference value
 
                     //std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << (pos[j][p] - FOR) << "F=" << (pos[j][p] - FOR) / 64 << "|" << (pos[j][p] - FOR) % 64;
-                    if(bins[j].bins[target_bin].n_vals == 0)
-                        bins[j].bins[target_bin].Allocate(n_ints_bin);
 
+                    // Allocate memory in target bins
+                    if(bins[j].bins[target_bin].n_vals == 0) bins[j].bins[target_bin].Allocate(n_ints_bin);
+                    if(bins_bit[j].bins[target_bin].n_vals == 0) bins_bit[j].bins[target_bin].Allocate(n_ints_bin);
+
+                    // Add integers
                     if(vv[target_bin].size() == 0) vv[target_bin].push_back((pos[j][p] - FOR) / 64);
                     else if(vv[target_bin].back() != ((pos[j][p] - FOR) / 64)) vv[target_bin].push_back((pos[j][p] - FOR) / 64);
 
+                    // Add bits
+                    if(vv2[target_bin].size() == 0) vv2[target_bin].push_back((pos[j][p] - FOR));
+                    else if(vv2[target_bin].back() != ((pos[j][p] - FOR))) vv2[target_bin].push_back((pos[j][p] - FOR));
+
+                    // Add data to bins and bitmap
                     bins[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
                     bins[j].bin_bitmap |= (1L << target_bin);
+
+                    bins_bit[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
+                    bins_bit[j].bin_bitmap |= (1L << target_bin);
                 }
                 //std::cerr << std::endl;
 
+                // for integer
                 for(int p = 0; p < vv.size(); ++p) {
                     if(vv[p].size() < 3 && vv[p].size() != 0) {
                         //std::cerr << "setting internal pos" << std::endl;
                         bins[j].bins[p].list = true;
-                        bins[j].bins[p].pos = std::make_shared< std::vector<uint32_t> >(vv[p]);
+                        bins[j].bins[p].pos = std::make_shared< std::vector<uint16_t> >(vv[p]);
                         bins[j].bins[p].n_list = vv[p].size();
                     }
                 }
 
-                std::vector< uint32_t > v;
+                std::vector< uint16_t > v;
                 for(int p = 0; p < bins[j].bins.size(); ++p) {
                     if(bins[j].bins[p].n_vals) v.push_back(p);
                 }
@@ -1380,9 +1500,33 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 if(v.size() / (float)bin_size < 0.5) {
                     //std::cerr << v.size() << "/" << bin_size << "->" << (v.size() / (float)bin_size) << std::endl;
                     bins[j].list = true;
-                    bins[j].pos = std::make_shared<std::vector<uint32_t>>(v);
+                    bins[j].pos = std::make_shared< std::vector<uint16_t> >(v);
                     bins[j].n_list = v.size();
                 }
+
+                // for bits
+                for(int p = 0; p < vv2.size(); ++p) {
+                    if(vv2[p].size() < 10 && vv2[p].size() != 0) {
+                        //std::cerr << "setting internal pos" << std::endl;
+                        bins_bit[j].bins[p].list = true;
+                        bins_bit[j].bins[p].pos = std::make_shared< std::vector<uint16_t> >(vv2[p]);
+                        bins_bit[j].bins[p].n_list = vv2[p].size();
+                    }
+                }
+
+                v.clear();
+                for(int p = 0; p < bins_bit[j].bins.size(); ++p) {
+                    if(bins_bit[j].bins[p].n_vals) v.push_back(p);
+                }
+
+                if(v.size() / (float)bin_size < 0.5) {
+                    //std::cerr << v.size() << "/" << bin_size << "->" << (v.size() / (float)bin_size) << std::endl;
+                    bins_bit[j].list = true;
+                    bins_bit[j].pos = std::make_shared< std::vector<uint16_t> >(v);
+                    bins_bit[j].n_list = v.size();
+                }
+
+                //
 
                 pos_integer16[j].push_back(pos[j][0] / 64);
 
@@ -1498,10 +1642,24 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             */
 
+            uint64_t int_comparisons = 0;
+            for(int k = 0; k < n_variants; ++k) {
+                for(int p = k + 1; p < n_variants; ++p) {
+                    int_comparisons += pos[k].size() + pos[p].size();
+                }
+            }
+            const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
+
             //
             // const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< range_bin >& bins, const uint8_t n_ints_bin
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << std::endl
+
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << std::endl;
+            PRINT("bins-popcnt",bins1);
+
+            bench_t bins_bitwise = frbinswrapper<&intersect_range_bins_bit>(n_variants, n_ints_sample, bins_bit, n_ints_bin);
+            PRINT("bins-bit",bins_bitwise);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << "\t" << (int_comparisons*1000 / (bins1.milliseconds)) << std::endl;
 
             // Reduced
             //bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
@@ -1512,111 +1670,134 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             // Scalar 1
             bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
+            PRINT("scalar-popcnt",m1);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt\t" << m1.milliseconds << "\t" << m1.count << "\t" << m1.throughput << std::endl;
 
             // Scalar 4-way
             bench_t m4_way = fwrapper<&intersect_bitmaps_scalar_4way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-4way\t" << m4_way.milliseconds << "\t" << m4_way.count << "\t" << m4_way.throughput << std::endl;
+            PRINT("scalar-popcnt-4way",m4_way);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-4way\t" << m4_way.milliseconds << "\t" << m4_way.count << "\t" << m4_way.throughput << std::endl;
 
             // Scalar 8-way
             bench_t m8_way = fwrapper<&intersect_bitmaps_scalar_8way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-8way\t" << m8_way.milliseconds << "\t" << m8_way.count << "\t" << m8_way.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-8way\t" << m8_way.milliseconds << "\t" << m8_way.count << "\t" << m8_way.throughput << std::endl;
+            PRINT("scalar-popcnt-8way",m8_way);
 
             // Scalar 1x4-way
             bench_t m1x4_way = fwrapper<&intersect_bitmaps_scalar_1x4way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-1x4way\t" << m1x4_way.milliseconds << "\t" << m1x4_way.count << "\t" << m1x4_way.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-1x4way\t" << m1x4_way.milliseconds << "\t" << m1x4_way.count << "\t" << m1x4_way.throughput << std::endl;
+            PRINT("scalar-popcnt-1x4way",m1x4_way);
 
             // Scalar 1x8-way
             bench_t m1x8_way = fwrapper<&intersect_bitmaps_scalar_1x8way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-1x8way\t" << m1x8_way.milliseconds << "\t" << m1x8_way.count << "\t" << m1x8_way.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-popcnt-1x8way\t" << m1x8_way.milliseconds << "\t" << m1x8_way.count << "\t" << m1x8_way.throughput << std::endl;
+            PRINT("scalar-popcnt-1x8way",m1x8_way);
 
             // Scalar prefix-suffix 1x4-way
             bench_t ps_m1x4_way = fpswrapper<&intersect_bitmaps_scalar_prefix_suffix>(n_variants, vals, n_ints_sample, prefix_suffix_pos);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-prefix-suffix-popcnt-1x4way\t" << ps_m1x4_way.milliseconds << "\t" << ps_m1x4_way.count << "\t" << ps_m1x4_way.throughput << std::endl;
-
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-prefix-suffix-popcnt-1x4way\t" << ps_m1x4_way.milliseconds << "\t" << ps_m1x4_way.count << "\t" << ps_m1x4_way.throughput << std::endl;
+            PRINT("scalar-prefix-suffix-popcnt-1x4way",ps_m1x4_way);
 
             // Scalar-list
             if(n_alts[a] < 200 || (double)n_alts[a]/samples[a] < 0.05) {
                 bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
+                PRINT("scalar-list",m4);
 
                 bench_t m4_4way = flwrapper<&intersect_bitmaps_scalar_list_4way>(n_variants, vals, n_ints_sample, pos);
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << m4_4way.milliseconds << "\t" << m4_4way.count << "\t" << m4_4way.throughput << std::endl;
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << m4_4way.milliseconds << "\t" << m4_4way.count << "\t" << m4_4way.throughput << std::endl;
+                PRINT("scalar-list-4way",m4_4way);
 
                 bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << m4_1x4way.milliseconds << "\t" << m4_1x4way.count << "\t" << m4_1x4way.throughput << std::endl;
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << m4_1x4way.milliseconds << "\t" << m4_1x4way.count << "\t" << m4_1x4way.throughput << std::endl;
+                PRINT("scalar-list-1x4way",m4_1x4way);
             } else {
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
 
             // Scalar-int-list
             bench_t m5 = flwrapper<&intersect_bitmaps_scalar_intlist>(n_variants, vals, n_ints_sample, pos_integer);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
+            PRINT("scalar-int-list",m5);
 
             // Scalar-int-list
             bench_t m5_1x4 = flwrapper<&intersect_bitmaps_scalar_intlist_1x4way>(n_variants, vals, n_ints_sample, pos_integer);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list-1x4\t" << m5_1x4.milliseconds << "\t" << m5_1x4.count << "\t" << m5_1x4.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list-1x4\t" << m5_1x4.milliseconds << "\t" << m5_1x4.count << "\t" << m5_1x4.throughput << std::endl;
+            PRINT("scalar-int-list-1x4",m5_1x4);
 
 
             // SIMD SSE4
             bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("sse4",m2);
 
             // SIMD SSE 2-way
             bench_t m2_2way = fwrapper<&intersect_bitmaps_sse4_2way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-2way\t" << m2_2way.milliseconds << "\t" << m2_2way.count << "\t" << m2_2way.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-2way\t" << m2_2way.milliseconds << "\t" << m2_2way.count << "\t" << m2_2way.throughput << std::endl;
+            PRINT("sse4-2way",m2_2way);
 
             // SIMD SSE 2-way
             bench_t m2_1x2way = fwrapper<&intersect_bitmaps_sse4_1x2way>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-1x2way\t" << m2_1x2way.milliseconds << "\t" << m2_1x2way.count << "\t" << m2_1x2way.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-1x2way\t" << m2_1x2way.milliseconds << "\t" << m2_1x2way.count << "\t" << m2_1x2way.throughput << std::endl;
+            PRINT("sse4-1x2way",m2_1x2way);
 
 
             // SIMD SSE4-list
             bench_t m6 = flwrapper<&intersect_bitmaps_sse4_list>(n_variants, vals, n_ints_sample, pos_reg128);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list\t" << m6.milliseconds << "\t" << m6.count << "\t" << m6.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list\t" << m6.milliseconds << "\t" << m6.count << "\t" << m6.throughput << std::endl;
+            PRINT("sse4-list",m6);
 
             // SIMD SSE4-squash
             bench_t m13 = fsqwrapper<&intersect_bitmaps_sse4_squash>(n_variants, vals, n_ints_sample, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-squash\t" << m13.milliseconds << "\t" << m13.count << "\t" << m13.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-squash\t" << m13.milliseconds << "\t" << m13.count << "\t" << m13.throughput << std::endl;
+            PRINT("sse4-squash",m13);
 
             // SIMD SSE4-list-squash
             bench_t m14 = flsqwrapper<&intersect_bitmaps_sse4_list_squash>(n_variants, vals, n_ints_sample, pos_reg128, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list-squash\t" << m14.milliseconds << "\t" << m14.count << "\t" << m14.throughput << std::endl;
-
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-list-squash\t" << m14.milliseconds << "\t" << m14.count << "\t" << m14.throughput << std::endl;
+            PRINT("sse4-list-squash",m14);
 
             // SIMD AVX2
             bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
+            PRINT("avx2",m3);
 
             // SIMD AVX2-list
             bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
+            PRINT("avx2-list",m7);
 
             // SIMD AVX2-squash
             bench_t m10 = fsqwrapper<&intersect_bitmaps_avx2_squash>(n_variants, vals, n_ints_sample, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-squash\t" << m10.milliseconds << "\t" << m10.count << "\t" << m10.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-squash\t" << m10.milliseconds << "\t" << m10.count << "\t" << m10.throughput << std::endl;
+            PRINT("avx2-squash",m10);
 
             // SIMD AVX2-list-squash
             bench_t m12 = flsqwrapper<&intersect_bitmaps_avx2_list_squash>(n_variants, vals, n_ints_sample, pos_reg256, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
+            PRINT("avx2-list-squash",m12);
 
             // SIMD AVX512
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            PRINT("avx512",m8);
 
             // SIMD AVX512-list
             bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
+            PRINT("avx512-list",m9);
 
             // SIMD AVX512-squash
             bench_t m11 = fsqwrapper<&intersect_bitmaps_avx512_squash>(n_variants, vals, n_ints_sample, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-squash\t" << m11.milliseconds << "\t" << m11.count << "\t" << m11.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-squash\t" << m11.milliseconds << "\t" << m11.count << "\t" << m11.throughput << std::endl;
+            PRINT("avx512-squash",m11);
 
             // SIMD AVX512-list-squash
             bench_t m15 = flsqwrapper<&intersect_bitmaps_avx512_list_squash>(n_variants, vals, n_ints_sample, pos_reg512, squash_4096);
-            std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
+            PRINT("avx512-list-squash",m15);
         }
 
         delete[] vals;
