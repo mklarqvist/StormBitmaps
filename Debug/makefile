@@ -43,7 +43,7 @@ all: FastIntersectCount
 FastIntersectCount: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Cross G++ Linker'
-	g++  -o "FastIntersectCount" $(OBJS) $(USER_OBJS) $(LIBS)
+	g++ -L/home/mdrk/tools/CRoaring/build/ -o "FastIntersectCount" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

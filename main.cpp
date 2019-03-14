@@ -7,6 +7,12 @@
 #include <memory>
 #include <bitset>
 
+#define USE_ROARING
+
+#ifdef USE_ROARING
+#include <roaring/roaring.h>
+#endif
+
 /*
  * Reference data transfer rates:
  *
@@ -41,7 +47,7 @@
 
 //temp
 //#define __AVX512F__ 1
-//#define __AVX2__ 1
+#define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -154,6 +160,10 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
                     const bin& bin1 = b1.bins[b1.pos->at(i)];
                     const bin& bin2 = b2.bins[b1.pos->at(i)];
 
+                    if((bin1.bitmap & bin2.bitmap) == 0) {
+                        continue;
+                    }
+
                     //std::cerr << "in list-b1" << std::endl;
                     if(bin1.list || bin2.list) {
                         if(bin1.n_list < bin2.n_list) {
@@ -179,6 +189,10 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
 
                 const bin& bin1 = b1.bins[b2.pos->at(i)];
                 const bin& bin2 = b2.bins[b2.pos->at(i)];
+
+                if((bin1.bitmap & bin2.bitmap) == 0) {
+                    continue;
+                }
 
                 if(bin1.list || bin2.list) {
                     if(bin1.n_list < bin2.n_list) {
@@ -206,6 +220,9 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
                     //std::cerr << "in list-full" << std::endl;
                     const bin& bin1 = b1.bins[i];
                     const bin& bin2 = b2.bins[i];
+
+                    if((bin1.bitmap & bin2.bitmap) == 0)
+                       continue;
 
                     if(bin1.list || bin2.list) {
                         if(bin1.n_list < bin2.n_list) {
@@ -253,6 +270,9 @@ uint64_t intersect_range_bins_bit(const range_bin& b1, const range_bin& b2, cons
                     const bin& bin1 = b1.bins[b1.pos->at(i)];
                     const bin& bin2 = b2.bins[b1.pos->at(i)];
 
+                    if((bin1.bitmap & bin2.bitmap) == 0)
+                       continue;
+
                     if(bin1.list || bin2.list) {
                         if(bin1.n_list < bin2.n_list) {
                             for(int j = 0; j < bin1.n_list; ++j) {
@@ -277,6 +297,9 @@ uint64_t intersect_range_bins_bit(const range_bin& b1, const range_bin& b2, cons
 
                 const bin& bin1 = b1.bins[b2.pos->at(i)];
                 const bin& bin2 = b2.bins[b2.pos->at(i)];
+
+                if((bin1.bitmap & bin2.bitmap) == 0)
+                   continue;
 
                 if(bin1.list || bin2.list) {
                     if(bin1.n_list < bin2.n_list) {
@@ -303,20 +326,20 @@ uint64_t intersect_range_bins_bit(const range_bin& b1, const range_bin& b2, cons
         for(int i = 0; i < n; ++i) {
             if(b1.bins[i].n_vals && b2.bins[i].n_vals) {
                 if(b1.bins[i].list || b2.bins[i].list) {
-                    //std::cerr << "in list-full" << std::endl;
                     const bin& bin1 = b1.bins[i];
                     const bin& bin2 = b2.bins[i];
+
+                    if((bin1.bitmap & bin2.bitmap) == 0)
+                       continue;
 
                     if(bin1.list || bin2.list) {
                         if(bin1.n_list < bin2.n_list) {
                             for(int j = 0; j < bin1.n_list; ++j) {
                                 count += ((bin2.vals[bin1.pos->at(j) / 64] & (1L << (bin1.pos->at(j) % 64))) != 0);
-                                //count += TWK_POPCOUNT(bin1.vals[bin1.pos->at(j)] & bin2.vals[bin1.pos->at(j)]);
                             }
                         } else {
                             for(int j = 0; j < bin2.n_list; ++j) {
                                 count += ((bin1.vals[bin2.pos->at(j) / 64] & (1L << (bin2.pos->at(j) % 64))) != 0);
-                                //count += TWK_POPCOUNT(bin1.vals[bin2.pos->at(j)] & bin2.vals[bin2.pos->at(j)]);
                             }
                         }
                     } else {
@@ -1145,6 +1168,102 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
     return(ltot);
 }
 
+/**<
+ * Compare the uncompressed integers from two sets pairwise.
+ * @param v1
+ * @param v2
+ * @return
+ */
+uint64_t intersect_raw_naive(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
+    uint64_t count = 0;
+    for(int i = 0; i < v1.size(); ++i) {
+        for(int j = 0; j < v2.size(); ++j) {
+            count += (v1[i] == v2[j]);
+        }
+    }
+    return(count);
+}
+
+#if SIMD_VERSION >= 3
+uint64_t intersect_raw_sse4_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
+    uint64_t count = 0;
+    const __m128i one_mask = _mm_set1_epi16(1);
+    if(v1.size() < v2.size()) { // broadcast-compare V1-values to vectors of V2 values
+        const uint32_t n_cycles = v2.size() / 8;
+       // const __m128i* y = (const __m128i*)(&v2[0]);
+
+        for(int i = 0; i < v1.size(); ++i) {
+            const __m128i r = _mm_set1_epi16(v1[i]);
+
+            int j = 0;
+            for(; j < n_cycles; ++j) {
+                const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j*8]);
+                TWK_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+            }
+            j *= 8;
+            for(; j < v2.size(); ++j) count += (v1[i] == v2[j]);
+        }
+    } else {
+        const uint32_t n_cycles = v1.size() / 8;
+        const __m128i* y = (const __m128i*)(&v1[0]);
+
+        for(int i = 0; i < v2.size(); ++i) {
+            const __m128i r = _mm_set1_epi16(v2[i]);
+
+            int j = 0;
+            for(; j < n_cycles; ++j) {
+                const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j*8]);
+                TWK_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+            }
+            j *= 8;
+            for(; j < v1.size(); ++j) count += (v1[j] == v2[i]);
+        }
+    }
+    return(count);
+}
+#else
+uint64_t intersect_raw_sse4_broadcast(const std::vector<uint32_t>& v1, const std::vector<uint32_t>& v2) { return(0); }
+#endif
+
+#if SIMD_VERSION >= 5
+uint64_t intersect_raw_avx2_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
+    uint64_t count = 0;
+    const __m256i one_mask = _mm256_set1_epi16(1);
+    if(v1.size() < v2.size()) { // broadcast-compare V1-values to vectors of V2 values
+        const uint32_t n_cycles = v2.size() / 16;
+
+        for(int i = 0; i < v1.size(); ++i) {
+            __m256i r = _mm256_set1_epi16(v1[i]);
+
+            int j = 0;
+            for(; j < n_cycles; ++j) {
+                const __m256i y = _mm256_loadu_si256((const __m256i*)&v2[j*16]);
+                TWK_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+            }
+            j *= 16;
+            for(; j < v2.size(); ++j) count += (v1[i] == v2[j]);
+        }
+    } else {
+        const uint32_t n_cycles = v1.size() / 16;
+
+        for(int i = 0; i < v2.size(); ++i) {
+            __m256i r = _mm256_set1_epi16(v2[i]);
+
+            int j = 0;
+            for(; j < n_cycles; ++j) {
+                const __m256i y = _mm256_loadu_si256((const __m256i*)&v1[j*16]);
+                TWK_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+            }
+            j *= 16;
+            for(; j < v1.size(); ++j)  count += (v1[j] == v2[i]);
+        }
+    }
+    return(count);
+}
+#else
+uint64_t intersect_raw_avx2_broadcast(const std::vector<uint32_t>& v1, const std::vector<uint32_t>& v2) { return(0); }
+#endif
+
 // Convenience wrapper
 struct bench_t {
     uint64_t count;
@@ -1361,18 +1480,63 @@ bench_t frbinswrapper(const uint32_t n_variants, const uint32_t n_vals_actual, c
     return(b);
 }
 
+template <uint64_t (f)(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2)>
+bench_t frawwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< std::vector<uint16_t> >& pos) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    uint64_t total = 0;
+
+    for(int k = 0; k < n_variants; ++k) {
+        for(int p = k + 1; p < n_variants; ++p) {
+            total += (*f)(pos[k], pos[p]);
+        }
+    }
+
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+    b.throughput = ((n_comps*n_vals_actual*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+
+    return(b);
+}
+
+#ifdef USE_ROARING
+bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, roaring_bitmap_t** bitmaps) {
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    uint64_t total = 0;
+
+    for(int k = 0; k < n_variants; ++k) {
+        for(int p = k + 1; p < n_variants; ++p) {
+            total += roaring_bitmap_and_cardinality(bitmaps[k], bitmaps[p]);
+        }
+    }
+
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+    b.throughput = ((n_comps*n_vals_actual*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+
+    return(b);
+}
+#endif
+
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    //std::vector<uint32_t> samples = {512, 2048, 8192, 32768, 131072, 196608};
-    std::vector<uint32_t> samples = {32768, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {512, 2048, 8192, 32768, 131072, 196608, 589824};
+    //std::vector<uint32_t> samples = {32768, 131072, 196608, 589824};
     for(int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
 
         // Limit memory usage to 10e6 but no more than 10k records.
         uint32_t desired_mem = 10 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
-        uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
-        //uint32_t n_variants = 10000;
+        //uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
+        uint32_t n_variants = 10000;
 
         std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
         std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint64_t)/(1024 * 1024.0) << "Mb" << std::endl;
@@ -1380,6 +1544,15 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
         uint64_t* vals_reduced;
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
+
+#ifdef USE_ROARING
+        // roaring_bitmap_t *r1 = roaring_bitmap_create();
+        // uint64_t roaring_bitmap_and_cardinality(const roaring_bitmap_t *x1, const roaring_bitmap_t *x2);
+        // roaring_bitmap_free(r1);
+        roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
+        for(int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
+        std::cerr << "after roaring init" << std::endl;
+#endif
 
         std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
         //std::vector<uint32_t> n_alts = {1,5,10,15,20,25,50,100};
@@ -1398,6 +1571,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             if(n_squash4096 == 1) divisor = samples[s];
             std::cerr << "nsq=" << n_squash4096 << " div=" << divisor << std::endl;
             std::vector< std::vector<uint32_t> > pos(n_variants, std::vector<uint32_t>());
+            std::vector< std::vector<uint16_t> > pos16(n_variants, std::vector<uint16_t>());
             std::vector< std::vector<uint32_t> > pos_integer(n_variants, std::vector<uint32_t>());
             std::vector< std::vector<uint16_t> > pos_integer16(n_variants, std::vector<uint16_t>());
             std::vector< std::vector<uint32_t> > pos_reg128(n_variants, std::vector<uint32_t>());
@@ -1407,7 +1581,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             std::vector< std::pair<uint32_t, uint32_t> > prefix_suffix_pos(n_variants, std::pair<uint32_t, uint32_t>(0,0));
 
-            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)(SIMD_WIDTH/64));
+            const uint8_t n_ints_bin = std::min(n_ints_sample, (uint32_t)(4*SIMD_WIDTH/64));
             const uint32_t bin_size = std::ceil(n_ints_sample / (float)n_ints_bin);
             std::cerr << "bin-size=" << bin_size << std::endl;
             std::vector< range_bin > bins(n_variants, bin_size);
@@ -1430,11 +1604,19 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                     vals2[val / 64] |= (1L << (val % 64));
                 }
 
-
                 // Sort to simplify
                 std::sort(pos[j].begin(), pos[j].end());
+
+                for(int p = 0; p < pos[j].size(); ++p)
+                    pos16[j].push_back(pos[j][p]);
+
                 //for(int p = 0; p < pos.back().size(); ++p) std::cerr << " " << pos.back()[p];
                 //std::cerr << std::endl;
+
+#ifdef USE_ROARING
+                for(int p = 0; p < pos[j].size(); ++p)
+                    roaring_bitmap_add(roaring[j], pos[j][p]);
+#endif
 
                 // Todo
                 // Collapse positions into integers
@@ -1458,26 +1640,30 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 for(int p = 0; p < pos[j].size(); ++p) {
                     const uint32_t target_bin = pos[j][p] / 64 / n_ints_bin;
                     const uint32_t FOR = (target_bin*64*n_ints_bin); // frame of reference value
+                    const uint32_t local_val = (pos[j][p] - FOR);
+                    const uint32_t local_int = local_val / 64;
 
-                    //std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << (pos[j][p] - FOR) << "F=" << (pos[j][p] - FOR) / 64 << "|" << (pos[j][p] - FOR) % 64;
+                    //std::cerr << " " << pos[j][p] << ":" << target_bin << " FOR=" << FOR << "->" << local_val << "F=" << local_int << "|" << local_val % 64;
 
                     // Allocate memory in target bins
                     if(bins[j].bins[target_bin].n_vals == 0) bins[j].bins[target_bin].Allocate(n_ints_bin);
                     if(bins_bit[j].bins[target_bin].n_vals == 0) bins_bit[j].bins[target_bin].Allocate(n_ints_bin);
 
                     // Add integers
-                    if(vv[target_bin].size() == 0) vv[target_bin].push_back((pos[j][p] - FOR) / 64);
-                    else if(vv[target_bin].back() != ((pos[j][p] - FOR) / 64)) vv[target_bin].push_back((pos[j][p] - FOR) / 64);
+                    if(vv[target_bin].size() == 0) vv[target_bin].push_back(local_int);
+                    else if(vv[target_bin].back() != (local_int)) vv[target_bin].push_back(local_int);
 
                     // Add bits
-                    if(vv2[target_bin].size() == 0) vv2[target_bin].push_back((pos[j][p] - FOR));
-                    else if(vv2[target_bin].back() != ((pos[j][p] - FOR))) vv2[target_bin].push_back((pos[j][p] - FOR));
+                    if(vv2[target_bin].size() == 0) vv2[target_bin].push_back(local_val);
+                    else if(vv2[target_bin].back() != (local_val)) vv2[target_bin].push_back(local_val);
 
                     // Add data to bins and bitmap
-                    bins[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
+                    bins[j].bins[target_bin].vals[local_int] |= (1L << (local_val % 64));
+                    bins[j].bins[target_bin].bitmap |= (1L << local_int);
                     bins[j].bin_bitmap |= (1L << target_bin);
 
-                    bins_bit[j].bins[target_bin].vals[(pos[j][p] - FOR) / 64] |= (1L << ((pos[j][p] - FOR) % 64));
+                    bins_bit[j].bins[target_bin].vals[local_int] |= (1L << (local_val % 64));
+                    bins_bit[j].bins[target_bin].bitmap |= (1L << local_int);
                     bins_bit[j].bin_bitmap |= (1L << target_bin);
                 }
                 //std::cerr << std::endl;
@@ -1650,9 +1836,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
 
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << std::endl
+
+#ifdef USE_ROARING
+            // temp
+            bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
+            PRINT("roaring",broaring);
+#endif
+
             //
             // const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< range_bin >& bins, const uint8_t n_ints_bin
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << std::endl
 
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
             PRINT("bins-popcnt",bins1);
@@ -1660,6 +1853,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t bins_bitwise = frbinswrapper<&intersect_range_bins_bit>(n_variants, n_ints_sample, bins_bit, n_ints_bin);
             PRINT("bins-bit",bins_bitwise);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << "\t" << (int_comparisons*1000 / (bins1.milliseconds)) << std::endl;
+
+
+            bench_t raw1 = frawwrapper<&intersect_raw_naive>(n_variants, n_ints_sample, pos16);
+            PRINT("raw-naive",raw1);
+
+            bench_t raw2 = frawwrapper<&intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
+            PRINT("raw-naive-sse4",raw2);
+
+            bench_t raw3 = frawwrapper<&intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
+            PRINT("raw-naive-avx2",raw3);
 
             // Reduced
             //bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
@@ -1702,30 +1905,30 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             if(n_alts[a] < 200 || (double)n_alts[a]/samples[a] < 0.05) {
                 bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
                 //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << m4.milliseconds << "\t" << m4.count << "\t" << m4.throughput << std::endl;
-                PRINT("scalar-list",m4);
+                PRINT("scalar-skip-list",m4);
 
                 bench_t m4_4way = flwrapper<&intersect_bitmaps_scalar_list_4way>(n_variants, vals, n_ints_sample, pos);
                 //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << m4_4way.milliseconds << "\t" << m4_4way.count << "\t" << m4_4way.throughput << std::endl;
-                PRINT("scalar-list-4way",m4_4way);
+                PRINT("scalar-skip-list-4way",m4_4way);
 
                 bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
                 //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << m4_1x4way.milliseconds << "\t" << m4_1x4way.count << "\t" << m4_1x4way.throughput << std::endl;
-                PRINT("scalar-list-1x4way",m4_1x4way);
+                PRINT("scalar-skip-list-1x4way",m4_1x4way);
             } else {
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-list-1x4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-skip-list\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-skip-list-4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-skip-list-1x4way\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
 
             // Scalar-int-list
             bench_t m5 = flwrapper<&intersect_bitmaps_scalar_intlist>(n_variants, vals, n_ints_sample, pos_integer);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list\t" << m5.milliseconds << "\t" << m5.count << "\t" << m5.throughput << std::endl;
-            PRINT("scalar-int-list",m5);
+            PRINT("scalar-int-skip-list",m5);
 
             // Scalar-int-list
             bench_t m5_1x4 = flwrapper<&intersect_bitmaps_scalar_intlist_1x4way>(n_variants, vals, n_ints_sample, pos_integer);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tscalar-int-list-1x4\t" << m5_1x4.milliseconds << "\t" << m5_1x4.count << "\t" << m5_1x4.throughput << std::endl;
-            PRINT("scalar-int-list-1x4",m5_1x4);
+            PRINT("scalar-int-skip-list-1x4",m5_1x4);
 
 
             // SIMD SSE4
@@ -1767,7 +1970,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // SIMD AVX2-list
             bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
-            PRINT("avx2-list",m7);
+            PRINT("avx2-skip-list",m7);
 
             // SIMD AVX2-squash
             bench_t m10 = fsqwrapper<&intersect_bitmaps_avx2_squash>(n_variants, vals, n_ints_sample, squash_4096);
@@ -1777,7 +1980,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // SIMD AVX2-list-squash
             bench_t m12 = flsqwrapper<&intersect_bitmaps_avx2_list_squash>(n_variants, vals, n_ints_sample, pos_reg256, squash_4096);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
-            PRINT("avx2-list-squash",m12);
+            PRINT("avx2-skip-list-squash",m12);
 
             // SIMD AVX512
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
@@ -1787,7 +1990,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // SIMD AVX512-list
             bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
-            PRINT("avx512-list",m9);
+            PRINT("avx512-skip-list",m9);
 
             // SIMD AVX512-squash
             bench_t m11 = fsqwrapper<&intersect_bitmaps_avx512_squash>(n_variants, vals, n_ints_sample, squash_4096);
@@ -1797,11 +2000,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // SIMD AVX512-list-squash
             bench_t m15 = flsqwrapper<&intersect_bitmaps_avx512_list_squash>(n_variants, vals, n_ints_sample, pos_reg512, squash_4096);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
-            PRINT("avx512-list-squash",m15);
+            PRINT("avx512-skip-list-squash",m15);
         }
 
         delete[] vals;
         delete[] vals_reduced;
+#ifdef USE_ROARING
+        // Cleanup
+        for(int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
+        delete[] roaring;
+#endif
     }
 }
 
