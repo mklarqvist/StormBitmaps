@@ -180,7 +180,6 @@ uint64_t intersect_bitmaps_sse4_1x2way(const uint64_t* __restrict__ b1, const ui
 uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2);
 uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);
 uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);uint64_t insersect_reduced_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2);
-uint64_t insersect_reduced_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2);
 
 // AVX2
 uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints);
@@ -194,6 +193,12 @@ uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const ui
 uint64_t intersect_bitmaps_avx512_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);
 uint64_t intersect_bitmaps_avx512_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);
 
+// Reduced
+uint64_t insersect_reduced_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2);
+
+/****************************
+*  Run-length encoding
+****************************/
 template <class int_t>
 std::vector<int_t> construct_rle(const uint64_t* input, const uint32_t n_vals) {
     uint32_t n_runs = 0;
@@ -281,8 +286,15 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
     return(ltot);
 }
 
+/****************************
+*  Intersect vectors of values directly
+****************************/
 /**<
  * Compare the uncompressed integers from two sets pairwise.
+ * Naive: This function compares values from the two lists pairwise in
+ *    O(n*m)-time.
+ * Broadcast: Vectorized approach where a value from the smaller vector is broadcast
+ *    to a reference vector and compared against N values from the other vector.
  * @param v1
  * @param v2
  * @return
