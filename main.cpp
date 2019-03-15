@@ -286,8 +286,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         // Limit memory usage to 10e6 but no more than 10k records.
         uint32_t desired_mem = 10 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
-        //uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
-        uint32_t n_variants = 10000;
+        uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
+        //uint32_t n_variants = 10000;
 
         std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
         std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint64_t)/(1024 * 1024.0) << "Mb" << std::endl;
@@ -297,12 +297,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
 #ifdef USE_ROARING
-        // roaring_bitmap_t *r1 = roaring_bitmap_create();
-        // uint64_t roaring_bitmap_and_cardinality(const roaring_bitmap_t *x1, const roaring_bitmap_t *x2);
-        // roaring_bitmap_free(r1);
         roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
         for(int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
-        std::cerr << "after roaring init" << std::endl;
 #endif
 
         std::vector<uint32_t> n_alts = {3, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
@@ -545,48 +541,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             */
 
-            /*
-            if(n_alts[a] <= 20) {
-                std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
-                std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
-
-                uint32_t offset = 0;
-                for(int i = 0; i < n_variants; ++i) {
-                    rle_32[i]  = construct_rle<uint32_t> (&vals[offset], n_ints_sample);
-                    rle_64[i] = construct_rle<uint64_t>(&vals[offset], n_ints_sample);
-                    offset += n_ints_sample;
-                }
-
-                bench_t mrle32 = frlewrapper< uint32_t, &intersect_rle<uint32_t> >(rle_32, n_ints_sample);
-                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
-
-                //bench_t mrle32_b = frlewrapper< uint32_t, &intersect_rle_branchless<uint32_t> >(rle_32, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.milliseconds << "\t" << mrle32_b.count << "\t" << mrle32_b.throughput << std::endl;
-
-                bench_t mrle64 = frlewrapper< uint64_t, &intersect_rle<uint64_t> >(rle_64, n_ints_sample);
-                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
-
-                //bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.milliseconds << "\t" << mrle64_b.count << "\t" << mrle64_b.throughput << std::endl;
-
-                rle_32.clear(); rle_64.clear();
-
-            } else {
-                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
-            }
-            */
-
             uint64_t int_comparisons = 0;
-            for(int k = 0; k < n_variants; ++k) {
-                for(int p = k + 1; p < n_variants; ++p) {
-                    int_comparisons += pos[k].size() + pos[p].size();
-                }
-            }
-            const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
+              for(int k = 0; k < n_variants; ++k) {
+                  for(int p = k + 1; p < n_variants; ++p) {
+                      int_comparisons += pos[k].size() + pos[p].size();
+                  }
+              }
+              const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
 
+
+              std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)" << std::endl;
 #define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << std::endl
 
 #ifdef USE_ROARING
@@ -595,9 +559,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("roaring",broaring);
 #endif
 
-            //
-            // const uint32_t n_variants, const uint32_t n_vals_actual, const std::vector< range_bin >& bins, const uint8_t n_ints_bin
-
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
             PRINT("bins-popcnt",bins1);
 
@@ -605,22 +566,63 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("bins-bit",bins_bitwise);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << "\t" << (int_comparisons*1000 / (bins1.milliseconds)) << std::endl;
 
+            if(n_alts[a] <= 20) {
+                bench_t raw1 = frawwrapper<&intersect_raw_naive>(n_variants, n_ints_sample, pos16);
+                PRINT("raw-naive",raw1);
 
-            bench_t raw1 = frawwrapper<&intersect_raw_naive>(n_variants, n_ints_sample, pos16);
-            PRINT("raw-naive",raw1);
+                bench_t raw2 = frawwrapper<&intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
+                PRINT("raw-naive-sse4",raw2);
 
-            bench_t raw2 = frawwrapper<&intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
-            PRINT("raw-naive-sse4",raw2);
+                bench_t raw3 = frawwrapper<&intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
+                PRINT("raw-naive-avx2",raw3);
 
-            bench_t raw3 = frawwrapper<&intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
-            PRINT("raw-naive-avx2",raw3);
+                std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
+                std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
+
+                uint32_t offset = 0;
+                for(int i = 0; i < n_variants; ++i) {
+                    rle_32[i] = construct_rle<uint32_t>(&vals[offset], n_ints_sample);
+                    rle_64[i] = construct_rle<uint64_t>(&vals[offset], n_ints_sample);
+                    offset += n_ints_sample;
+                }
+
+                bench_t mrle32 = frlewrapper< uint32_t, &intersect_rle<uint32_t> >(rle_32, n_ints_sample);
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
+                PRINT("rle-32",mrle32);
+
+                bench_t mrle32_b = frlewrapper< uint32_t, &intersect_rle_branchless<uint32_t> >(rle_32, n_ints_sample);
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.milliseconds << "\t" << mrle32_b.count << "\t" << mrle32_b.throughput << std::endl;
+                PRINT("rle-32-branchless",mrle32_b);
+
+                bench_t mrle64 = frlewrapper< uint64_t, &intersect_rle<uint64_t> >(rle_64, n_ints_sample);
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
+                PRINT("rle-64",mrle64);
+
+                bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
+                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.milliseconds << "\t" << mrle64_b.count << "\t" << mrle64_b.throughput << std::endl;
+                PRINT("rle-64-branchless",mrle64_b);
+
+                rle_32.clear(); rle_64.clear();
+
+            } else {
+                std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive-sse4\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive-avx2\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+
+                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+            }
 
             // Reduced
-            //bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
+            bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-sse4-popcnt\t" << red1.milliseconds << "\t" << red1.count << "\t" << red1.throughput << std::endl;
+            PRINT("reduced-sse4-popcnt",red1);
 
-            //bench_t red2 = fredwrapper<&insersect_reduced_scalar>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
+            bench_t red2 = fredwrapper<&insersect_reduced_scalar>(n_variants, n_ints_sample, vals_reduced, pos_integer16);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\treduced-scalar-popcnt\t" << red2.milliseconds << "\t" << red2.count << "\t" << red2.throughput << std::endl;
+            PRINT("reduced-scalar-popcnt",red2);
 
             // Scalar 1
             bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
@@ -756,8 +758,8 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
         delete[] vals;
         delete[] vals_reduced;
+
 #ifdef USE_ROARING
-        // Cleanup
         for(int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
         delete[] roaring;
 #endif

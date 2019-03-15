@@ -21,7 +21,9 @@
 #include <cstdint>
 #include <cassert>
 #include <memory>
+#include <cstring>
 #include <vector>
+#include <limits>
 // temp
 #include <iostream>
 

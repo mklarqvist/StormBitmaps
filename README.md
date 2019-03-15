@@ -19,7 +19,7 @@ In [Tomahawk](https://github.com/mklarqvist/Tomahawk), we must compute N!2 set i
 ## Goals
 
 * Achieve high-performance on large arrays of values.
-* Support both small and large sets (sparse and dense bitmaps).
+* Support both small and large sets (sparse and dense).
 
 ## Technical approach
 
