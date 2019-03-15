@@ -4,12 +4,15 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
+../fast_intersect_count.cpp \
 ../main.cpp 
 
 OBJS += \
+./fast_intersect_count.o \
 ./main.o 
 
 CPP_DEPS += \
+./fast_intersect_count.d \
 ./main.d 
 
 
