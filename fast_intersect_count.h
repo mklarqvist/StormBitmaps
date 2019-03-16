@@ -128,17 +128,17 @@ struct bin {
     bin() : list(false), n_vals(0), n_list(std::numeric_limits<uint32_t>::max()), bitmap(0), vals(nullptr){}
     ~bin(){ delete[] vals; }
 
-    void Allocate(const uint8_t n) {
+    void Allocate(const uint16_t n) {
         delete[] vals;
         assert(!posix_memalign((void**)&vals, SIMD_ALIGNMENT, n*sizeof(uint64_t)));
         memset(vals, 0, n*sizeof(uint64_t));
         n_vals = n;
     }
 
-    inline const uint64_t& operator[](const uint8_t p) const { return(vals[p]); }
+    inline const uint64_t& operator[](const uint16_t p) const { return(vals[p]); }
 
     bool list;
-    uint8_t n_vals; // limited to 64 uint64_t
+    uint16_t n_vals; // limited to 64 uint64_t
     uint32_t n_list;
     uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
     uint64_t* vals; // pointer to data
