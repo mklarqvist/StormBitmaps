@@ -553,6 +553,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
               std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)" << std::endl;
 #define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << std::endl
 
+
 #ifdef USE_ROARING
             // temp
             bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
@@ -566,7 +567,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("bins-bit",bins_bitwise);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tbins-popcnt\t" << bins1.milliseconds << "\t" << bins1.count << "\t" << bins1.throughput << "\t" << (int_comparisons*1000 / (bins1.milliseconds)) << std::endl;
 
-            if(n_alts[a] <= 20) {
+            if(n_alts[a] <= 40) {
                 bench_t raw1 = frawwrapper<&intersect_raw_naive>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-naive",raw1);
 
@@ -575,6 +576,10 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
                 bench_t raw3 = frawwrapper<&intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-naive-avx2",raw3);
+
+                bench_t raw_gallop = frawwrapper<&intersect_raw_gallop>(n_variants, n_ints_sample, pos16);
+                PRINT("raw-gallop",raw_gallop);
+
 
                 std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
                 std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
@@ -608,12 +613,14 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive-sse4\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 std::cout << samples[s] << "\t" << n_alts[a] << "\traw-naive-avx2\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
+                std::cout << samples[s] << "\t" << n_alts[a] << "\traw-galloping-avx2\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
 
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
                 std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << 0 << "\t" << 0 << "\t" << 0 << "\t" << 0 << std::endl;
             }
+
 
             // Reduced
             bench_t red1 = fredwrapper<&insersect_reduced_sse4>(n_variants, n_ints_sample, vals_reduced, pos_integer16);

@@ -957,6 +957,38 @@ uint64_t intersect_raw_avx2_broadcast(const std::vector<uint16_t>& v1, const std
 uint64_t intersect_raw_avx2_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) { return(0); }
 #endif
 
+uint64_t intersect_raw_gallop(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
+    uint64_t count = 0;
+    const uint32_t skip_size = std::max(v2.size() / 10, (size_t)1);
+    const uint32_t n_skips = v2.size() / skip_size;
+
+    for(int i = 0; i < v1.size(); ++i) {
+        uint32_t from = 0;
+
+        for(int j = 0; j < n_skips; ++j) {
+            if(v2[j*skip_size] == v1[i]) {
+                ++count;
+                goto end;
+            }
+            else if(v2[j*skip_size] < v1[i]) {
+                from += skip_size;
+                continue;
+            }
+            break;
+        }
+
+        //std::cerr << "ft=" << from << "-" << v2.size() << std::endl;
+
+        for(int j = from; j < v2.size(); ++j) {
+            count += (v1[i] == v2[j]);
+        }
+        end:
+        continue;
+    }
+    //std::cerr << "done=" << count << std::endl;
+    return(count);
+}
+
 // ewah
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals) {
     struct control_word {

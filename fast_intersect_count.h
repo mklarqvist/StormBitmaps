@@ -304,6 +304,8 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
 uint64_t intersect_raw_naive(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 uint64_t intersect_raw_sse4_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 uint64_t intersect_raw_avx2_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_gallop(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+
 
 // construct ewah
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals);
