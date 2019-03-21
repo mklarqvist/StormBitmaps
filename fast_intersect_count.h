@@ -62,7 +62,7 @@
 
 //temp
 //#define __AVX512F__ 1
-//#define __AVX2__ 1
+#define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -143,6 +143,25 @@ struct bin {
     uint64_t bitmap; // bitmap of bitmaps (equivalent to squash)
     uint64_t* vals; // pointer to data
     std::shared_ptr< std::vector<uint16_t> > pos;
+};
+
+struct parent_bin {
+    inline const uint16_t& size() const { return(n_vals); }
+
+    uint8_t bitmap: 1, list: 1, unused: 6;
+    uint16_t n_vals;
+    uint8_t* raw;
+    std::shared_ptr< std::vector<uint16_t> > skip_list; // used only for bitmap
+};
+
+// interpret data as uint64_t
+struct bitmap_bin : public parent_bin {
+    inline const uint64_t* data() const { return(reinterpret_cast<const uint64_t*>(raw)); }
+};
+
+// intepret data as uint16_t
+struct array_bin : public parent_bin {
+    inline const uint16_t* data() const { return(reinterpret_cast<const uint16_t*>(raw)); }
 };
 
 struct range_bin {
@@ -302,10 +321,18 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
  * @return
  */
 uint64_t intersect_raw_naive(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_naive_roaring(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_naive_roaring_sse4(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 uint64_t intersect_raw_sse4_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_rotl_gallop_sse4(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_sse4_broadcast_skip(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 uint64_t intersect_raw_avx2_broadcast(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 uint64_t intersect_raw_gallop(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
-
+uint64_t intersect_raw_gallop_sse4(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_raw_binary(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_roaring_cardinality(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
+uint64_t intersect_vector16_cardinality_roar(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2);
 
 // construct ewah
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals);
