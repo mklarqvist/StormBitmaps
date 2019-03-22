@@ -1005,14 +1005,9 @@ uint64_t intersect_raw_rotl_gallop_sse4(const std::vector<uint16_t>& v1, const s
     const size_t st_a = (v1.size() / vectorlength) * vectorlength;
     const size_t st_b = (v2.size() / vectorlength) * vectorlength;
     __m128i v_a, v_b;
-    const __m128i one_mask = _mm_set1_epi16(1);
-    const __m128i mask1 = _mm_set_epi8(13,12,11,10,9,8,7,6,5,4,3,2,1,0,15,14);
-    const __m128i mask2 = _mm_set_epi8(11,10,9,8,7,6,5,4,3,2,1,0,15,14,13,12);
-    const __m128i mask3 = _mm_set_epi8(9,8,7,6,5,4,3,2,1,0,15,14,13,12,11,10);
-    const __m128i mask4 = _mm_set_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
-    const __m128i mask5 = _mm_set_epi8(5,4,3,2,1,0,15,14,13,12,11,10,9,8,7,6);
-    const __m128i mask6 = _mm_set_epi8(3,2,1,0,15,14,13,12,11,10,9,8,7,6,5,4);
-    const __m128i mask7 = _mm_set_epi8(1,0,15,14,13,12,11,10,9,8,7,6,5,4,3,2);
+    const __m128i one_mask  = _mm_set1_epi16(1);
+    const __m128i rotl_mask = _mm_set_epi8(13, 12, 11, 10, 9, 8,  7,  6,
+                                            5,  4,  3,  2, 1, 0, 15, 14);
     __m128i rcount = _mm_setzero_si128();
 
     if ((i_a < st_a) && (i_b < st_b)) {
@@ -1020,14 +1015,17 @@ uint64_t intersect_raw_rotl_gallop_sse4(const std::vector<uint16_t>& v1, const s
         v_b = _mm_lddqu_si128((__m128i *)&v2[i_b]);
 
         while (true) {
+
+#define UPDATE {                                            \
+        v_b = _mm_shuffle_epi8(v_b, rotl_mask);             \
+        res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, v_b)); \
+}
             __m128i res = _mm_cmpeq_epi16(v_a, v_b);
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask1)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask2)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask3)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask4)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask5)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask6)));
-            res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, _mm_shuffle_epi8(v_b, mask7)));
+            UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE
+
+#undef UPDATE
+
             //count += ((_mm_popcnt_u32(_mm_movemask_epi8(res))) >> 1); // option 1: popcnt of bit-mask
             rcount = _mm_add_epi16(rcount, _mm_and_si128(res, one_mask)); // option 2: horizontal accumulator
 
@@ -1077,23 +1075,11 @@ uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const s
     const size_t st_a = (v1.size() / vectorlength) * vectorlength;
     const size_t st_b = (v2.size() / vectorlength) * vectorlength;
     __m256i v_a, v_b;
-    const __m256i one_mask = _mm256_set1_epi16(1);
-    // 31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-    const __m256i mask1  = _mm256_set_epi8(29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30);
-    const __m256i mask2  = _mm256_set_epi8(27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28);
-    const __m256i mask3  = _mm256_set_epi8(25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26);
-    const __m256i mask4  = _mm256_set_epi8(23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24);
-    const __m256i mask5  = _mm256_set_epi8(21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22);
-    const __m256i mask6  = _mm256_set_epi8(19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20);
-    const __m256i mask7  = _mm256_set_epi8(17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18);
-    const __m256i mask8  = _mm256_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16);
-    const __m256i mask9  = _mm256_set_epi8(13,12,11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14);
-    const __m256i mask10 = _mm256_set_epi8(11,10,9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12);
-    const __m256i mask11 = _mm256_set_epi8(9,8,7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10);
-    const __m256i mask12 = _mm256_set_epi8(7,6,5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8);
-    const __m256i mask13 = _mm256_set_epi8(5,4,3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6);
-    const __m256i mask14 = _mm256_set_epi8(3,2,1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4);
-    const __m256i mask15 = _mm256_set_epi8(1,0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2);
+    const __m256i one_mask  = _mm256_set1_epi16(1);
+    const __m256i rotl_mask = _mm256_set_epi8(29, 28, 27, 26, 25, 24, 23, 22,
+                                              21, 20, 19, 18, 17, 16, 15, 14,
+                                              13, 12, 11, 10,  9,  8,  7,  6,
+                                               5,  4,  3,  2,  1,  0, 31, 30);
 
     __m256i rcount = _mm256_setzero_si256();
 
@@ -1103,21 +1089,19 @@ uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const s
 
         while (true) {
 
-#define UPDATE(p) res = _mm256_or_si256(res, _mm256_cmpeq_epi16(v_a, _mm256_shuffle_epi8(v_b, p)));
-#define BLOCK { \
-    UPDATE(mask1)  UPDATE(mask2)  UPDATE(mask3) \
-    UPDATE(mask4)  UPDATE(mask5)  UPDATE(mask6) \
-    UPDATE(mask7)  UPDATE(mask8)  UPDATE(mask9) \
-    UPDATE(mask10) UPDATE(mask11) UPDATE(mask12) \
-    UPDATE(mask13) UPDATE(mask14) UPDATE(mask15) \
+#define UPDATE {                                                  \
+        v_b = _mm256_shuffle_epi8(v_b, rotl_mask);                \
+        res = _mm256_or_si256(res, _mm256_cmpeq_epi16(v_a, v_b)); \
 }
             __m256i res = _mm256_cmpeq_epi16(v_a, v_b);
-            BLOCK
+            UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE
 
-#undef BLOCK
 #undef UPDATE
 
-            //count += ((_mm_popcnt_u32(_mm_movemask_epi8(res))) >> 1); // option 1: popcnt of bit-mask
+            //count += ((_mm_popcnt_u32(_mm256_movemask_epi8(res))) >> 1); // option 1: popcnt of bit-mask
             rcount = _mm256_add_epi16(rcount, _mm256_and_si256(res, one_mask)); // option 2: horizontal accumulator
 
             const uint16_t a_max = v1[i_a + vectorlength - 1];

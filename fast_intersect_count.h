@@ -311,7 +311,7 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
 *  Intersect vectors of values directly
 ****************************/
 /**<
- * Compare the uncompressed integers from two sets pairwise.
+ * Compare pairs of uncompressed 16-bit integers from two sets pairwise.
  * Naive: This function compares values from the two lists pairwise in
  *    O(n*m)-time.
  * Broadcast: Vectorized approach where a value from the smaller vector is broadcast
