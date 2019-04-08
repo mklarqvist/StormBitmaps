@@ -375,6 +375,25 @@ for(int i = from; i < to; ++i) {
 return(count);
 ```
 
+### Approach 7:
+
+Galloping psuedo-code
+
+```python
+low = 1
+for i = 1 to m
+    diff = 1
+    while low + diff <= n and A[low + diff] < B[i]
+        diff *= 2
+
+    high = min(n, low + diff)
+    k = binary_search(A, low, high)
+    if A[k] == B[i]:
+        output B[i]
+    
+    low = k
+```
+
 ### Results
 
 

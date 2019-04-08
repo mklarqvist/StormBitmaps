@@ -28,6 +28,7 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
     if(b1.list || b2.list) {
         //std::cerr << "double list" << std::endl;
         if(b1.n_list < b2.n_list) {
+            // std::cerr << "Double list=" << b1.n_list << "," << b2.n_list << std::endl;
             for(int i = 0; i < b1.pos->size(); ++i) {
                 if((b1.bins[b1.pos->at(i)].n_vals == 0) || (b2.bins[b1.pos->at(i)].n_vals == 0))
                     continue;
@@ -36,6 +37,8 @@ uint64_t intersect_range_bins(const range_bin& b1, const range_bin& b2, const ui
 
                     const bin& bin1 = b1.bins[b1.pos->at(i)];
                     const bin& bin2 = b2.bins[b1.pos->at(i)];
+
+                    // std::cerr << "\t" << bin1.n_list << "," << bin2.n_list << std::endl;
 
                     if((bin1.bitmap & bin2.bitmap) == 0) {
                         continue;
@@ -439,7 +442,11 @@ uint64_t intersect_bitmaps_scalar_list_1x4way(const uint64_t* __restrict__ b1, c
     return(count);
 }
 
-uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, 
+                                          const uint64_t* __restrict__ b2, 
+                                          const std::vector<uint32_t>& l1, 
+                                          const std::vector<uint32_t>& l2) 
+{
     uint64_t count = 0;
 
     if(l1.size() < l2.size()) {
@@ -454,7 +461,11 @@ uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const
     return(count);
 }
 
-uint64_t intersect_bitmaps_scalar_intlist_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+uint64_t intersect_bitmaps_scalar_intlist_1x4way(const uint64_t* __restrict__ b1, 
+                                                 const uint64_t* __restrict__ b2, 
+                                                 const std::vector<uint32_t>& l1, 
+                                                 const std::vector<uint32_t>& l2) 
+{
     uint64_t count = 0;
 
     if(l1.size() < l2.size()) {
@@ -554,7 +565,11 @@ uint64_t intersect_bitmaps_sse4_1x2way(const uint64_t* __restrict__ b1, const ui
     return(count);
 }
 
-uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, 
+                                     const uint64_t* __restrict__ b2, 
+                                     const std::vector<uint32_t>& l1, 
+                                     const std::vector<uint32_t>& l2) 
+{
     uint64_t count = 0;
 
     const __m128i* r1 = (__m128i*)b1;
@@ -572,7 +587,13 @@ uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1, const uint
     return(count);
 }
 
-uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, 
+                                       const uint64_t* __restrict__ b2, 
+                                       const uint32_t n_ints, 
+                                       const uint32_t n_squash, 
+                                       const std::vector<uint64_t>& sq1,
+                                       const std::vector<uint64_t>& sq2) 
+{
     uint64_t count = 0;
 
     for(int i = 0; i < n_squash; ++i) {
@@ -583,7 +604,14 @@ uint64_t intersect_bitmaps_sse4_squash(const uint64_t* __restrict__ b1, const ui
     return(intersect_bitmaps_sse4(b1,b2,n_ints));
 }
 
-uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, 
+                                            const uint64_t* __restrict__ b2, 
+                                            const std::vector<uint32_t>& l1, 
+                                            const std::vector<uint32_t>& l2, 
+                                            const uint32_t n_squash, 
+                                            const std::vector<uint64_t>& sq1, 
+                                            const std::vector<uint64_t>& sq2) 
+{
     uint64_t count = 0;
 
     for(int i = 0; i < n_squash; ++i) {
@@ -594,7 +622,11 @@ uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, con
     return(intersect_bitmaps_sse4_list(b1,b2,l1,l2));
 }
 
-uint64_t insersect_reduced_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2) {
+uint64_t insersect_reduced_sse4(const uint64_t* __restrict__ b1, 
+                                const uint64_t* __restrict__ b2, 
+                                const std::vector<uint16_t>& l1, 
+                                const std::vector<uint16_t>& l2) 
+{
     const __m128i full_vec = _mm_set1_epi16(0xFFFF);
     const __m128i one_mask = _mm_set1_epi16(1);
     const __m128i range    = _mm_set_epi16(8,7,6,5,4,3,2,1);
@@ -672,7 +704,11 @@ uint64_t insersect_reduced_sse4(const uint64_t* __restrict__ b1, const uint64_t*
     return(count);
 }
 
-uint64_t insersect_reduced_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint16_t>& l1, const std::vector<uint16_t>& l2) {
+uint64_t insersect_reduced_scalar(const uint64_t* __restrict__ b1, 
+                                  const uint64_t* __restrict__ b2, 
+                                  const std::vector<uint16_t>& l1, 
+                                  const std::vector<uint16_t>& l2) 
+{
     uint64_t count = 0; // helper
 
     if(l1.size() < l2.size()) {
@@ -713,30 +749,50 @@ uint64_t intersect_bitmaps_sse4_list_squash(const uint64_t* __restrict__ b1, con
 
 
 #if SIMD_VERSION >= 5
+// uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+//     uint64_t count = 0;
+//     const __m256i* r1 = (__m256i*)b1;
+//     const __m256i* r2 = (__m256i*)b2;
+//     const uint32_t n_cycles = n_ints / 4;
 
-#ifndef TWK_POPCOUNT_AVX2
-#define TWK_POPCOUNT_AVX2(A, B) {                  \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 0)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 1)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 2)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 3)); \
-}
-#endif
+//     int i = 0;
+//     for(/**/; i < n_cycles; ++i) {
+//         //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
+//         const __m256i diff = _mm256_and_si256(r1[i], r2[i]);
+//         count += popcount64_unrolled((uint64_t*)&diff, 4);
+//     }
+    
+//     i*=4;
+//     for(/**/; i < n_ints; ++i) {
+//         count += _mm_popcnt_u64(b1[i] & b2[i]);
+//     }
 
-uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+//     return(count);
+// }
+
+uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, 
+                                const uint64_t* __restrict__ b2, 
+                                const uint32_t n_ints) 
+{
     uint64_t count = 0;
     const __m256i* r1 = (__m256i*)b1;
     const __m256i* r2 = (__m256i*)b2;
     const uint32_t n_cycles = n_ints / 4;
 
-    for(int i = 0; i < n_cycles; ++i) {
-        TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[i], r2[i]));
+    count += popcnt_avx2_csa_intersect(r1, r2, n_cycles);
+
+    for(int i = n_cycles*4; i < n_ints; ++i) {
+        count += _mm_popcnt_u64(b1[i] & b2[i]);
     }
 
     return(count);
 }
 
-uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, 
+                                     const uint64_t* __restrict__ b2, 
+                                     const std::vector<uint32_t>& l1, 
+                                     const std::vector<uint32_t>& l2) 
+{
     uint64_t count = 0;
 
     const __m256i* r1 = (__m256i*)b1;
@@ -744,17 +800,27 @@ uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+            const __m256i diff = _mm256_and_si256(r1[l1[i]], r2[l1[i]]);
+            count += popcount64_unrolled((uint64_t*)&diff, 4);
+            //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+            const __m256i diff = _mm256_and_si256(r1[l2[i]], r2[l2[i]]);
+            count += popcount64_unrolled((uint64_t*)&diff, 4);
+            //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
         }
     }
     return(count);
 }
 
-uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, 
+                                       const uint64_t* __restrict__ b2, 
+                                       const uint32_t n_ints, 
+                                       const uint32_t n_squash, 
+                                       const std::vector<uint64_t>& sq1, 
+                                       const std::vector<uint64_t>& sq2) 
+{
     uint64_t count = 0;
 
     for(int i = 0; i < n_squash; ++i) {
@@ -765,7 +831,15 @@ uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const ui
     return(intersect_bitmaps_avx2(b1,b2,n_ints));
 }
 
-uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) {
+uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, 
+                                            const uint64_t* __restrict__ b2, 
+                                            const std::vector<uint32_t>& l1, 
+                                            const std::vector<uint32_t>& l2, 
+                                            const uint32_t n_squash, 
+                                            const std::vector<uint64_t>& sq1, 
+                                            const std::vector<uint64_t>& sq2) 
+{
+
     uint64_t count = 0;
 
     for(int i = 0; i < n_squash; ++i) {
@@ -776,11 +850,34 @@ uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, con
     return(intersect_bitmaps_avx2_list(b1,b2,l1,l2));
 }
 
+uint64_t intersect_bitmaps_avx2_twister(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, uint64_t* __restrict__ buffer) {
+    // uint64_t count = 0;
+    // const __m256i* r1 = (__m256i*)b1;
+    // const __m256i* r2 = (__m256i*)b2;
+    // const uint32_t n_cycles = n_ints / 4;
+
+    // int i = 0;
+    // for(/**/; i + 4 <= n_cycles; i += 4) {
+    //     for(int j = 0; j < 4; ++j) {
+    //         _mm256_store_si256((__m256i*)&buffer[j*4], r1[i+j] & r2[i+j]);
+    //     }
+    //     count += popcnt_avx2((__m256i*)buffer, 4);
+    // }
+
+    // for(/**/; i < n_cycles; ++i) {
+    //     const __m256i diff = _mm256_and_si256(r1[i], r2[i]);
+    //     count += popcount64_unrolled((uint64_t*)&diff, 4);
+    // }
+
+    return(0);
+}
+
 #else
 uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) { return(0); }
 uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) { return(0); }
 uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
 uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2) { return(0); }
+uint64_t intersect_bitmaps_avx2_twister(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, uint64_t* __restrict__ buffer) { return(0); }
 #endif // endif avx2
 
 
@@ -794,7 +891,7 @@ static inline __m512i TWK_AVX512_POPCNT(const __m512i v) {
 
     const __m512i t1 = _mm512_sub_epi8(v,       (_mm512_srli_epi16(v,  1) & m1));
     const __m512i t2 = _mm512_add_epi8(t1 & m2, (_mm512_srli_epi16(t1, 2) & m2));
-    const __m512i t3 = _mm512_add_epi8(t2, _mm512_srli_epi16(t2, 4)) & m4;
+    const __m512i t3 = _mm512_add_epi8(t2,       _mm512_srli_epi16(t2, 4)) & m4;
     return _mm512_sad_epu8(t3, _mm512_setzero_si512());
 }
 
@@ -887,7 +984,7 @@ uint64_t intersect_raw_naive_roaring(const std::vector<uint16_t>& v1, const std:
     const uint16_t *endA = A + v1.size();
     const uint16_t *endB = B + v2.size();
 
-    while (1) {
+    while (true) {
         while (*A < *B) {
             SKIP_FIRST_COMPARE:
             if (++A == endA) return answer;
@@ -915,7 +1012,7 @@ uint64_t intersect_raw_naive_roaring_sse4(const std::vector<uint16_t>& v1, const
     const uint32_t endB = v2.size();
     //const __m128i one_mask = _mm_set1_epi16(1);
 
-    while (1) {
+    while (true) {
         while (v1[A] < v2[B]) {
             SKIP_FIRST_COMPARE:
             if (++A == endA) return answer;

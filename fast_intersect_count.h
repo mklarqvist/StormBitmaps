@@ -107,11 +107,133 @@
 #define TWK_POPCOUNT __builtin_popcountll
 #endif
 
+static inline uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size)
+{
+    const uint64_t limit = size - size % 4;
+    uint64_t cnt = 0;
+    uint64_t i   = 0;
+
+    for (; i < limit; i += 4)
+    {
+        cnt += TWK_POPCOUNT(data[i+0]);
+        cnt += TWK_POPCOUNT(data[i+1]);
+        cnt += TWK_POPCOUNT(data[i+2]);
+        cnt += TWK_POPCOUNT(data[i+3]);
+    }
+
+    for (; i < size; i++)
+        cnt += TWK_POPCOUNT(data[i]);
+
+    return cnt;
+}
+
 #if SIMD_VERSION >= 3
 #ifndef TWK_POPCOUNT_SSE4
 #define TWK_POPCOUNT_SSE4(A, B) {               \
     A += TWK_POPCOUNT(_mm_extract_epi64(B, 0)); \
     A += TWK_POPCOUNT(_mm_extract_epi64(B, 1)); \
+}
+#endif
+
+#if SIMD_VERSION >= 5
+#ifndef TWK_POPCOUNT_AVX2
+#define TWK_POPCOUNT_AVX2(A, B) {                  \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+}
+#endif
+
+static inline void CSA256(__m256i* h, __m256i* l, __m256i a, __m256i b, __m256i c)
+{
+  __m256i u = _mm256_xor_si256(a, b);
+  *h = _mm256_or_si256(_mm256_and_si256(a, b), _mm256_and_si256(u, c));
+  *l = _mm256_xor_si256(u, c);
+}
+
+static inline __m256i popcnt256(__m256i v)
+{
+  __m256i lookup1 = _mm256_setr_epi8(
+      4, 5, 5, 6, 5, 6, 6, 7,
+      5, 6, 6, 7, 6, 7, 7, 8,
+      4, 5, 5, 6, 5, 6, 6, 7,
+      5, 6, 6, 7, 6, 7, 7, 8
+  );
+
+  __m256i lookup2 = _mm256_setr_epi8(
+      4, 3, 3, 2, 3, 2, 2, 1,
+      3, 2, 2, 1, 2, 1, 1, 0,
+      4, 3, 3, 2, 3, 2, 2, 1,
+      3, 2, 2, 1, 2, 1, 1, 0
+  );
+
+  __m256i low_mask = _mm256_set1_epi8(0x0f);
+  __m256i lo = _mm256_and_si256(v, low_mask);
+  __m256i hi = _mm256_and_si256(_mm256_srli_epi16(v, 4), low_mask);
+  __m256i popcnt1 = _mm256_shuffle_epi8(lookup1, lo);
+  __m256i popcnt2 = _mm256_shuffle_epi8(lookup2, hi);
+
+  return _mm256_sad_epu8(popcnt1, popcnt2);
+}
+
+/*
+ * AVX2 Harley-Seal popcount (4th iteration).
+ * The algorithm is based on the paper "Faster Population Counts
+ * using AVX2 Instructions" by Daniel Lemire, Nathan Kurz and
+ * Wojciech Mula (23 Nov 2016).
+ * @see https://arxiv.org/abs/1611.07612
+ */
+static inline uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m256i* __restrict__ data2, uint64_t size)
+{
+  __m256i cnt = _mm256_setzero_si256();
+  __m256i ones = _mm256_setzero_si256();
+  __m256i twos = _mm256_setzero_si256();
+  __m256i fours = _mm256_setzero_si256();
+  __m256i eights = _mm256_setzero_si256();
+  __m256i sixteens = _mm256_setzero_si256();
+  __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+  uint64_t i = 0;
+  uint64_t limit = size - size % 16;
+  uint64_t* cnt64;
+
+  for(; i < limit; i += 16)
+  {
+    CSA256(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
+    CSA256(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
+    CSA256(&foursA, &twos, twos, twosA, twosB);
+    CSA256(&twosA, &ones, ones, (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
+    CSA256(&twosB, &ones, ones, (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
+    CSA256(&foursB, &twos, twos, twosA, twosB);
+    CSA256(&eightsA, &fours, fours, foursA, foursB);
+    CSA256(&twosA, &ones, ones, (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
+    CSA256(&twosB, &ones, ones, (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
+    CSA256(&foursA, &twos, twos, twosA, twosB);
+    CSA256(&twosA, &ones, ones, (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
+    CSA256(&twosB, &ones, ones, (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
+    CSA256(&foursB, &twos, twos, twosA, twosB);
+    CSA256(&eightsB, &fours, fours, foursA, foursB);
+    CSA256(&sixteens, &eights, eights, eightsA, eightsB);
+
+    cnt = _mm256_add_epi64(cnt, popcnt256(sixteens));
+  }
+
+  cnt = _mm256_slli_epi64(cnt, 4);
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(eights), 3));
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
+  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
+  cnt = _mm256_add_epi64(cnt, popcnt256(ones));
+
+  for(; i < size; i++)
+    cnt = _mm256_add_epi64(cnt, popcnt256(data1[i] & data2[i]));
+
+  cnt64 = (uint64_t*) &cnt;
+
+  return cnt64[0] +
+         cnt64[1] +
+         cnt64[2] +
+         cnt64[3];
 }
 #endif
 
@@ -207,6 +329,7 @@ uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, const uint64_t*
 uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2);
 uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);
 uint64_t intersect_bitmaps_avx2_list_squash(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2, const uint32_t n_squash, const std::vector<uint64_t>& sq1, const std::vector<uint64_t>& sq2);
+uint64_t intersect_bitmaps_avx2_twister(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints, uint64_t* buffer);
 
 // AVX512
 uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints);
