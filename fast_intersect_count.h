@@ -62,7 +62,7 @@
 
 //temp
 //#define __AVX512F__ 1
-#define __AVX2__ 1
+// #define __AVX2__ 1
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -107,7 +107,41 @@
 #define TWK_POPCOUNT __builtin_popcountll
 #endif
 
-static inline uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size)
+static
+uint64_t builtin_popcnt_unrolled_actual(const uint64_t* buf, int len) {
+    //assert(len % 4 == 0);
+    uint64_t cnt = 0;
+    int i = 0;
+    for (; i + 4 <= len; i += 4) {
+        cnt += __builtin_popcountll(buf[i]);
+        cnt += __builtin_popcountll(buf[i+1]);
+        cnt += __builtin_popcountll(buf[i+2]);
+        cnt += __builtin_popcountll(buf[i+3]);
+    }
+
+    for (; i + 2 <= len; i += 2) {
+        cnt += __builtin_popcountll(buf[i]);
+        cnt += __builtin_popcountll(buf[i+1]);
+    }
+
+    for (; i < len; ++i) {
+        cnt += __builtin_popcountll(buf[i]);
+    }
+
+    return cnt;
+}
+
+static inline
+uint64_t builtin_popcnt_unrolled(const __m128i val) {
+    // return(builtin_popcnt_unrolled_actual((const uint64_t*)&val, 2));
+    uint64_t cnt = 0;
+    cnt += TWK_POPCOUNT(*((uint64_t*)&val + 0));
+    cnt += TWK_POPCOUNT(*((uint64_t*)&val + 1));
+    return cnt;
+}
+
+static inline
+uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size)
 {
     const uint64_t limit = size - size % 4;
     uint64_t cnt = 0;
@@ -127,14 +161,6 @@ static inline uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size)
     return cnt;
 }
 
-#if SIMD_VERSION >= 3
-#ifndef TWK_POPCOUNT_SSE4
-#define TWK_POPCOUNT_SSE4(A, B) {               \
-    A += TWK_POPCOUNT(_mm_extract_epi64(B, 0)); \
-    A += TWK_POPCOUNT(_mm_extract_epi64(B, 1)); \
-}
-#endif
-
 #if SIMD_VERSION >= 5
 #ifndef TWK_POPCOUNT_AVX2
 #define TWK_POPCOUNT_AVX2(A, B) {                  \
@@ -145,14 +171,16 @@ static inline uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size)
 }
 #endif
 
-static inline void CSA256(__m256i* h, __m256i* l, __m256i a, __m256i b, __m256i c)
+static inline
+void CSA256(__m256i* h, __m256i* l, __m256i a, __m256i b, __m256i c)
 {
   __m256i u = _mm256_xor_si256(a, b);
   *h = _mm256_or_si256(_mm256_and_si256(a, b), _mm256_and_si256(u, c));
   *l = _mm256_xor_si256(u, c);
 }
 
-static inline __m256i popcnt256(__m256i v)
+static inline
+__m256i popcnt256(__m256i v)
 {
   __m256i lookup1 = _mm256_setr_epi8(
       4, 5, 5, 6, 5, 6, 6, 7,
@@ -184,7 +212,8 @@ static inline __m256i popcnt256(__m256i v)
  * Wojciech Mula (23 Nov 2016).
  * @see https://arxiv.org/abs/1611.07612
  */
-static inline uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m256i* __restrict__ data2, uint64_t size)
+static inline 
+uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m256i* __restrict__ data2, uint64_t size)
 {
   __m256i cnt = _mm256_setzero_si256();
   __m256i ones = _mm256_setzero_si256();
@@ -237,11 +266,20 @@ static inline uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ dat
 }
 #endif
 
+#if SIMD_VERSION >= 3
+#ifndef TWK_POPCOUNT_SSE4
+#define TWK_POPCOUNT_SSE4(A, B) {               \
+    A += TWK_POPCOUNT(_mm_extract_epi64(B, 0)); \
+    A += TWK_POPCOUNT(_mm_extract_epi64(B, 1)); \
+}
+#endif
 __attribute__((always_inline))
-static inline void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
+static inline 
+void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
     a += TWK_POPCOUNT(_mm_cvtsi128_si64(n)) + TWK_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n)));
 }
 #endif
+
 
 /****************************
 *  Class definitions

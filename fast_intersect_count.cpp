@@ -279,7 +279,8 @@ uint64_t intersect_bitmaps_scalar_1x4way(const uint64_t* __restrict__ b1, const 
 
 uint64_t intersect_bitmaps_scalar_8way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count[8] = {0};
-    for(int i = 0; i < n_ints; i += 8) {
+    int i = 0;
+    for(; i + 8 <= n_ints; i += 8) {
         count[0] += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
         count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
         count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
@@ -290,6 +291,13 @@ uint64_t intersect_bitmaps_scalar_8way(const uint64_t* __restrict__ b1, const ui
         count[7] += TWK_POPCOUNT(b1[i+7] & b2[i+7]);
     }
 
+    for(; i + 4 <= n_ints; i += 4) {
+        count[0] += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
+        count[1] += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count[2] += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count[3] += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+    }
+
     uint64_t tot_count = count[0] + count[1] + count[2] + count[3] + count[4] + count[5] + count[6] + count[7];
 
     return(tot_count);
@@ -297,7 +305,8 @@ uint64_t intersect_bitmaps_scalar_8way(const uint64_t* __restrict__ b1, const ui
 
 uint64_t intersect_bitmaps_scalar_1x8way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
-    for(int i = 0; i < n_ints; i += 8) {
+    int i = 0;
+    for(; i + 8 <= n_ints; i += 8) {
         count += TWK_POPCOUNT(b1[i] & b2[i]);
         count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
         count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
@@ -306,6 +315,13 @@ uint64_t intersect_bitmaps_scalar_1x8way(const uint64_t* __restrict__ b1, const 
         count += TWK_POPCOUNT(b1[i+5] & b2[i+5]);
         count += TWK_POPCOUNT(b1[i+6] & b2[i+6]);
         count += TWK_POPCOUNT(b1[i+7] & b2[i+7]);
+    }
+
+    for(; i + 4 <= n_ints; i += 4) {
+        count += TWK_POPCOUNT(b1[i] & b2[i]);
+        count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
     }
 
     return(count);
@@ -514,8 +530,9 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t*
     const uint32_t n_cycles = n_ints / 2;
 
     for(int i = 0; i < n_cycles; ++i) {
-        __m128i v1 = _mm_and_si128(r1[i], r2[i]);
-        TWK_POPCOUNT_SSE4(count, v1);
+        count += builtin_popcnt_unrolled(r1[i] & r2[i]);
+        // __m128i v1 = _mm_and_si128(r1[i], r2[i]);
+        // TWK_POPCOUNT_SSE4(count, v1);
     }
 
     return(count);
@@ -529,15 +546,18 @@ uint64_t intersect_bitmaps_sse4_2way(const uint64_t* __restrict__ b1, const uint
 
     int i = 0;
     for(; i + 2 < n_cycles; i += 2) {
-        __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
-        TWK_POPCOUNT_SSE4(count[0], v1);
-        v1 = _mm_and_si128(r1[i+1], r2[i+1]);
-        TWK_POPCOUNT_SSE4(count[1], v1);
+        // __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
+        // TWK_POPCOUNT_SSE4(count[0], v1);
+        // v1 = _mm_and_si128(r1[i+1], r2[i+1]);
+        // TWK_POPCOUNT_SSE4(count[1], v1);
+        count[0] += builtin_popcnt_unrolled(r1[i+0] & r2[i+0]);
+        count[1] += builtin_popcnt_unrolled(r1[i+1] & r2[i+1]);
     }
 
     for(; i < n_cycles; ++i) {
-        __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
-        TWK_POPCOUNT_SSE4(count[0], v1);
+        // __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
+        // TWK_POPCOUNT_SSE4(count[0], v1);
+        count[0] += builtin_popcnt_unrolled(r1[i] & r2[i]);
     }
 
     return(count[0] + count[1]);
@@ -550,16 +570,20 @@ uint64_t intersect_bitmaps_sse4_1x2way(const uint64_t* __restrict__ b1, const ui
     const uint32_t n_cycles = n_ints / 2;
 
     int i = 0;
-    for(; i + 2 < n_cycles; i += 2) {
-        __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
-        TWK_POPCOUNT_SSE4(count, v1);
-        v1 = _mm_and_si128(r1[i+1], r2[i+1]);
-        TWK_POPCOUNT_SSE4(count, v1);
+    for(; i + 4 < n_cycles; i += 4) {
+        count += builtin_popcnt_unrolled(r1[i] & r2[i]);
+        count += builtin_popcnt_unrolled(r1[i+1] & r2[i+1]);
+        count += builtin_popcnt_unrolled(r1[i+2] & r2[i+2]);
+        count += builtin_popcnt_unrolled(r1[i+3] & r2[i+3]);
+    }
+
+    for(; i + 2 <= n_cycles; i += 2) {
+        count += builtin_popcnt_unrolled(r1[i] & r2[i]);
+        count += builtin_popcnt_unrolled(r1[i+1] & r2[i+1]);
     }
 
     for(; i < n_cycles; ++i) {
-        __m128i v1 = _mm_and_si128(r1[i+0], r2[i+0]);
-        TWK_POPCOUNT_SSE4(count, v1);
+        count += builtin_popcnt_unrolled(r1[i] & r2[i]);
     }
 
     return(count);
@@ -1161,7 +1185,9 @@ uint64_t intersect_raw_rotl_gallop_sse4(const std::vector<uint16_t>& v1, const s
     }
     return (uint64_t)count;
 }
+#endif
 
+#if SIMD_VERSION >= 5
 uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
     if(v1.size() == 0 || v2.size() == 0) return 0;
     if(v1.front() > v2.back() || v2.front() > v1.back()) return 0;
@@ -1236,8 +1262,11 @@ uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const s
     }
     return (uint64_t)count;
 }
+#else
+uint64_t intersect_raw_rotl_gallop_avx2(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) { return(0); }
+#endif
 
-
+#if SIMD_VERSION >= 3
 uint64_t intersect_raw_sse4_broadcast_skip(const std::vector<uint16_t>& v1, const std::vector<uint16_t>& v2) {
     uint64_t count = 0;
     const __m128i one_mask = _mm_set1_epi8(255);

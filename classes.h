@@ -171,9 +171,9 @@ public:
                 // 1) bucket range
                 bin_size = 8192;
                 n_bins   = (max_value / bin_size) + 1;
-                buckets  = std::shared_ptr<std::vector<base>>(new std::vector<base>(n_bins));
-                bitmap_bucket = std::shared_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
-                bitmap_type   = std::shared_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
+                buckets  = std::unique_ptr<std::vector<base>>(new std::vector<base>(n_bins));
+                bitmap_bucket = std::unique_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
+                bitmap_type   = std::unique_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
                 
                 // fixme
                 // pre-test buckets
@@ -310,7 +310,11 @@ public:
             // temp
             while (diff) {
                 // uint32_t offset = __builtin_clzll(diff);
+#ifdef _lzcnt_u64
                 uint32_t offset = _lzcnt_u64(diff);
+#else
+                uint32_t offset = __builtin_clzl(diff);
+#endif
                 uint32_t target_bin = 64 - offset;
                 // assert(target_bin != 0);
                 // std::cerr << " " << (int)target_bin << " " << std::bitset<64>(diff) << std::endl; 
@@ -377,14 +381,12 @@ private:
     }
 
     uint64_t IntersectCount(const bitmap* __restrict__ s1, const bitmap* __restrict__ s2) const {
-        // std::cerr << "intsect bitmap-bitmap" << std::endl;
-        // return(intersect_bitmaps_avx2((uint64_t*)s1->vals, (uint64_t*)s2->vals, (n_bins / 64)+1));
-
-        // std::cerr << "here: " << s1->len << "," << s2->len << std::endl;
-        assert(s1->len == s2->len);
-        // assert(s1->len == (bin_size/64)+1);
+        // assert(s1->len == s2->len);
+#if SIMD_VERSION >= 5
         uint64_t ret = intersect_bitmaps_avx2((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len);
-        // if (ret) std::cerr << "ret=" << ret << " bins=" << bin_size << "->" << (bin_size/64)+1 << std::endl;
+#elif SIMD_VERSION >= 3
+        uint64_t ret = intersect_bitmaps_sse4((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len);
+#endif
         return(ret);
     }
 
@@ -407,12 +409,12 @@ public:
     ssize_t n_entries;
     ssize_t n_bins;
     ssize_t bin_size; // variable sized (unlike Roaring)
-    std::shared_ptr<uint64_t[]> bitmap_bucket; // Bitmap used for querying if a particular bucket contains values.
-    std::shared_ptr<uint64_t[]> bitmap_type; // 0 -> array, 1-> bitmap.
-    std::shared_ptr< std::vector<base> > buckets; // Must be cast to either the array or bitmap archetype.
+    std::unique_ptr<uint64_t[]> bitmap_bucket; // Bitmap used for querying if a particular bucket contains values.
+    std::unique_ptr<uint64_t[]> bitmap_type; // 0 -> array, 1-> bitmap.
+    std::unique_ptr< std::vector<base> > buckets; // Must be cast to either the array or bitmap archetype.
     // Special case when there are very few values limited to the range [0,65536)
     // then we store those as array literals in a special vector.
-    std::shared_ptr<array> array_global; // Unbucketed.
+    std::unique_ptr<array> array_global; // Unbucketed.
 };
 
 #endif /* FAST_INTERSECT_COUNT_H_ */
