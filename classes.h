@@ -89,7 +89,9 @@ static uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__
 
 struct base {
     base() : len(0), vals(nullptr){}
-    ~base() { delete[] vals; }
+    ~base() { 
+        delete[] vals; 
+    }
 
     uint8_t control; // control sequence.
     size_t len; // length in either 16 bits or 64 bits depending on the downstream container archetype
@@ -149,6 +151,11 @@ struct bitmap : public base {
 class IntersectContainer {
 public:
     IntersectContainer() : n_bins(0), bin_size(0){}
+    ~IntersectContainer() {
+        delete[] buckets;
+        delete[] bitmap_bucket;
+        delete[] bitmap_type;
+    }
 
     void construct(const uint32_t* vals, const ssize_t len, ssize_t max_value) {
         // cleanup if repeatedly calling construct
@@ -171,9 +178,11 @@ public:
                 // 1) bucket range
                 bin_size = 8192;
                 n_bins   = (max_value / bin_size) + 1;
-                buckets  = std::unique_ptr<std::vector<base>>(new std::vector<base>(n_bins));
-                bitmap_bucket = std::unique_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
-                bitmap_type   = std::unique_ptr<uint64_t[]>(new uint64_t[(n_bins / 64)+1]{0});
+                buckets  = new base[n_bins];
+                bitmap_bucket = new uint64_t[(n_bins / 64)+1];
+                bitmap_type   = new uint64_t[(n_bins / 64)+1];
+                memset(bitmap_bucket, 0, sizeof(uint64_t)*((n_bins / 64)+1));
+                memset(bitmap_type,   0, sizeof(uint64_t)*((n_bins / 64)+1));
                 
                 // fixme
                 // pre-test buckets
@@ -212,21 +221,21 @@ public:
                             // std::cerr << "construct array: " << l_val.size() << std::endl;
                             
                             // Construct array archetype and add values to it.
-                            reinterpret_cast<array*>(&buckets->at(prev_bin))->build(l_val.data(), l_val.size());
+                            reinterpret_cast<array*>(&buckets[prev_bin])->build(l_val.data(), l_val.size());
                             // Set type to 0
                             //bitmap_type.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                             // Set the bin position in the presence/absence bitmap.
-                            bitmap_bucket.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                            bitmap_bucket[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                         } 
                         // Construct bitmap
                         else {
                             // std::cerr << "construct bitmap: " << l_val.size() << std::endl;
                             // Construct array archetype and add values to it.
-                            reinterpret_cast<bitmap*>(&buckets->at(prev_bin))->build(l_val.data(), l_val.size(), (bin_size / 64)+1);
+                            reinterpret_cast<bitmap*>(&buckets[prev_bin])->build(l_val.data(), l_val.size(), (bin_size / 64)+1);
                             // Set type to 1
-                            bitmap_type.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                            bitmap_type[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                             // Set the bin position in the presence/absence bitmap.
-                            bitmap_bucket.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                            bitmap_bucket[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                         }
 
                         // Update and reset values.
@@ -254,21 +263,21 @@ public:
                         // std::cerr << "construct array: " << l_val.size() << std::endl;
                         
                         // Construct array archetype and add values to it.
-                        reinterpret_cast<array*>(&buckets->at(prev_bin))->build(l_val.data(), l_val.size());
+                        reinterpret_cast<array*>(&buckets[prev_bin])->build(l_val.data(), l_val.size());
                         // Set type to 0
                         //bitmap_type.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                         // Set the bin position in the presence/absence bitmap.
-                        bitmap_bucket.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                        bitmap_bucket[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                     } 
                     // Construct bitmap
                     else {
                         // std::cerr << "construct bitmap: " << l_val.size() << std::endl;
                         // Construct array archetype and add values to it.
-                        reinterpret_cast<bitmap*>(&buckets->at(prev_bin))->build(l_val.data(), l_val.size(), (bin_size / 64)+1);
+                        reinterpret_cast<bitmap*>(&buckets[prev_bin])->build(l_val.data(), l_val.size(), (bin_size / 64)+1);
                         // Set type to 1
-                        bitmap_type.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                        bitmap_type[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                         // Set the bin position in the presence/absence bitmap.
-                        bitmap_bucket.get()[prev_bin / 64] |= (1ULL << (prev_bin % 64));
+                        bitmap_bucket[prev_bin / 64] |= (1ULL << (prev_bin % 64));
                     }
                 }
 
@@ -302,20 +311,22 @@ public:
         // }  
         // return(overlap);
         
-        
-        for (int i = 0; i < (n_bins / 64)+1; ++i) {
-            uint64_t diff = this->bitmap_bucket.get()[i] & other.bitmap_bucket.get()[i];
+        const uint32_t bb = (n_bins / 64)+1;
+        for (int i = 0; i < bb; ++i) {
+            uint64_t diff = this->bitmap_bucket[i] & other.bitmap_bucket[i];
+            if (!diff) continue;
             // std::cerr <<"[][]diff=" << std::bitset<64>(diff) << std::endl;
 
-            // temp
+            uint32_t target_bin = 0;
+            uint32_t offset = 0;
             while (diff) {
                 // uint32_t offset = __builtin_clzll(diff);
 #ifdef _lzcnt_u64
-                uint32_t offset = _lzcnt_u64(diff);
+                offset = _lzcnt_u64(diff);
 #else
-                uint32_t offset = __builtin_clzl(diff);
+                offset = __builtin_clzl(diff);
 #endif
-                uint32_t target_bin = 64 - offset;
+                target_bin = 64 - offset;
                 // assert(target_bin != 0);
                 // std::cerr << " " << (int)target_bin << " " << std::bitset<64>(diff) << std::endl; 
 
@@ -324,30 +335,30 @@ public:
                 // std::cerr << "target_bin=" << target_bin << ">>" << std::bitset<64>(1ULL << (target_bin-1)) << std::endl;
                 // std::cerr << "type1=" << std::bitset<64>(bitmap_type.get()[i]) << ">>" << std::bitset<64>(bitmap_type.get()[i] & (1ULL << (target_bin-1))) << std::endl;
                 // std::cerr << "type2=" << std::bitset<64>(other.bitmap_type.get()[i]) << ">>" << std::bitset<64>(other.bitmap_type.get()[i] & (1ULL << (target_bin-1))) << std::endl;
-                bool type1 = (bitmap_type.get()[i] & (1ULL << (target_bin-1))) != 0;
-                bool type2 = (other.bitmap_type.get()[i] & (1ULL << (target_bin-1))) != 0;
+                
+                // bool type1 = (bitmap_type.get()[i] & (1ULL << (target_bin-1))) != 0;
+                // bool type2 = (other.bitmap_type.get()[i] & (1ULL << (target_bin-1))) != 0;
+                const uint32_t target = target_bin-1;
+                const uint8_t ref = (((bitmap_type[i] & (1ULL << target)) != 0) << 1) | ((other.bitmap_type[i] & (1ULL << target)) != 0);
 
                 // std::cerr << "type1=" << type1 << ",type2=" << type2 << std::endl;
-
-                if (type1 && type2) {
-                    overlap += IntersectCount(reinterpret_cast<bitmap*>(&buckets->at(target_bin-1)), reinterpret_cast<bitmap*>(&other.buckets->at(target_bin-1)));
-                } else if (!type1 && !type2) {
-                    overlap += IntersectCount(reinterpret_cast<array*>(&buckets->at(target_bin-1)), reinterpret_cast<array*>(&other.buckets->at(target_bin-1)));
-                } else if (!type1 && type2) {
-                    overlap += IntersectCount(reinterpret_cast<array*>(&buckets->at(target_bin-1)), reinterpret_cast<bitmap*>(&other.buckets->at(target_bin-1)));
-                } else if (type1 && !type2) {
-                    overlap += IntersectCount(reinterpret_cast<bitmap*>(&buckets->at(target_bin-1)), reinterpret_cast<array*>(&other.buckets->at(target_bin-1)));
+                switch(ref){
+                    case 0: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]), reinterpret_cast<const array*>(&other.buckets[target])); break;
+                    case 1: overlap += IntersectCount(reinterpret_cast<const bitmap*>(&buckets[target]), reinterpret_cast<const array*>(&other.buckets[target])); break;
+                    case 2: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]), reinterpret_cast<const bitmap*>(&other.buckets[target])); break;
+                    case 3: overlap += IntersectCount(reinterpret_cast<const bitmap*>(&buckets[target]), reinterpret_cast<const bitmap*>(&other.buckets[target])); break;
                 }
-                else {
-                    std::cerr << "illegal" << std::endl;
-                    // exit(1);
-                }
+                
+                // else {
+                //     std::cerr << "illegal" << std::endl;
+                //     // exit(1);
+                // }
 
                 // std::cerr << "overlap=" << overlap << std::endl;
 
                 // unset bit
                 // std::cerr << "mask out=" << std::bitset<64>(~(1ULL << (target_bin-1))) << std::endl;
-                diff &= ~(1ULL << (target_bin-1));
+                diff &= ~(1ULL << target);
             }
             // std::cerr << "done while" << std::endl;
         }
@@ -357,7 +368,7 @@ public:
 
 private:
     // Internal.
-    uint64_t IntersectCount(const array* __restrict__ s1,  const array* __restrict__ s2)  const {
+    static inline uint64_t IntersectCount(const array* __restrict__ s1,  const array* __restrict__ s2) {
         // Debug prints.
         // for (int i = 0; i < s1->len; ++i) {
         //     std::cerr << "," << reinterpret_cast<uint16_t*>(s1->vals)[i];
@@ -380,22 +391,22 @@ private:
         return(intersect_vector16_cardinality_roar(reinterpret_cast<uint16_t*>(s1->vals), s1->len, reinterpret_cast<uint16_t*>(s2->vals), s2->len));
     }
 
-    uint64_t IntersectCount(const bitmap* __restrict__ s1, const bitmap* __restrict__ s2) const {
+    static inline uint64_t IntersectCount(const bitmap* __restrict__ s1, const bitmap* __restrict__ s2) {
         // assert(s1->len == s2->len);
 #if SIMD_VERSION >= 5
-        uint64_t ret = intersect_bitmaps_avx2((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len);
+        return(intersect_bitmaps_avx2((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len));
 #elif SIMD_VERSION >= 3
-        uint64_t ret = intersect_bitmaps_sse4((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len);
+        return(intersect_bitmaps_sse4((uint64_t*)s1->vals, (uint64_t*)s2->vals, s1->len));
 #endif
-        return(ret);
+        return(0);
     }
 
-    uint64_t IntersectCount(const array* s1,  const bitmap* s2) const {
+    static inline uint64_t IntersectCount(const array* s1,  const bitmap* s2) {
         // std::cerr << "in array->bitmap intersect. use fingering" << std::endl;
         return 0;
     }
     // Alias for the mirrored prototype (array, bitmap).
-    uint64_t IntersectCount(const bitmap* s1, const array* s2) const { return IntersectCount(s2,s1); }
+    static inline uint64_t IntersectCount(const bitmap* s1, const array* s2) { return IntersectCount(s2,s1); }
 
     // Second set is a bitmap.
     uint64_t IntersectCountGlobal(const bitmap* s2) const;
@@ -409,12 +420,12 @@ public:
     ssize_t n_entries;
     ssize_t n_bins;
     ssize_t bin_size; // variable sized (unlike Roaring)
-    std::unique_ptr<uint64_t[]> bitmap_bucket; // Bitmap used for querying if a particular bucket contains values.
-    std::unique_ptr<uint64_t[]> bitmap_type; // 0 -> array, 1-> bitmap.
-    std::unique_ptr< std::vector<base> > buckets; // Must be cast to either the array or bitmap archetype.
+    uint64_t* bitmap_bucket; // Bitmap used for querying if a particular bucket contains values.
+    uint64_t* bitmap_type; // 0 -> array, 1-> bitmap.
+    base* buckets; // Must be cast to either the array or bitmap archetype.
     // Special case when there are very few values limited to the range [0,65536)
     // then we store those as array literals in a special vector.
-    std::unique_ptr<array> array_global; // Unbucketed.
+    std::unique_ptr<base> base_global; // Unbucketed.
 };
 
 #endif /* FAST_INTERSECT_COUNT_H_ */

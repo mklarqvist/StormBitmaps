@@ -407,7 +407,7 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, ro
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    std::vector<uint32_t> samples = {4096, 8192, 32768, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {5120,4096, 8192, 32768, 131072, 196608, 589824};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     for (int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
@@ -416,7 +416,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         //uint32_t desired_mem = 10 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
         //uint32_t n_variants = std::min((uint32_t)10000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t))));
-        uint32_t n_variants = 2500;
+        uint32_t n_variants = 10000;
 
         std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
         std::cerr << "Allocating: " << n_ints_sample*n_variants*sizeof(uint64_t)/(1024 * 1024.0) << "Mb" << std::endl;
@@ -425,7 +425,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint64_t* vals_reduced;
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
-        std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
+        // 1:500, 1:167, 1:22
+        std::vector<uint32_t> n_alts = {10, 30, 224}; //, samples[s]/10, samples[s]/4, samples[s]/2};
+        // std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
         // std::vector<uint32_t> n_alts = {samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
@@ -724,8 +726,53 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
             std::cerr << "Size of intersections=" << int_comparisons << std::endl;
 
+        //
+
+        // Cache blocking
+		uint32_t bsize = (256e3/2) / (samples[s]/8);
+		bsize = (bsize == 0 ? 10 : bsize);
+		const uint32_t n_blocks1 = n_variants / bsize;
+        const uint32_t n_blocks2 = n_variants / bsize;
+
+		uint64_t d = 0;
+		for(uint32_t ii = 0; ii < n_blocks1*bsize; ii += bsize){
+			for(uint32_t jj = ii; jj < n_blocks2*bsize; jj += bsize){
+				for(uint32_t i = ii; i < ii + bsize; ++i){
+					for(uint32_t j = jj; j < jj + bsize; ++j){
+						++d;
+						// do stuff
+					}
+				}
+			}
+			// residual j that does not fit in a block
+			for(uint32_t i = ii; i < ii + bsize; ++i){
+				for(uint32_t j = n_blocks2*bsize; j < n_blocks2; ++j){
+					++d;
+					// do stuff
+				}
+			}
+		}
+
+		for(uint32_t i = n_blocks1*bsize; i < n_blocks2; ++i) {
+			for(uint32_t j = i; j < n_blocks2; ++j){
+				++d;
+				// do stuff
+			}
+		}
+
+        std::cerr << "BLOCKIING=" << d << "/" << n_intersects << std::endl;
+ 
+        //
+        //
+
             std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << bench.throughput << "\t" << (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << (bench.milliseconds == 0 ? 0 : int_comparisons*sizeof(uint32_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)int_comparisons) << "\t" << (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << \
+        bench.throughput << "\t" << \
+        (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
+        (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
+        (bench.milliseconds == 0 ? 0 : int_comparisons*sizeof(uint32_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)int_comparisons) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
 
 
 #ifdef USE_ROARING
