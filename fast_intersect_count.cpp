@@ -523,19 +523,27 @@ uint64_t intersect_bitmaps_scalar_intlist_1x4way(const uint64_t* __restrict__ b1
 }
 
 #if SIMD_VERSION >= 3
-uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
-    uint64_t count = 0;
-    const __m128i* r1 = (__m128i*)b1;
-    const __m128i* r2 = (__m128i*)b2;
-    const uint32_t n_cycles = n_ints / 2;
+// uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+//     uint64_t count = 0;
+//     const __m128i* r1 = (__m128i*)b1;
+//     const __m128i* r2 = (__m128i*)b2;
+//     const uint32_t n_cycles = n_ints / 2;
 
-    for(int i = 0; i < n_cycles; ++i) {
-        count += builtin_popcnt_unrolled(r1[i] & r2[i]);
-        // __m128i v1 = _mm_and_si128(r1[i], r2[i]);
-        // TWK_POPCOUNT_SSE4(count, v1);
-    }
+//     for(int i = 0; i < n_cycles; ++i) {
+//         count += builtin_popcnt_unrolled(r1[i] & r2[i]);
+//         // __m128i v1 = _mm_and_si128(r1[i], r2[i]);
+//         // TWK_POPCOUNT_SSE4(count, v1);
+//     }
 
-    return(count);
+//     return(count);
+// }
+
+uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, 
+                                const uint64_t* __restrict__ b2, 
+                                const uint32_t n_ints) 
+{
+    // std::cerr << "here" << std::endl;
+    return(popcnt_sse_csa_intersect(b1, b2, n_ints));
 }
 
 uint64_t intersect_bitmaps_sse4_2way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
@@ -601,11 +609,11 @@ uint64_t intersect_bitmaps_sse4_list(const uint64_t* __restrict__ b1,
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[l1[i]], r2[l1[i]]));
+            count += TWK_POPCOUNT_SSE(_mm_and_si128(r1[l1[i]], r2[l1[i]]));
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            TWK_POPCOUNT_SSE(count, _mm_and_si128(r1[l2[i]], r2[l2[i]]));
+            count += TWK_POPCOUNT_SSE(_mm_and_si128(r1[l2[i]], r2[l2[i]]));
         }
     }
     return(count);

@@ -134,10 +134,9 @@ uint64_t builtin_popcnt_unrolled_actual(const uint64_t* buf, int len) {
 static inline
 uint64_t builtin_popcnt_unrolled(const __m128i val) {
     // return(builtin_popcnt_unrolled_actual((const uint64_t*)&val, 2));
-    uint64_t cnt = 0;
-    cnt += TWK_POPCOUNT(*((uint64_t*)&val + 0));
-    cnt += TWK_POPCOUNT(*((uint64_t*)&val + 1));
-    return cnt;
+    // uint64_t cnt = 0;
+    return(TWK_POPCOUNT(*((uint64_t*)&val + 0)) + TWK_POPCOUNT(*((uint64_t*)&val + 1)));
+    // return cnt;
 }
 
 static inline
@@ -275,11 +274,86 @@ uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m2
 #endif
 __attribute__((always_inline))
 static inline 
-void TWK_POPCOUNT_SSE(uint64_t& a, const __m128i n) {
-    a += TWK_POPCOUNT(_mm_cvtsi128_si64(n)) + TWK_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n)));
+uint64_t TWK_POPCOUNT_SSE(const __m128i n) {
+    return(TWK_POPCOUNT(_mm_cvtsi128_si64(n)) + TWK_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n))));
+}
+
+static inline
+void CSA128(__m128i* h, __m128i* l, __m128i a, __m128i b, __m128i c)
+{
+  __m128i u = _mm_xor_si128(a, b);
+  *h = _mm_or_si128(_mm_and_si128(a, b), _mm_and_si128(u, c));
+  *l = _mm_xor_si128(u, c);
+}
+
+static inline 
+uint64_t popcnt_sse_csa_intersect(const uint64_t* __restrict__ d1, 
+                                  const uint64_t* __restrict__ d2, 
+                                  uint64_t size)
+{
+    //   __m128i cnt = _mm_setzero_si128();
+    uint64_t total = 0;
+    __m128i ones = _mm_setzero_si128();
+    __m128i twos = _mm_setzero_si128();
+    __m128i fours = _mm_setzero_si128();
+    __m128i eights = _mm_setzero_si128();
+    __m128i sixteens = _mm_setzero_si128();
+    __m128i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    __m128i* data1 = (__m128i*)d1;
+    __m128i* data2 = (__m128i*)d2;
+
+    uint64_t i = 0;
+    //   const uint64_t limit = size - size % (16*2);
+    const uint64_t limit = size / (16*2);
+    const uint64_t limit2 = size / 2;
+    //   uint64_t* cnt64;
+    // std::cerr << size << "->" << size/(16*2) << " or " << limit << std::endl;
+
+    for(; i < limit; i += 16) {
+        CSA128(&twosA,   &ones,  ones,  (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
+        CSA128(&twosB,   &ones,  ones,  (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
+        CSA128(&foursA,  &twos,  twos,  twosA,  twosB);
+        CSA128(&twosA,   &ones,  ones,  (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
+        CSA128(&twosB,   &ones,  ones,  (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
+        CSA128(&foursB,  &twos,  twos,  twosA,  twosB);
+        CSA128(&eightsA, &fours, fours, foursA, foursB);
+        CSA128(&twosA,   &ones,  ones,  (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
+        CSA128(&twosB,   &ones,  ones,  (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
+        CSA128(&foursA,  &twos,  twos,  twosA,  twosB);
+        CSA128(&twosA,   &ones,  ones,  (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
+        CSA128(&twosB,   &ones,  ones,  (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
+        CSA128(&foursB,  &twos,  twos,  twosA,  twosB);
+        CSA128(&eightsB, &fours, fours, foursA, foursB);
+        CSA128(&sixteens,&eights,eights,eightsA,eightsB);
+
+        total += TWK_POPCOUNT_SSE(sixteens);
+        _mm_prefetch((const char *)&data1[i+16], _MM_HINT_T0);
+        _mm_prefetch((const char *)&data2[i+16], _MM_HINT_T0);
+    }
+
+    total <<= 4;
+    total += TWK_POPCOUNT_SSE(eights) << 3;
+    total += TWK_POPCOUNT_SSE(fours)  << 2;
+    total += TWK_POPCOUNT_SSE(twos)   << 1;
+    total += TWK_POPCOUNT_SSE(ones)   << 0;
+
+    //   for(; i < size; i++)
+    //     cnt = _mm_add_epi64(cnt, TWK_POPCOUNT(data1[i] & data2[i]));
+
+    //   cnt64 = (uint64_t*) &cnt;
+
+
+    for (; i < limit2; ++i)
+        total += builtin_popcnt_unrolled(data1[i] & data2[i]);
+
+    i *= 2;
+    for (; i < size; ++i)
+        total += TWK_POPCOUNT(d1[i] & d2[i]);
+
+    return total;
 }
 #endif
-
 
 /****************************
 *  Class definitions

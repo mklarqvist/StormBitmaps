@@ -59,58 +59,84 @@ bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t
     }
     const uint64_t cycles_end = get_cpu_cycles();
     
-    /*
-// cache blocking
-    uint32_t n_cycles = n_variants / 50;
-    uint32_t debug = 0;
-    int k = 0;
-    for (; k < n_cycles; ++k) { // Y dimension
-        // X dimension
-        int c = k;
-        // Upper trig
-        for (int i = 0; i < 50; ++i) {
-            for (int j = i + 1; j < 50; ++j) {
-                ++debug;
-                // std::cerr << 50*k*n_ints+i*n_ints << "," << 50*k*n_ints+j*n_ints << "/" << n_ints*n_variants << std::endl;
-                total += (*f)(&vals[50*k*n_ints+i*n_ints], &vals[50*k*n_ints+j*n_ints], n_ints);
+    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+    auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+    bench_t b; b.count = total; b.milliseconds = time_span.count();
+    uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; 
+    b.throughput = ((n_comps*n_ints*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+    b.cpu_cycles = cycles_end - cycles_start;
+
+    return(b);
+}
+
+template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints)>
+bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints, uint32_t bsize = 200) {    
+    
+
+    // uint32_t offset = 0;
+    // uint32_t inner_offset = 0;
+    uint64_t total = 0;
+    
+    
+    // for (int i = 0; i < n_variants; ++i) {
+    //     inner_offset = offset + n_ints;
+    //     for (int j = i + 1; j < n_variants; ++j, inner_offset += n_ints) {
+    //         total += (*f)(&vals[offset], &vals[inner_offset], n_ints);
+    //     }
+    //     offset += n_ints;
+    // }
+
+    // uint32_t bsize = (256e3/2) / (n_ints*8);
+    // uint32_t bsize = 100;
+    bsize = (bsize == 0 ? 10 : bsize);
+    const uint32_t n_blocks1 = n_variants / bsize;
+    const uint32_t n_blocks2 = n_variants / bsize;
+
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+    // uint64_t blocked_con_tot = 0;
+    const uint64_t cycles_start = get_cpu_cycles();
+    uint32_t i = 0;
+    uint32_t tt = 0;
+    for (/**/; i + bsize <= n_variants; i += bsize) {
+        // diagonal component
+        for (uint32_t j = 0; j < bsize; ++j) {
+            for (uint32_t jj = j + 1; jj < bsize; ++jj) {
+                // [i+j] and i+jj]
+                // std::cerr << i+j << "," << i+jj << std::endl;
+                // blocked_con_tot += itcontainers[i + j].IntersectCount(itcontainers[i + jj]);
+                total += (*f)(&vals[(i + j)*n_ints], &vals[(i + jj)*n_ints], n_ints);
+                // ++d; ++diag;
             }
         }
-        ++c;
 
-        for (; c < n_cycles; ++c) {
-            // Square
-            for (int i = 50*c; i < 50*(c+1); ++i) {
-                for (int j = 50*c; j < 50*(c+1); ++j) {
-                    ++debug;
-                    total += (*f)(&vals[50*k*n_ints+i*n_ints], &vals[50*k*n_ints+j*n_ints], n_ints);
+        // square component
+        //uint32_t curi = i + bsize;
+        uint32_t curi = i;
+        uint32_t j = curi + bsize;
+        for (/**/; j + bsize <= n_variants; j += bsize) {
+            for (uint32_t ii = 0; ii < bsize; ++ii) {
+                for (uint32_t jj = 0; jj < bsize; ++jj) {
+                    // [j+ii], [j+jj]
+                    // blocked_con_tot += itcontainers[curi + ii].IntersectCount(itcontainers[j + jj]);
+                    total += (*f)(&vals[(curi + ii)*n_ints], &vals[(j + jj)*n_ints], n_ints);
+                    // std::cerr << curi+ii << "," << j+jj << " b=" << bsize << std::endl;
+                    // ++d;
                 }
+                // exit(1);
             }
         }
 
-        // std::cerr << "residual X=" << c*50 << "/" << n_variants << std::endl;
-        for (int i = c * 50; i < n_variants; ++i) {
-            for (int j = c * 50; j < n_variants; ++j) {
-                ++debug;
-                // total += (*f)(&vals[50*k*n_ints+i*n_ints], &vals[50*k*n_ints+j*n_ints], n_ints);
-            }
-        }
-    }
-
-    // std::cerr << "final residual Y=" << k*50 << "/" << n_variants << std::endl;
-    for (int i = k * 50; i < n_variants; ++i) {
-        for (int j = 0; j < 50; ++j) {
-            ++debug;
-            // total += (*f)(&vals[50*k+i], &vals[50*k+j], n_ints);
-        }
+        // residual
+        // for (/**/; j < n_variants; ++j) {
+        //     for (uint32_t jj = j + 1; jj < n_variants; ++jj) {
+        //         ++d;
+        //     }
+        // }
     }
     const uint64_t cycles_end = get_cpu_cycles();
-
-    // std::cerr << "cycles=" << n_cycles << " with " << n_variants << " variants" << std::endl;
-    // std::cerr << "debug=" << debug << std::endl;
-    assert(debug == 12497500);
-
-//
-*/
+    
     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
 
@@ -733,36 +759,56 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 		bsize = (bsize == 0 ? 10 : bsize);
 		const uint32_t n_blocks1 = n_variants / bsize;
         const uint32_t n_blocks2 = n_variants / bsize;
+        std::cerr << "blocking size=" << bsize << std::endl;
 
-		uint64_t d = 0;
-		for(uint32_t ii = 0; ii < n_blocks1*bsize; ii += bsize){
-			for(uint32_t jj = ii; jj < n_blocks2*bsize; jj += bsize){
-				for(uint32_t i = ii; i < ii + bsize; ++i){
-					for(uint32_t j = jj; j < jj + bsize; ++j){
-						++d;
-						// do stuff
-					}
-				}
-			}
-			// residual j that does not fit in a block
-			for(uint32_t i = ii; i < ii + bsize; ++i){
-				for(uint32_t j = n_blocks2*bsize; j < n_blocks2; ++j){
-					++d;
-					// do stuff
-				}
-			}
-		}
 
-		for(uint32_t i = n_blocks1*bsize; i < n_blocks2; ++i) {
-			for(uint32_t j = i; j < n_blocks2; ++j){
-				++d;
-				// do stuff
-			}
-		}
+        // Debug
+        std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
+        // uint64_t d = 0, diag = 0;
 
-        std::cerr << "BLOCKIING=" << d << "/" << n_intersects << std::endl;
- 
-        //
+        uint64_t blocked_con_tot = 0;
+        uint32_t i = 0;
+        uint32_t tt = 0;
+        for (/**/; i + bsize <= n_variants; i += bsize) {
+            // diagonal component
+            for (uint32_t j = 0; j < bsize; ++j) {
+                for (uint32_t jj = j + 1; jj < bsize; ++jj) {
+                    // [i+j] and i+jj]
+                    // std::cerr << i+j << "," << i+jj << std::endl;
+                    blocked_con_tot += itcontainers[i + j].IntersectCount(itcontainers[i + jj]);
+                    // ++d; ++diag;
+                }
+            }
+
+            // square component
+            //uint32_t curi = i + bsize;
+            uint32_t curi = i;
+            uint32_t j = curi + bsize;
+            for (/**/; j + bsize <= n_variants; j += bsize) {
+                for (uint32_t ii = 0; ii < bsize; ++ii) {
+                    for (uint32_t jj = 0; jj < bsize; ++jj) {
+                        // [j+ii], [j+jj]
+                        blocked_con_tot += itcontainers[curi + ii].IntersectCount(itcontainers[j + jj]);
+                        // std::cerr << curi+ii << "," << j+jj << " b=" << bsize << std::endl;
+                        // ++d;
+                    }
+                    // exit(1);
+                }
+            }
+
+            // residual
+            // for (/**/; j < n_variants; ++j) {
+            //     for (uint32_t jj = j + 1; jj < n_variants; ++jj) {
+            //         ++d;
+            //     }
+            // }
+        }
+        std::chrono::high_resolution_clock::time_point t2_blocked = std::chrono::high_resolution_clock::now();
+        auto time_span_blocked = std::chrono::duration_cast<std::chrono::milliseconds>(t2_blocked - t1_blocked);
+
+        // std::cerr << "BLOCKIING=" << d << "/" << n_intersects << " with diag " << diag << std::endl;
+        // assert(d == n_intersects);
+        std::cerr << "blocked tot=" << blocked_con_tot << " time=" << time_span_blocked.count() << std::endl;
         //
 
             std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
@@ -779,6 +825,42 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // temp
             bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
             PRINT("roaring",broaring);
+#endif
+
+#if SIMD_VERSION >= 3
+            // SIMD SSE4
+            bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4",m2);
+
+            bench_t m2_block10 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,10);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-10",m2_block10);
+
+
+            bench_t m2_block50 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,50);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-50",m2_block50);
+
+            bench_t m2_block100 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,100);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-100",m2_block100);
+
+            bench_t m2_block200 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,200);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-200",m2_block200);
+
+            bench_t m2_block400 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,400);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-400",m2_block400);
+
+            bench_t m2_block800 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,800);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-800",m2_block800);
+
+            bench_t m2_block1600 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,1600);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4-blocked-800",m2_block1600);
 #endif
 
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
@@ -942,11 +1024,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("bitmap-scalar-int-skip-list-1x4",m5_1x4);
 
 #if SIMD_VERSION >= 3
-            // SIMD SSE4
-            bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4",m2);
-
             // SIMD SSE 2-way
             bench_t m2_2way = fwrapper<&intersect_bitmaps_sse4_2way>(n_variants, vals, n_ints_sample);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4-2way\t" << m2_2way.milliseconds << "\t" << m2_2way.count << "\t" << m2_2way.throughput << std::endl;
