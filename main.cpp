@@ -128,10 +128,11 @@ bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const 
             }
         }
 
-        // residual
+        // todo: residual
         // for (/**/; j < n_variants; ++j) {
         //     for (uint32_t jj = j + 1; jj < n_variants; ++jj) {
-        //         ++d;
+        //         // ++d;
+        //         total += (*f)(&vals[(i + j)*n_ints], &vals[(i + jj)*n_ints], n_ints);
         //     }
         // }
     }
@@ -829,9 +830,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
 #if SIMD_VERSION >= 3
             // SIMD SSE4
-            bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4",m2);
 
             bench_t m2_block10 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,10);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
@@ -845,6 +843,10 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m2_block100 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,100);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
             PRINT("bitmap-sse4-blocked-100",m2_block100);
+
+            bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
+            PRINT("bitmap-sse4",m2);
 
             bench_t m2_block200 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,200);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
@@ -860,7 +862,13 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             bench_t m2_block1600 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,1600);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-800",m2_block1600);
+            PRINT("bitmap-sse4-blocked-1600",m2_block1600);
+
+            #ifdef USE_ROARING
+        for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
+        delete[] roaring;
+#endif
+continue;
 #endif
 
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
