@@ -357,11 +357,13 @@ uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const ui
 
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            count += ((b2[l1[i] / 64] & (1L << (l1[i] % 64))) != 0);
+            // count += ((b2[l1[i] / 64] & (1L << (l1[i] % 64))) != 0);
+            count += ((b2[l1[i] >> 6] & (1L << (l1[i] % 64))) != 0);
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            count += ((b1[l2[i] / 64] & (1L << (l2[i] % 64))) != 0);
+            // count += ((b1[l2[i] / 64] & (1L << (l2[i] % 64))) != 0);
+            count += ((b1[l2[i] >> 6] & (1L << (l2[i] % 64))) != 0);
         }
     }
     return(count);

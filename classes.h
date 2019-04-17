@@ -49,7 +49,7 @@ static uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__
                 v_b = _mm_lddqu_si128((__m128i *)&v2[i_b]);
             }
         }
-        if ((i_a < st_a) && (i_b < st_b))
+        if ((i_a < st_a) && (i_b < st_b)) {
             while (true) {
                 const __m128i res_v = _mm_cmpistrm(
                     v_b, v_a,
@@ -69,6 +69,7 @@ static uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__
                     v_b = _mm_lddqu_si128((__m128i *)&v2[i_b]);
                 }
             }
+        }
     }
     // intersect the tail using scalar intersection
     while (i_a < len1 && i_b < len2) {
@@ -343,9 +344,9 @@ public:
 
                 // std::cerr << "type1=" << type1 << ",type2=" << type2 << std::endl;
                 switch(ref){
-                    case 0: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]), reinterpret_cast<const array*>(&other.buckets[target])); break;
+                    case 0: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]),  reinterpret_cast<const array*>(&other.buckets[target])); break;
                     case 1: overlap += IntersectCount(reinterpret_cast<const bitmap*>(&buckets[target]), reinterpret_cast<const array*>(&other.buckets[target])); break;
-                    case 2: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]), reinterpret_cast<const bitmap*>(&other.buckets[target])); break;
+                    case 2: overlap += IntersectCount(reinterpret_cast<const array*>(&buckets[target]),  reinterpret_cast<const bitmap*>(&other.buckets[target])); break;
                     case 3: overlap += IntersectCount(reinterpret_cast<const bitmap*>(&buckets[target]), reinterpret_cast<const bitmap*>(&other.buckets[target])); break;
                 }
                 

@@ -107,6 +107,11 @@
 #define TWK_POPCOUNT __builtin_popcountll
 #endif
 
+static inline uint32_t fastrange32(uint32_t word, uint32_t p) {
+	return (uint32_t)(((uint64_t)word * (uint64_t)p) >> 32);
+}
+
+
 static
 uint64_t builtin_popcnt_unrolled_actual(const uint64_t* buf, int len) {
     //assert(len % 4 == 0);
@@ -245,6 +250,9 @@ uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m2
     CSA256(&sixteens, &eights, eights, eightsA, eightsB);
 
     cnt = _mm256_add_epi64(cnt, popcnt256(sixteens));
+
+    _mm_prefetch((const char *)&data1[i+16], _MM_HINT_T0);
+    _mm_prefetch((const char *)&data2[i+16], _MM_HINT_T0);
   }
 
   cnt = _mm256_slli_epi64(cnt, 4);
