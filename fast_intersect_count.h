@@ -219,57 +219,234 @@ __m256i popcnt256(__m256i v)
 static inline 
 uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, const __m256i* __restrict__ data2, uint64_t size)
 {
-  __m256i cnt = _mm256_setzero_si256();
-  __m256i ones = _mm256_setzero_si256();
-  __m256i twos = _mm256_setzero_si256();
-  __m256i fours = _mm256_setzero_si256();
-  __m256i eights = _mm256_setzero_si256();
-  __m256i sixteens = _mm256_setzero_si256();
-  __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+    __m256i cnt    = _mm256_setzero_si256();
+    __m256i ones   = _mm256_setzero_si256();
+    __m256i twos   = _mm256_setzero_si256();
+    __m256i fours  = _mm256_setzero_si256();
+    __m256i eights = _mm256_setzero_si256();
+    __m256i sixteens = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
 
-  uint64_t i = 0;
-  uint64_t limit = size - size % 16;
-  uint64_t* cnt64;
+    uint64_t i = 0;
+    uint64_t limit = size - size % 16;
+    uint64_t* cnt64;
 
-  for(; i < limit; i += 16)
-  {
-    CSA256(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
-    CSA256(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
-    CSA256(&foursA, &twos, twos, twosA, twosB);
-    CSA256(&twosA, &ones, ones, (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
-    CSA256(&twosB, &ones, ones, (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
-    CSA256(&foursB, &twos, twos, twosA, twosB);
-    CSA256(&eightsA, &fours, fours, foursA, foursB);
-    CSA256(&twosA, &ones, ones, (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
-    CSA256(&twosB, &ones, ones, (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
-    CSA256(&foursA, &twos, twos, twosA, twosB);
-    CSA256(&twosA, &ones, ones, (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
-    CSA256(&twosB, &ones, ones, (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
-    CSA256(&foursB, &twos, twos, twosA, twosB);
-    CSA256(&eightsB, &fours, fours, foursA, foursB);
-    CSA256(&sixteens, &eights, eights, eightsA, eightsB);
+    for(; i < limit; i += 16) {
+        CSA256(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
+        CSA256(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
+        CSA256(&twosB, &ones, ones, (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsA, &fours, fours, foursA, foursB);
+        CSA256(&twosA, &ones, ones, (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
+        CSA256(&twosB, &ones, ones, (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
+        CSA256(&twosB, &ones, ones, (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsB, &fours, fours, foursA, foursB);
+        CSA256(&sixteens, &eights, eights, eightsA, eightsB);
 
-    cnt = _mm256_add_epi64(cnt, popcnt256(sixteens));
+        cnt = _mm256_add_epi64(cnt, popcnt256(sixteens));
 
-    _mm_prefetch((const char *)&data1[i+16], _MM_HINT_T0);
-    _mm_prefetch((const char *)&data2[i+16], _MM_HINT_T0);
-  }
+        _mm_prefetch((const char *)&data1[i+16], _MM_HINT_T0);
+        _mm_prefetch((const char *)&data2[i+16], _MM_HINT_T0);
+    }
 
-  cnt = _mm256_slli_epi64(cnt, 4);
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(eights), 3));
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
-  cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
-  cnt = _mm256_add_epi64(cnt, popcnt256(ones));
+    cnt = _mm256_slli_epi64(cnt, 4);
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(eights), 3));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
+    cnt = _mm256_add_epi64(cnt, popcnt256(ones));
 
-  for(; i < size; i++)
+    for(; i < size; i++)
     cnt = _mm256_add_epi64(cnt, popcnt256(data1[i] & data2[i]));
 
-  cnt64 = (uint64_t*) &cnt;
+    cnt64 = (uint64_t*) &cnt;
 
-  return cnt64[0] +
-         cnt64[1] +
-         cnt64[2] +
-         cnt64[3];
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3];
+}
+
+static inline 
+uint64_t popcnt_avx2_csa8_intersect_list(const uint64_t* __restrict__ b1,
+                                         const uint64_t* __restrict__ b2,
+                                         const std::vector<uint32_t>& l1,
+                                         const std::vector<uint32_t>& l2)
+{
+    const __m256i* data1 = (__m256i*)b1;
+    const __m256i* data2 = (__m256i*)b2;
+    __m256i cnt    = _mm256_setzero_si256();
+    __m256i ones   = _mm256_setzero_si256();
+    __m256i twos   = _mm256_setzero_si256();
+    __m256i fours  = _mm256_setzero_si256();
+    __m256i eights = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB;
+    uint64_t* cnt64;
+
+    if (l1.size() > l2.size()) {
+        uint64_t i = 0;
+        uint64_t limit = l2.size() - l2.size() % 8;
+        
+
+        for(; i < limit; i += 8) {
+            CSA256(&twosA, &ones, ones, (data1[l2[i+0]] & data2[l2[i+0]]), (data1[l2[i+1]] & data2[l2[i+1]]));
+            CSA256(&twosB, &ones, ones, (data1[l2[i+2]] & data2[l2[i+2]]), (data1[l2[i+3]] & data2[l2[i+3]]));
+            CSA256(&foursA, &twos, twos, twosA, twosB);
+            CSA256(&twosA, &ones, ones, (data1[l2[i+4]] & data2[l2[i+4]]), (data1[l2[i+5]] & data2[l2[i+5]]));
+            CSA256(&twosB, &ones, ones, (data1[l2[i+6]] & data2[l2[i+6]]), (data1[l2[i+7]] & data2[l2[i+7]]));
+            CSA256(&foursB, &twos, twos, twosA, twosB);
+            CSA256(&eights, &fours, fours, foursA, foursB);
+
+            cnt = _mm256_add_epi64(cnt, popcnt256(eights));
+        }
+
+        cnt = _mm256_slli_epi64(cnt, 3);
+        cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
+        cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
+        cnt = _mm256_add_epi64(cnt, popcnt256(ones));
+
+        for(; i < l2.size(); i++)
+            cnt = _mm256_add_epi64(cnt, popcnt256(data1[l2[i]] & data2[l2[i]]));
+
+        cnt64 = (uint64_t*) &cnt;
+    }
+    else 
+    {
+        uint64_t i = 0;
+        uint64_t limit = l1.size() - l1.size() % 8;
+
+        for(; i < limit; i += 8) {
+            CSA256(&twosA, &ones, ones, (data1[l1[i+0]] & data2[l1[i+0]]), (data1[l1[i+1]] & data2[l1[i+1]]));
+            CSA256(&twosB, &ones, ones, (data1[l1[i+2]] & data2[l1[i+2]]), (data1[l1[i+3]] & data2[l1[i+3]]));
+            CSA256(&foursA, &twos, twos, twosA, twosB);
+            CSA256(&twosA, &ones, ones, (data1[l1[i+4]] & data2[l1[i+4]]), (data1[l1[i+5]] & data2[l1[i+5]]));
+            CSA256(&twosB, &ones, ones, (data1[l1[i+6]] & data2[l1[i+6]]), (data1[l1[i+7]] & data2[l1[i+7]]));
+            CSA256(&foursB, &twos, twos, twosA, twosB);
+            CSA256(&eights, &fours, fours, foursA, foursB);
+
+            cnt = _mm256_add_epi64(cnt, popcnt256(eights));
+        }
+
+        cnt = _mm256_slli_epi64(cnt, 3);
+        cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
+        cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
+        cnt = _mm256_add_epi64(cnt, popcnt256(ones));
+
+        for(; i < l1.size(); i++)
+            cnt = _mm256_add_epi64(cnt, popcnt256(data1[l1[i]] & data2[l1[i]]));
+
+        cnt64 = (uint64_t*) &cnt;
+    }
+
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3];
+}
+
+static inline 
+uint64_t popcnt_avx2_csa32_intersect(const __m256i* __restrict__ data1, const __m256i* __restrict__ data2, uint64_t size)
+{
+    __m256i cnt    = _mm256_setzero_si256();
+    __m256i ones   = _mm256_setzero_si256();
+    __m256i twos   = _mm256_setzero_si256();
+    __m256i fours  = _mm256_setzero_si256();
+    __m256i eights = _mm256_setzero_si256();
+    __m256i sixteens = _mm256_setzero_si256();
+    __m256i thirtytwos = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB, eightsA, eightsB, sixteensA, sixteensB;
+
+    uint64_t i = 0;
+    uint64_t limit = size - size % 32;
+    uint64_t* cnt64;
+
+    for(; i < limit; i += 32) {
+        CSA256(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
+        CSA256(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
+        CSA256(&twosB, &ones, ones, (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsA, &fours, fours, foursA, foursB);
+        CSA256(&twosA, &ones, ones, (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
+        CSA256(&twosB, &ones, ones, (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
+        CSA256(&twosB, &ones, ones, (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsB, &fours, fours, foursA, foursB);
+        CSA256(&sixteensA, &eights, eights, eightsA, eightsB);
+
+        CSA256(&twosA, &ones, ones, (data1[i+16] & data2[i+16]), (data1[i+17] & data2[i+17]));
+        CSA256(&twosB, &ones, ones, (data1[i+18] & data2[i+18]), (data1[i+19] & data2[i+19]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+20] & data2[i+20]), (data1[i+21] & data2[i+21]));
+        CSA256(&twosB, &ones, ones, (data1[i+22] & data2[i+22]), (data1[i+23] & data2[i+23]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsA, &fours, fours, foursA, foursB);
+        CSA256(&twosA, &ones, ones, (data1[i+24] & data2[i+24]), (data1[i+25] & data2[i+25]));
+        CSA256(&twosB, &ones, ones, (data1[i+26] & data2[i+26]), (data1[i+27] & data2[i+27]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+28] & data2[i+28]), (data1[i+29] & data2[i+29]));
+        CSA256(&twosB, &ones, ones, (data1[i+30] & data2[i+30]), (data1[i+31] & data2[i+31]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsB, &fours, fours, foursA, foursB);
+        CSA256(&sixteensB, &eights, eights, eightsA, eightsB);
+
+        CSA256(&thirtytwos, &sixteens, sixteens, sixteensA, sixteensB);
+
+
+        cnt = _mm256_add_epi64(cnt, popcnt256(thirtytwos));
+
+        _mm_prefetch((const char *)&data1[i+32], _MM_HINT_T0);
+        _mm_prefetch((const char *)&data2[i+32], _MM_HINT_T0);
+    }
+
+    limit = size - size % 16;
+
+    for(; i < limit; i += 16) {
+        CSA256(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
+        CSA256(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+4] & data2[i+4]), (data1[i+5] & data2[i+5]));
+        CSA256(&twosB, &ones, ones, (data1[i+6] & data2[i+6]), (data1[i+7] & data2[i+7]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsA, &fours, fours, foursA, foursB);
+        CSA256(&twosA, &ones, ones, (data1[i+8] & data2[i+8]), (data1[i+9] & data2[i+9]));
+        CSA256(&twosB, &ones, ones, (data1[i+10] & data2[i+10]), (data1[i+11] & data2[i+11]));
+        CSA256(&foursA, &twos, twos, twosA, twosB);
+        CSA256(&twosA, &ones, ones, (data1[i+12] & data2[i+12]), (data1[i+13] & data2[i+13]));
+        CSA256(&twosB, &ones, ones, (data1[i+14] & data2[i+14]), (data1[i+15] & data2[i+15]));
+        CSA256(&foursB, &twos, twos, twosA, twosB);
+        CSA256(&eightsB, &fours, fours, foursA, foursB);
+        CSA256(&sixteens, &eights, eights, eightsA, eightsB);
+
+        // cnt = _mm256_add_epi64(cnt, popcnt256(sixteens));
+
+        _mm_prefetch((const char *)&data1[i+16], _MM_HINT_T0);
+        _mm_prefetch((const char *)&data2[i+16], _MM_HINT_T0);
+    }
+
+    cnt = _mm256_slli_epi64(cnt, 5);
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(sixteens), 4));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(eights), 3));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(fours), 2));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(popcnt256(twos), 1));
+    cnt = _mm256_add_epi64(cnt, popcnt256(ones));
+
+    for(; i < size; i++)
+    cnt = _mm256_add_epi64(cnt, popcnt256(data1[i] & data2[i]));
+
+    cnt64 = (uint64_t*) &cnt;
+
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3];
 }
 #endif
 

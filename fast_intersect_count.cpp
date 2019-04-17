@@ -359,10 +359,12 @@ uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const ui
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
             count += ((b2[l1[i] >> 6] & (1L << MOD(l1[i]))) != 0); 
+            __builtin_prefetch(&b2[l1[i] >> 6], 0, 1);
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
             count += ((b1[l2[i] >> 6] & (1L << MOD(l2[i]))) != 0);
+            __builtin_prefetch(&b1[l2[i] >> 6], 0, 1);
         }
     }
 #undef MOD
@@ -834,6 +836,7 @@ uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1,
     const uint32_t n_cycles = n_ints / 4;
 
     count += popcnt_avx2_csa_intersect(r1, r2, n_cycles);
+    // count += popcnt_avx2_csa32_intersect(r1, r2, n_cycles);
 
     for(int i = n_cycles*4; i < n_ints; ++i) {
         count += _mm_popcnt_u64(b1[i] & b2[i]);
@@ -847,25 +850,27 @@ uint64_t intersect_bitmaps_avx2_list(const uint64_t* __restrict__ b1,
                                      const std::vector<uint32_t>& l1, 
                                      const std::vector<uint32_t>& l2) 
 {
-    uint64_t count = 0;
+    // uint64_t count = 0;
 
-    const __m256i* r1 = (__m256i*)b1;
-    const __m256i* r2 = (__m256i*)b2;
+    // const __m256i* r1 = (__m256i*)b1;
+    // const __m256i* r2 = (__m256i*)b2;
 
-    if(l1.size() < l2.size()) {
-        for(int i = 0; i < l1.size(); ++i) {
-            const __m256i diff = _mm256_and_si256(r1[l1[i]], r2[l1[i]]);
-            count += popcount64_unrolled((uint64_t*)&diff, 4);
-            //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
-        }
-    } else {
-        for(int i = 0; i < l2.size(); ++i) {
-            const __m256i diff = _mm256_and_si256(r1[l2[i]], r2[l2[i]]);
-            count += popcount64_unrolled((uint64_t*)&diff, 4);
-            //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
-        }
-    }
-    return(count);
+    // if(l1.size() < l2.size()) {
+    //     for(int i = 0; i < l1.size(); ++i) {
+    //         const __m256i diff = _mm256_and_si256(r1[l1[i]], r2[l1[i]]);
+    //         count += popcount64_unrolled((uint64_t*)&diff, 4);
+    //         //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l1[i]], r2[l1[i]]));
+    //     }
+    // } else {
+    //     for(int i = 0; i < l2.size(); ++i) {
+    //         const __m256i diff = _mm256_and_si256(r1[l2[i]], r2[l2[i]]);
+    //         count += popcount64_unrolled((uint64_t*)&diff, 4);
+    //         //TWK_POPCOUNT_AVX2(count, _mm256_and_si256(r1[l2[i]], r2[l2[i]]));
+    //     }
+    // }
+    // return(count);
+
+    return(popcnt_avx2_csa8_intersect_list(b1,b2,l1,l2));
 }
 
 uint64_t intersect_bitmaps_avx2_squash(const uint64_t* __restrict__ b1, 
