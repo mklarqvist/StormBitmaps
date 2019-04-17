@@ -248,44 +248,56 @@ bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const
 
     // uint64_t blocked_con_tot = 0;
     const uint64_t cycles_start = get_cpu_cycles();
-    uint32_t i = 0;
+    uint32_t i  = 0;
     uint32_t tt = 0;
     for (/**/; i + bsize <= n_variants; i += bsize) {
         // diagonal component
-        for (uint32_t j = 0; j < bsize; ++j) {
-            for (uint32_t jj = j + 1; jj < bsize; ++jj) {
-                // [i+j] and i+jj]
-                // std::cerr << i+j << "," << i+jj << std::endl;
-                // blocked_con_tot += itcontainers[i + j].IntersectCount(itcontainers[i + jj]);
-                total += (*f)(&vals[(i + j)*n_ints], &vals[(i + jj)*n_ints], pos[i+j], pos[i+jj]);
-                // ++d; ++diag;
+        uint32_t left = i*n_ints;
+        uint32_t right = 0;
+        for (uint32_t j = 0; j < bsize; ++j, left += n_ints) {
+            right = left + n_ints;
+            for (uint32_t jj = j + 1; jj < bsize; ++jj, right += n_ints) {
+                total += (*f)(&vals[left], &vals[right], pos[i+j], pos[i+jj]);
+                //total += (*f)(&vals[left], &vals[right], n_ints);
+                // ++d;
             }
         }
 
         // square component
-        //uint32_t curi = i + bsize;
         uint32_t curi = i;
         uint32_t j = curi + bsize;
         for (/**/; j + bsize <= n_variants; j += bsize) {
-            for (uint32_t ii = 0; ii < bsize; ++ii) {
-                for (uint32_t jj = 0; jj < bsize; ++jj) {
-                    // [j+ii], [j+jj]
-                    // blocked_con_tot += itcontainers[curi + ii].IntersectCount(itcontainers[j + jj]);
-                    total += (*f)(&vals[(curi + ii)*n_ints], &vals[(j + jj)*n_ints], pos[curi +ii], pos[j + jj]);
-                    // std::cerr << curi+ii << "," << j+jj << " b=" << bsize << std::endl;
+            left = curi*n_ints;
+            for (uint32_t ii = 0; ii < bsize; ++ii, left += n_ints) {
+                right = j*n_ints;
+                for (uint32_t jj = 0; jj < bsize; ++jj, right += n_ints) {
+                    // total += (*f)(&vals[left], &vals[right], n_ints);
+                    total += (*f)(&vals[left], &vals[right], pos[curi + ii], pos[j + jj]);
                     // ++d;
                 }
-                // exit(1);
             }
         }
 
-        // todo: residual
-        // for (/**/; j < n_variants; ++j) {
-        //     for (uint32_t jj = j + 1; jj < n_variants; ++jj) {
-        //         // ++d;
-        //         total += (*f)(&vals[(i + j)*n_ints], &vals[(i + jj)*n_ints], n_ints);
-        //     }
-        // }
+        // residual
+        right = j*n_ints;
+        for (/**/; j < n_variants; ++j, right += n_ints) {
+            left = curi*n_ints;
+            for (uint32_t jj = 0; jj < bsize; ++jj, left += n_ints) {
+                // total += (*f)(&vals[left], &vals[right], n_ints);
+                total += (*f)(&vals[left], &vals[right], pos[curi + jj], pos[j]);
+                // ++d;
+            }
+        }
+    }
+    // residual tail
+    uint32_t left = i*n_ints;
+    for (/**/; i < n_variants; ++i, left += n_ints) {
+        uint32_t right = left + n_ints;
+        for (uint32_t j = i + 1; j < n_variants; ++j, right += n_ints) {
+            // total += (*f)(&vals[left], &vals[right], n_ints);
+            total += (*f)(&vals[left], &vals[right], pos[i], pos[j]);
+            // ++d;
+        }
     }
     const uint64_t cycles_end = get_cpu_cycles();
     
@@ -494,7 +506,7 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, ro
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    std::vector<uint32_t> samples = {4992, 65536, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {256, 512,1024,4992, 65536, 131072, 196608, 589824};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     for (int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
@@ -978,9 +990,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m4_4way = flwrapper<&intersect_bitmaps_scalar_list_4way>(n_variants, vals, n_ints_sample, pos);
             PRINT("bitmap-scalar-skip-list-4way",m4_4way);
 
-            bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
-            PRINT("bitmap-scalar-skip-list-1x4way",m4_1x4way);
-
             bench_t m4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 10);
             PRINT("bitmap-scalar-skip-list-blocked10",m4_b10);
 
@@ -989,6 +998,30 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             bench_t m4_b100 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 100);
             PRINT("bitmap-scalar-skip-list-blocked100",m4_b100);
+
+            bench_t m4_b200 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 200);
+            PRINT("bitmap-scalar-skip-list-blocked200",m4_b200);
+
+            bench_t m4_b400 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 400);
+            PRINT("bitmap-scalar-skip-list-blocked400",m4_b400);
+
+            bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
+            PRINT("bitmap-scalar-skip-list-1x4way",m4_1x4way);
+
+            bench_t m41x4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 10);
+            PRINT("bitmap-scalar-skip-list-1x4-blocked10",m41x4_b10);
+
+            bench_t m41x4_b50 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 50);
+            PRINT("bitmap-scalar-skip-list-1x4-blocked50",m41x4_b50);
+
+            bench_t m41x4_b100 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 100);
+            PRINT("bitmap-scalar-skip-list-1x4-blocked100",m41x4_b100);
+
+            bench_t m41x4_b200 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 200);
+            PRINT("bitmap-scalar-skip-list-1x4-blocked200",m41x4_b200);
+
+            bench_t m41x4_b400 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 400);
+            PRINT("bitmap-scalar-skip-list-1x4-blocked400",m41x4_b400);
 #endif
 
 #ifdef USE_ROARING

@@ -355,17 +355,17 @@ uint64_t intersect_bitmaps_scalar_prefix_suffix(const uint64_t* __restrict__ b1,
 uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
     uint64_t count = 0;
 
+#define MOD(x) (( (x) * 64 ) >> 6)
     if(l1.size() < l2.size()) {
         for(int i = 0; i < l1.size(); ++i) {
-            // count += ((b2[l1[i] / 64] & (1L << (l1[i] % 64))) != 0);
-            count += ((b2[l1[i] >> 6] & (1L << (l1[i] % 64))) != 0);
+            count += ((b2[l1[i] >> 6] & (1L << MOD(l1[i]))) != 0); 
         }
     } else {
         for(int i = 0; i < l2.size(); ++i) {
-            // count += ((b1[l2[i] / 64] & (1L << (l2[i] % 64))) != 0);
-            count += ((b1[l2[i] >> 6] & (1L << (l2[i] % 64))) != 0);
+            count += ((b1[l2[i] >> 6] & (1L << MOD(l2[i]))) != 0);
         }
     }
+#undef MOD
     return(count);
 }
 
@@ -415,48 +415,68 @@ uint64_t intersect_bitmaps_scalar_list_4way(const uint64_t* __restrict__ b1, con
     return(count[0] + count[1] + count[2] + count[3]);
 }
 
-uint64_t intersect_bitmaps_scalar_list_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
+uint64_t intersect_bitmaps_scalar_list_1x4way(const uint64_t* __restrict__ b1, 
+                                              const uint64_t* __restrict__ b2, 
+                                              const std::vector<uint32_t>& l1, 
+                                              const std::vector<uint32_t>& l2) 
+{
     uint64_t count = 0;
 
+#define MOD(x) (( (x) * 64 ) >> 6)
     if(l1.size() < l2.size()) {
         int i = 0;
 
         for(; i + 4 < l1.size(); i += 4) {
-            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
-            count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
-            count += ((b2[l1[i+2] / 64] & (1L << (l1[i+2] % 64))) != 0);
-            count += ((b2[l1[i+3] / 64] & (1L << (l1[i+3] % 64))) != 0);
+            // count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            // count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+            // count += ((b2[l1[i+2] / 64] & (1L << (l1[i+2] % 64))) != 0);
+            // count += ((b2[l1[i+3] / 64] & (1L << (l1[i+3] % 64))) != 0);
+            count += ((b2[l1[i+0] >> 6] & (1L << MOD(l1[i+0]))) != 0);
+            count += ((b2[l1[i+1] >> 6] & (1L << MOD(l1[i+1]))) != 0);
+            count += ((b2[l1[i+2] >> 6] & (1L << MOD(l1[i+2]))) != 0);
+            count += ((b2[l1[i+3] >> 6] & (1L << MOD(l1[i+3]))) != 0);
         }
 
         for(; i + 2 < l1.size(); i += 2) {
-            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
-            count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+            // count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            // count += ((b2[l1[i+1] / 64] & (1L << (l1[i+1] % 64))) != 0);
+            count += ((b2[l1[i+0] >> 6] & (1L << MOD(l1[i+0]))) != 0);
+            count += ((b2[l1[i+1] >> 6] & (1L << MOD(l1[i+1]))) != 0);
         }
 
 
         for(; i < l1.size(); ++i) {
-            count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            // count += ((b2[l1[i+0] / 64] & (1L << (l1[i+0] % 64))) != 0);
+            count += ((b2[l1[i+0] >> 6] & (1L << MOD(l1[i+0]))) != 0);
         }
     } else {
         int i = 0;
 
         for(; i + 4 < l2.size(); i += 4) {
-            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
-            count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
-            count += ((b1[l2[i+2] / 64] & (1L << (l2[i+2] % 64))) != 0);
-            count += ((b1[l2[i+3] / 64] & (1L << (l2[i+3] % 64))) != 0);
+            // count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            // count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+            // count += ((b1[l2[i+2] / 64] & (1L << (l2[i+2] % 64))) != 0);
+            // count += ((b1[l2[i+3] / 64] & (1L << (l2[i+3] % 64))) != 0);
+            count += ((b1[l2[i+0] >> 6] & (1L << MOD(l2[i+0]))) != 0);
+            count += ((b1[l2[i+1] >> 6] & (1L << MOD(l2[i+1]))) != 0);
+            count += ((b1[l2[i+2] >> 6] & (1L << MOD(l2[i+2]))) != 0);
+            count += ((b1[l2[i+3] >> 6] & (1L << MOD(l2[i+3]))) != 0);
         }
 
         for(; i + 2 < l2.size(); i += 2) {
-            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
-            count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+            // count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            // count += ((b1[l2[i+1] / 64] & (1L << (l2[i+1] % 64))) != 0);
+            count += ((b1[l2[i+0] >> 6] & (1L << MOD(l2[i+0]))) != 0);
+            count += ((b1[l2[i+1] >> 6] & (1L << MOD(l2[i+1]))) != 0);
         }
 
 
         for(; i < l2.size(); ++i) {
-            count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            // count += ((b1[l2[i+0] / 64] & (1L << (l2[i+0] % 64))) != 0);
+            count += ((b1[l2[i+0] >> 6] & (1L << MOD(l2[i+0]))) != 0);
         }
     }
+#undef MOD
     return(count);
 }
 
