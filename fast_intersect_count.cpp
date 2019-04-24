@@ -837,6 +837,7 @@ uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1,
 
     count += popcnt_avx2_csa_intersect(r1, r2, n_cycles);
     // count += popcnt_avx2_csa32_intersect(r1, r2, n_cycles);
+    // count += popcnt_avx2_csaB_intersect(r1, r2, n_cycles);
 
     for(int i = n_cycles*4; i < n_ints; ++i) {
         count += _mm_popcnt_u64(b1[i] & b2[i]);

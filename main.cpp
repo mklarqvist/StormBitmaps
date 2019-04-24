@@ -512,7 +512,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint32_t n_ints_sample = samples[s] / 64;
 
         // Limit memory usage to 10e6 but no more than 50k records.
-        uint32_t desired_mem = 10 * 1024 * 1024;
+        uint32_t desired_mem = 20 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
         uint32_t n_variants = std::max(std::min((uint32_t)50000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t)))), (uint32_t)64);
         // uint32_t n_variants = 10000;
@@ -913,106 +913,45 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
 #ifdef USE_ROARING
             // temp
+            uint64_t roaring_bytes_used = 0;
+            for (int k = 0; k < n_variants; ++k) {
+                roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
+            }
+            std::cerr << "Memory used by roaring=" << roaring_bytes_used << std::endl;
+
             bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
             PRINT("roaring",broaring);
 #endif
 
 #if SIMD_VERSION >= 3
             // SIMD SSE4
-            bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,3);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-3",m2_block3);
 
+            std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
-            bench_t m2_block5 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,5);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-5",m2_block5);
-
-            bench_t m2_block10 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,10);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-10",m2_block10);
-
-            bench_t m2_block50 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,50);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-50",m2_block50);
-
-            bench_t m2_block100 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,100);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-100",m2_block100);
-
+            for (int k = 0; k < block_range.size(); ++k) {
+               bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
+                PRINT("bitmap-sse4-blocked-" + std::to_string(block_range[k]),m2_block3);
+            }
             bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
             PRINT("bitmap-sse4",m2);
-
-            bench_t m2_block200 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,200);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-200",m2_block200);
-
-            bench_t m2_block400 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,400);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-400",m2_block400);
-
-            bench_t m2_block800 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,800);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-800",m2_block800);
-
-            bench_t m2_block1600 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,1600);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-sse4-blocked-1600",m2_block1600);
 #endif
 #if SIMD_VERSION >= 4
-            // SIMD SSE4
-
-            bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list\t" << m7.milliseconds << "\t" << m7.count << "\t" << m7.throughput << std::endl;
-            PRINT("bitmap-avx2-skip-list",m7);
-
-            std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400};
+            // SIMD AVX256
+            for (int k = 0; k < block_range.size(); ++k) {
+                bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,block_range[k]);
+                PRINT("bitmap-avx256-blocked-" + std::to_string(block_range[k]),m3_block3);
+            }
+            bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
+            PRINT("bitmap-avx256",m3_0);
 
             for (int k = 0; k < block_range.size(); ++k) {
                 bench_t m7 = flwrapper_blocked<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256, block_range[k]);
-                PRINT("bitmap-avx2-skip-list-block" + std::to_string(block_range[k]),m7);
+                PRINT("bitmap-avx2-skip-list-blocked-" + std::to_string(block_range[k]),m7);
             }
+            bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
+            PRINT("bitmap-avx2-skip-list",m7);
 
-            bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,3);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-3",m3_block3);
 
-            bench_t m3_block5 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,5);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-5",m3_block5);
-
-            bench_t m3_block10 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,10);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-10",m3_block10);
-
-            bench_t m3_block50 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,50);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-50",m3_block50);
-
-            bench_t m3_block100 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,100);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-100",m3_block100);
-
-            bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256",m3_0);
-
-            bench_t m3_block200 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,200);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-200",m3_block200);
-
-            bench_t m3_block400 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,400);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-400",m3_block400);
-
-            bench_t m3_block800 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,800);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-800",m3_block800);
-
-            bench_t m3_block1600 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,1600);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tsse4\t" << m2.milliseconds << "\t" << m2.count << "\t" << m2.throughput << std::endl;
-            PRINT("bitmap-avx256-blocked-1600",m3_block1600);
 
             bench_t raw_roaring = frawwrapper<&intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
             PRINT("raw-roaring",raw_roaring);
@@ -1020,51 +959,28 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t raw_roaring2 = frawwrapper<&intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
             PRINT("raw-roaring2",raw_roaring2);
 
+            
+            for (int k = 0; k < block_range.size(); ++k) {
+                bench_t m4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, block_range[k]);
+                PRINT("bitmap-scalar-skip-list-4way-blocked-" + std::to_string(block_range[k]),m4_b10);
+            }
             bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
             PRINT("bitmap-scalar-skip-list",m4);
 
-            bench_t m4_4way = flwrapper<&intersect_bitmaps_scalar_list_4way>(n_variants, vals, n_ints_sample, pos);
-            PRINT("bitmap-scalar-skip-list-4way",m4_4way);
 
-            bench_t m4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 10);
-            PRINT("bitmap-scalar-skip-list-blocked10",m4_b10);
-
-            bench_t m4_b50 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 50);
-            PRINT("bitmap-scalar-skip-list-blocked50",m4_b50);
-
-            bench_t m4_b100 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 100);
-            PRINT("bitmap-scalar-skip-list-blocked100",m4_b100);
-
-            bench_t m4_b200 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 200);
-            PRINT("bitmap-scalar-skip-list-blocked200",m4_b200);
-
-            bench_t m4_b400 = flwrapper_blocked<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos, 400);
-            PRINT("bitmap-scalar-skip-list-blocked400",m4_b400);
-
+            for (int k = 0; k < block_range.size(); ++k) {
+                bench_t m41x4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, block_range[k]);
+                PRINT("bitmap-scalar-skip-list-1x4way-blocked-" + std::to_string(block_range[k]),m41x4_b10);
+            }
             bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
             PRINT("bitmap-scalar-skip-list-1x4way",m4_1x4way);
-
-            bench_t m41x4_b10 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 10);
-            PRINT("bitmap-scalar-skip-list-1x4-blocked10",m41x4_b10);
-
-            bench_t m41x4_b50 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 50);
-            PRINT("bitmap-scalar-skip-list-1x4-blocked50",m41x4_b50);
-
-            bench_t m41x4_b100 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 100);
-            PRINT("bitmap-scalar-skip-list-1x4-blocked100",m41x4_b100);
-
-            bench_t m41x4_b200 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 200);
-            PRINT("bitmap-scalar-skip-list-1x4-blocked200",m41x4_b200);
-
-            bench_t m41x4_b400 = flwrapper_blocked<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos, 400);
-            PRINT("bitmap-scalar-skip-list-1x4-blocked400",m41x4_b400);
 #endif
 
-#ifdef USE_ROARING
-            for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
-                delete[] roaring;
-#endif
-            continue;
+// #ifdef USE_ROARING
+//             for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
+//                 delete[] roaring;
+// #endif
+//             continue;
 
 
             bench_t bins1 = frbinswrapper<&intersect_range_bins>(n_variants, n_ints_sample, bins, n_ints_bin);
@@ -1237,9 +1153,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 #if SIMD_VERSION >= 5
             // SIMD AVX2
         
-            bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
+            // bench_t m3 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2\t" << m3.milliseconds << "\t" << m3.count << "\t" << m3.throughput << std::endl;
-            PRINT("bitmap-avx2",m3);
+            // PRINT("bitmap-avx2",m3);
 
             // SIMD AVX2
             //bench_t m3twist = fwrapper_buffered<&intersect_bitmaps_avx2_twister>(n_variants, vals, n_ints_sample);
