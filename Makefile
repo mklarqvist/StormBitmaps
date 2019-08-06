@@ -28,16 +28,16 @@ all: intersect
 
 # Generic rules
 %.o: %.c
-	$(CC) $(CFLAGS)-c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.o: %.cpp
-	$(CXX) $(CPPFLAGS)-c -o $@ $<
+	$(CXX) $(CPPFLAGS) -c -o $@ $<
 
 main.o: main.cpp classes.h fast_intersect_count.h
-	$(CXX) $(CPPFLAGS)-c -o $@ $<
+	$(CXX) $(CPPFLAGS) -I/home/marcus/CRoaring/include -c -o $@ $<
 
 intersect: fast_intersect_count.o main.o classes.h fast_intersect_count.h
-	$(CXX) $(CPPFLAGS) -L/home/mdrk/tools/CRoaring/ fast_intersect_count.o main.o -o intersect -lroaring
+	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ fast_intersect_count.o main.o -o intersect -lroaring
 
 clean:
 	rm -f $(OBJECTS)
