@@ -529,9 +529,9 @@ uint64_t popcnt_avx2_csa32_intersect(const __m256i* __restrict__ data1, const __
     cnt = _mm256_add_epi64(cnt, popcnt256(ones));
 
     for(; i < size; i++)
-    cnt = _mm256_add_epi64(cnt, popcnt256(data1[i] & data2[i]));
+        cnt = _mm256_add_epi64(cnt, popcnt256(data1[i] & data2[i]));
 
-    cnt64 = (uint64_t*) &cnt;
+    cnt64 = (uint64_t*)&cnt;
 
     return cnt64[0] +
             cnt64[1] +
@@ -625,10 +625,12 @@ uint64_t popcnt_avx512_csa_intersect(const __m512i* __restrict__ data1, const __
   cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(popcnt512(twos), 1));
   cnt = _mm512_add_epi64(cnt, popcnt512(ones));
 
-  for(; i < size; i++)
-    cnt = _mm512_add_epi64(cnt, popcnt512(data[i]));
+//   for(; i < size; i++)
+//     cnt = _mm512_add_epi64(cnt, popcnt512(data[i]));
+    for(; i < size; i++)
+        cnt = _mm512_add_epi64(cnt, popcnt512(data1[i] & data2[i]));
 
-  cnt64 = (uint64_t*) &cnt;
+  cnt64 = (uint64_t*)&cnt;
 
   return cnt64[0] +
          cnt64[1] +
