@@ -625,10 +625,8 @@ uint64_t popcnt_avx512_csa_intersect(const __m512i* __restrict__ data1, const __
   cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(popcnt512(twos), 1));
   cnt = _mm512_add_epi64(cnt, popcnt512(ones));
 
-//   for(; i < size; i++)
-//     cnt = _mm512_add_epi64(cnt, popcnt512(data[i]));
-    for(; i < size; i++)
-        cnt = _mm512_add_epi64(cnt, popcnt512(data1[i] & data2[i]));
+  for(; i < size; i++)
+    cnt = _mm512_add_epi64(cnt, popcnt512(data1[i] & data2[i]));
 
   cnt64 = (uint64_t*)&cnt;
 

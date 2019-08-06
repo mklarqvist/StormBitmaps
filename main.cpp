@@ -506,7 +506,7 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, ro
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    std::vector<uint32_t> samples = {4864, 65536, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {5120, 65536, 131072, 196608, 589824};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     for (int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
@@ -1000,7 +1000,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
             PRINT("bitmap-sse4",m2);
 #endif
-#if SIMD_VERSION >= 4
+#if SIMD_VERSION >= 5
             // SIMD AVX256
             for (int k = 0; k < block_range.size(); ++k) {
                 bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,block_range[k]);
@@ -1019,11 +1019,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
 #if SIMD_VERSION >= 6
             // SIMD AVX512
-            // bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
-            // //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
-            // PRINT("bitmap-avx512",m8);
+            bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            PRINT("bitmap-avx512",m8);
 
             // SIMD AVX512
+            for (int k = 0; k < block_range.size(); ++k) {
+                bench_t m8_2_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample,block_range[k]);
+                PRINT("bitmap-avx512-csa-blocked-" + std::to_string(block_range[k]),m8_2_block);
+            }
+
             bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
             PRINT("bitmap-avx512-csa",m8_2);
