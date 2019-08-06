@@ -955,23 +955,23 @@ static inline __m512i TWK_AVX512_POPCNT(const __m512i v) {
     return _mm512_sad_epu8(t3, _mm512_setzero_si512());
 }
 
-uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
-    uint64_t count = 0;
-    const __m512i* r1 = (__m512i*)b1;
-    const __m512i* r2 = (__m512i*)b2;
-    const uint32_t n_cycles = n_ints / 8;
-    __m512i sum = _mm512_set1_epi32(0);
+// uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+//     uint64_t count = 0;
+//     const __m512i* r1 = (__m512i*)b1;
+//     const __m512i* r2 = (__m512i*)b2;
+//     const uint32_t n_cycles = n_ints / 8;
+//     __m512i sum = _mm512_set1_epi32(0);
 
-    for(int i = 0; i < n_cycles; ++i) {
-        sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[i], r2[i])));
-    }
+//     for(int i = 0; i < n_cycles; ++i) {
+//         sum = _mm512_add_epi32(sum, TWK_AVX512_POPCNT(_mm512_and_si512(r1[i], r2[i])));
+//     }
 
-    uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
-    for(int i = 0; i < 16; ++i)
-        count += v[i];
+//     uint32_t* v = reinterpret_cast<uint32_t*>(&sum);
+//     for(int i = 0; i < 16; ++i)
+//         count += v[i];
 
-    return(count);
-}
+//     return(count);
+// }
 
 uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1, 
                                       const uint64_t* __restrict__ b2, 

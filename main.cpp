@@ -988,11 +988,10 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
             PRINT("roaring",broaring);
 #endif
+            // SIMD SSE4
+            const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
 #if SIMD_VERSION >= 3
-            // SIMD SSE4
-
-            std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
             for (int k = 0; k < block_range.size(); ++k) {
                bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
@@ -1016,8 +1015,34 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             bench_t m7 = flwrapper<&intersect_bitmaps_avx2_list>(n_variants, vals, n_ints_sample, pos_reg256);
             PRINT("bitmap-avx2-skip-list",m7);
+#endif
 
+#if SIMD_VERSION >= 6
+            // SIMD AVX512
+            // bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
+            // //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            // PRINT("bitmap-avx512",m8);
 
+            // SIMD AVX512
+            bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            PRINT("bitmap-avx512-csa",m8_2);
+
+            // SIMD AVX512-list
+            bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
+            PRINT("bitmap-avx512-skip-list",m9);
+
+            // SIMD AVX512-squash
+            bench_t m11 = fsqwrapper<&intersect_bitmaps_avx512_squash>(n_variants, vals, n_ints_sample, squash_4096);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-squash\t" << m11.milliseconds << "\t" << m11.count << "\t" << m11.throughput << std::endl;
+            PRINT("bitmap-avx512-squash",m11);
+
+            // SIMD AVX512-list-squash
+            bench_t m15 = flsqwrapper<&intersect_bitmaps_avx512_list_squash>(n_variants, vals, n_ints_sample, pos_reg512, squash_4096);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
+            PRINT("bitmap-avx512-skip-list-squash",m15);
+#endif
 
             bench_t raw_roaring = frawwrapper<&intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
             PRINT("raw-roaring",raw_roaring);
@@ -1040,7 +1065,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             }
             bench_t m4_1x4way = flwrapper<&intersect_bitmaps_scalar_list_1x4way>(n_variants, vals, n_ints_sample, pos);
             PRINT("bitmap-scalar-skip-list-1x4way",m4_1x4way);
-#endif
 
 // #ifdef USE_ROARING
 //             for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
@@ -1064,8 +1088,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             bench_t raw1_roaring_avx2= frawwrapper<&intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
             PRINT("raw-rotl-gallop-avx2",raw1_roaring_avx2);
-
-            
 
 
             if (n_alts[a] <= 200) {
@@ -1244,32 +1266,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx2-list-squash\t" << m12.milliseconds << "\t" << m12.count << "\t" << m12.throughput << std::endl;
             PRINT("bitmap-avx2-skip-list-squash",m12);
             // }
-#endif
-#if SIMD_VERSION >= 6
-            // SIMD AVX512
-            bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
-            PRINT("bitmap-avx512",m8);
-
-            // SIMD AVX512
-            bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
-            PRINT("bitmap-avx512-csa",m8_2);
-
-            // SIMD AVX512-list
-            bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list\t" << m9.milliseconds << "\t" << m9.count << "\t" << m9.throughput << std::endl;
-            PRINT("bitmap-avx512-skip-list",m9);
-
-            // SIMD AVX512-squash
-            bench_t m11 = fsqwrapper<&intersect_bitmaps_avx512_squash>(n_variants, vals, n_ints_sample, squash_4096);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-squash\t" << m11.milliseconds << "\t" << m11.count << "\t" << m11.throughput << std::endl;
-            PRINT("bitmap-avx512-squash",m11);
-
-            // SIMD AVX512-list-squash
-            bench_t m15 = flsqwrapper<&intersect_bitmaps_avx512_list_squash>(n_variants, vals, n_ints_sample, pos_reg512, squash_4096);
-            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512-list-squash\t" << m15.milliseconds << "\t" << m15.count << "\t" << m15.throughput << std::endl;
-            PRINT("bitmap-avx512-skip-list-squash",m15);
 #endif
         
 #ifdef USE_ROARING
