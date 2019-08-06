@@ -973,6 +973,26 @@ uint64_t intersect_bitmaps_avx512(const uint64_t* __restrict__ b1, const uint64_
     return(count);
 }
 
+uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1, 
+                                      const uint64_t* __restrict__ b2, 
+                                      const uint32_t n_ints) 
+{
+    uint64_t count = 0;
+    const __m512i* r1 = (__m512i*)b1;
+    const __m512i* r2 = (__m512i*)b2;
+    const uint32_t n_cycles = n_ints / 8;
+
+    count += popcnt_avx512_csa_intersect(r1, r2, n_cycles);
+    // count += popcnt_avx2_csa32_intersect(r1, r2, n_cycles);
+    // count += popcnt_avx2_csaB_intersect(r1, r2, n_cycles);
+
+    for(int i = n_cycles*8; i < n_ints; ++i) {
+        count += _mm_popcnt_u64(b1[i] & b2[i]);
+    }
+
+    return(count);
+}
+
 uint64_t intersect_bitmaps_avx512_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2) {
     uint64_t count = 0;
     const __m512i* r1 = (__m512i*)b1;

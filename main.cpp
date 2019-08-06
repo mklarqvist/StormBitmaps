@@ -525,7 +525,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
         // 1:500, 1:167, 1:22
-        std::vector<uint32_t> n_alts = {2, 15, 30, 65, 222}; // 1kgp3 dist 
+        std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
         // std::vector<uint32_t> n_alts = {21,269,9506}; // HRC dist
 
         // std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
@@ -827,6 +827,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
             std::cerr << "Size of intersections=" << int_comparisons << std::endl;
 
+            const uint64_t n_total_integer_cmps = n_intersects * n_ints_sample;
+            std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
+
         //
 
         // Cache blocking
@@ -842,6 +845,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
         // uint64_t d = 0, diag = 0;
 
+        {
         uint64_t blocked_con_tot = 0;
         uint32_t i  = 0;
         uint32_t tt = 0;
@@ -898,16 +902,78 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
         // std::cerr << "BLOCKIING=" << d << "/" << n_intersects << " with diag " << diag << std::endl;
         // assert(d == n_intersects);
-        std::cerr << "blocked tot=" << blocked_con_tot << " time=" << time_span_blocked.count() << std::endl;
+        std::cerr << "[roaring] blocked tot=" << blocked_con_tot << " time=" << time_span_blocked.count() << std::endl;
         //
+        }
 
-            std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.count << "\t" << \
+        {
+        uint64_t blocked_con_tot = 0;
+        uint32_t i  = 0;
+        uint32_t tt = 0;
+        for (/**/; i + bsize <= n_variants; i += bsize) {
+            // diagonal component
+            for (uint32_t j = 0; j < bsize; ++j) {
+                for (uint32_t jj = j + 1; jj < bsize; ++jj) {
+                    blocked_con_tot += itcontainers[i + j].IntersectCount(itcontainers[i + jj]);
+                    // blocked_con_tot += roaring_bitmap_and_cardinality(roaring[i+j], roaring[i+jj]);
+                    // total += (*f)(&vals[left], &vals[right], pos[i+j], pos[i+jj]);
+                    //total += (*f)(&vals[left], &vals[right], n_ints);
+                    // ++d;
+                }
+            }
+
+            // square component
+            uint32_t curi = i;
+            uint32_t j = curi + bsize;
+            for (/**/; j + bsize <= n_variants; j += bsize) {
+                for (uint32_t ii = 0; ii < bsize; ++ii) {
+                    for (uint32_t jj = 0; jj < bsize; ++jj) {
+                        // total += (*f)(&vals[left], &vals[right], n_ints);
+                        // total += (*f)(&vals[left], &vals[right], pos[curi + ii], pos[j + jj]);
+                        blocked_con_tot += itcontainers[curi + ii].IntersectCount(itcontainers[j + jj]);
+                        // blocked_con_tot += roaring_bitmap_and_cardinality(roaring[curi+ii], roaring[j+jj]);
+                        // ++d;
+                    }
+                }
+            }
+
+            // residual
+            for (/**/; j < n_variants; ++j) {
+                for (uint32_t jj = 0; jj < bsize; ++jj) {
+                    // total += (*f)(&vals[left], &vals[right], n_ints);
+                    // total += (*f)(&vals[left], &vals[right], pos[curi + jj], pos[j]);
+                    blocked_con_tot += itcontainers[curi + jj].IntersectCount(itcontainers[j]);
+                    // blocked_con_tot += roaring_bitmap_and_cardinality(roaring[curi+jj], roaring[j]);
+                    // ++d;
+                }
+            }
+        }
+        // residual tail
+        for (/**/; i < n_variants; ++i) {
+            for (uint32_t j = i + 1; j < n_variants; ++j) {
+                // total += (*f)(&vals[left], &vals[right], n_ints);
+                // total += (*f)(&vals[left], &vals[right], pos[i], pos[j]);
+                blocked_con_tot += itcontainers[i].IntersectCount(itcontainers[j]);
+                // blocked_con_tot += roaring_bitmap_and_cardinality(roaring[i], roaring[j]);
+                // ++d;
+            }
+        }
+        std::chrono::high_resolution_clock::time_point t2_blocked = std::chrono::high_resolution_clock::now();
+        auto time_span_blocked = std::chrono::duration_cast<std::chrono::milliseconds>(t2_blocked - t1_blocked);
+
+        // std::cerr << "BLOCKIING=" << d << "/" << n_intersects << " with diag " << diag << std::endl;
+        // assert(d == n_intersects);
+        std::cerr << "[itcontainer] blocked tot=" << blocked_con_tot << " time=" << time_span_blocked.count() << std::endl;
+        //
+        }
+
+        std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
         bench.throughput << "\t" << \
         (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
         (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
-        (bench.milliseconds == 0 ? 0 : int_comparisons*sizeof(uint32_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
-        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)int_comparisons) << "\t" << \
+        (bench.milliseconds == 0 ? 0 : n_total_integer_cmps*sizeof(uint64_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
         (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
 
 
@@ -1184,6 +1250,11 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512>(n_variants, vals, n_ints_sample);
             //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
             PRINT("bitmap-avx512",m8);
+
+            // SIMD AVX512
+            bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
+            //std::cout << samples[s] << "\t" << n_alts[a] << "\tavx512\t" << m8.milliseconds << "\t" << m8.count << "\t" << m8.throughput << std::endl;
+            PRINT("bitmap-avx512-csa",m8_2);
 
             // SIMD AVX512-list
             bench_t m9 = flwrapper<&intersect_bitmaps_avx512_list>(n_variants, vals, n_ints_sample, pos_reg512);

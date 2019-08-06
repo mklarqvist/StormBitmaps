@@ -37,7 +37,7 @@ main.o: main.cpp classes.h fast_intersect_count.h
 	$(CXX) $(CPPFLAGS)-c -o $@ $<
 
 intersect: fast_intersect_count.o main.o classes.h fast_intersect_count.h
-	$(CXX) $(CPPFLAGS) -L/home/mdrk/tools/CRoaring/build fast_intersect_count.o main.o -o intersect -lroaring
+	$(CXX) $(CPPFLAGS) -L/home/mdrk/tools/CRoaring/ fast_intersect_count.o main.o -o intersect -lroaring
 
 clean:
 	rm -f $(OBJECTS)
