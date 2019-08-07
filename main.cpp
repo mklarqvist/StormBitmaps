@@ -506,8 +506,11 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, ro
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    std::vector<uint32_t> samples = {5120, 65536, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {65536, 131072, 196608, 589824};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
+    
+    std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
+
     for (int s = 0; s < samples.size(); ++s) {
         uint32_t n_ints_sample = samples[s] / 64;
 
@@ -533,7 +536,13 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
 
+        bitmap_container_t bcont(n_variants,samples[s]);
+        bitmap_container_t bcont2(n_variants,samples[s],true,true);
+
         for (int a = 0; a < n_alts.size(); ++a) {
+            bcont.clear();
+            bcont2.clear();
+
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
             for (int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
@@ -601,8 +610,12 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 //std::cerr << std::endl;
 
 #ifdef USE_ROARING
-                for (int p = 0; p < pos[j].size(); ++p)
+                for (int p = 0; p < pos[j].size(); ++p) {
                     roaring_bitmap_add(roaring[j], pos[j][p]);
+                    bcont.Add(j,pos[j][p]);
+                    // bcont2.Add(j,pos[j][p]);
+                }
+                bcont2.Add(j,pos[j]);
 #endif
 
                 // Todo
@@ -845,6 +858,99 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
         // uint64_t d = 0, diag = 0;
 
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
+        bench.throughput << "\t" << \
+        (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
+        (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
+        (bench.milliseconds == 0 ? 0 : n_total_integer_cmps*sizeof(uint64_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = bcont.intersect();
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("test-avx2",b);
+        }
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = bcont2.intersect_cont();
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("test-avx2-cont-only",b);
+        }
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = bcont2.intersect_blocked_cont(256e3/(n_ints_sample*8));
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("test-avx2-cont-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
+        }
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = bcont2.intersect_cont_auto();
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("test-avx2-cont-auto",b);
+        }
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = bcont2.intersect_cont_blocked_auto(256e3/(n_ints_sample*8));
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("test-avx2-cont-auto-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
+        }
+
         {
         uint64_t blocked_con_tot = 0;
         uint32_t i  = 0;
@@ -966,16 +1072,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         std::cerr << "[itcontainer] blocked tot=" << blocked_con_tot << " time=" << time_span_blocked.count() << std::endl;
         //
         }
-
-        std::cerr << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
-        bench.throughput << "\t" << \
-        (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
-        (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
-        (bench.milliseconds == 0 ? 0 : n_total_integer_cmps*sizeof(uint64_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
-        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
-        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
-
 
 #ifdef USE_ROARING
             // temp

@@ -24,9 +24,9 @@
 #include <cstring>
 #include <vector>
 #include <limits>
+#include <cmath>
 // temp
 #include <iostream>
-
 
 /*
  * Reference data transfer rates:
@@ -37,9 +37,64 @@
  * DDR4 3200：25.6 GB/s
  */
 
-/****************************
-*  SIMD definitions
-****************************/
+#if !(defined(__APPLE__)) && !(defined(__FreeBSD__))
+#include <malloc.h>  // this should never be needed but there are some reports that it is needed.
+#endif
+
+/* *************************************
+ *  Support.
+ * 
+ *  These subroutines and definitions are taken from the CRoaring repo
+ *  by Daniel Lemire et al. available under the Apache 2.0 License
+ *  (same as Djinn):
+ *  https://github.com/RoaringBitmap/CRoaring/ 
+ ***************************************/
+#if defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ != 8
+#error This code assumes 64-bit long longs (by use of the GCC intrinsics). Your system is not currently supported.
+#endif
+
+// portable version of  posix_memalign
+static inline 
+void* aligned_malloc2(size_t alignment, size_t size) {
+    void *p;
+#ifdef _MSC_VER
+    p = _aligned_malloc(size, alignment);
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+    p = __mingw_aligned_malloc(size, alignment);
+#else
+    // somehow, if this is used before including "x86intrin.h", it creates an
+    // implicit defined warning.
+    if (posix_memalign(&p, alignment, size) != 0) return NULL;
+#endif
+    return p;
+}
+
+static inline 
+void aligned_free2(void* memblock) {
+#ifdef _MSC_VER
+    _aligned_free(memblock);
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+    __mingw_aligned_free(memblock);
+#else
+    free(memblock);
+#endif
+}
+
+#if defined(_MSC_VER)
+#define ALIGNED(x) __declspec(align(x))
+#else
+#if defined(__GNUC__)
+#define ALIGNED(x) __attribute__((aligned(x)))
+#endif
+#endif
+
+#ifdef __GNUC__
+#define WARN_UNUSED __attribute__((warn_unused_result))
+#else
+#define WARN_UNUSED
+#endif
+
+/*------ SIMD definitions --------*/
 #if defined(_MSC_VER)
      /* Microsoft C/C++-compatible compiler */
      #include <intrin.h>
@@ -60,45 +115,34 @@
      #include <spe.h>
 #endif
 
-//temp
-//#define __AVX512F__ 1
-// #define __AVX2__ 1
-
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    6
-#define SIMD_WIDTH      512
 #define SIMD_ALIGNMENT  64
 #elif defined(__AVX2__) && __AVX2__ == 1
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    5
-#define SIMD_WIDTH      256
 #define SIMD_ALIGNMENT  32
 #elif defined(__AVX__) && __AVX__ == 1
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    4
 #define SIMD_ALIGNMENT  16
-#define SIMD_WIDTH      128
 #elif defined(__SSE4_1__) && __SSE4_1__ == 1
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    3
 #define SIMD_ALIGNMENT  16
-#define SIMD_WIDTH      128
 #elif defined(__SSE2__) && __SSE2__ == 1
 #define SIMD_AVAILABLE  0 // unsupported version
 #define SIMD_VERSION    0
 #define SIMD_ALIGNMENT  16
-#define SIMD_WIDTH      128
 #elif defined(__SSE__) && __SSE__ == 1
 #define SIMD_AVAILABLE  0 // unsupported version
 #define SIMD_VERSION    0
 #define SIMD_ALIGNMENT  16
-#define SIMD_WIDTH      0
 #else
 #define SIMD_AVAILABLE  0
 #define SIMD_VERSION    0
 #define SIMD_ALIGNMENT  16
-#define SIMD_WIDTH      0
 #endif
 
 #ifdef _mm_popcnt_u64
@@ -582,24 +626,7 @@ uint64_t popcnt_avx512_csa_intersect(const __m512i* __restrict__ data1, const __
   uint64_t limit = size - size % 16;
   uint64_t* cnt64;
 
-  for(; i < limit; i += 16)
-  {
-    // CSA512(&twosA, &ones, ones, data[i+0], data[i+1]);
-    // CSA512(&twosB, &ones, ones, data[i+2], data[i+3]);
-    // CSA512(&foursA, &twos, twos, twosA, twosB);
-    // CSA512(&twosA, &ones, ones, data[i+4], data[i+5]);
-    // CSA512(&twosB, &ones, ones, data[i+6], data[i+7]);
-    // CSA512(&foursB, &twos, twos, twosA, twosB);
-    // CSA512(&eightsA, &fours, fours, foursA, foursB);
-    // CSA512(&twosA, &ones, ones, data[i+8], data[i+9]);
-    // CSA512(&twosB, &ones, ones, data[i+10], data[i+11]);
-    // CSA512(&foursA, &twos, twos, twosA, twosB);
-    // CSA512(&twosA, &ones, ones, data[i+12], data[i+13]);
-    // CSA512(&twosB, &ones, ones, data[i+14], data[i+15]);
-    // CSA512(&foursB, &twos, twos, twosA, twosB);
-    // CSA512(&eightsB, &fours, fours, foursA, foursB);
-    // CSA512(&sixteens, &eights, eights, eightsA, eightsB);
-
+  for(; i < limit; i += 16) {
     CSA512(&twosA, &ones, ones, (data1[i+0] & data2[i+0]), (data1[i+1] & data2[i+1]));
     CSA512(&twosB, &ones, ones, (data1[i+2] & data2[i+2]), (data1[i+3] & data2[i+3]));
     CSA512(&foursA, &twos, twos, twosA, twosB);
@@ -804,6 +831,10 @@ uint64_t intersect_bitmaps_scalar_list_1x4way(const uint64_t* __restrict__ b1, c
 uint64_t intersect_bitmaps_scalar_intlist(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2);
 uint64_t intersect_bitmaps_scalar_intlist_1x4way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2);
 
+uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, 
+    const uint32_t* l1, const uint32_t* l2,
+    const uint32_t n1, const uint32_t n2);
+
 // SSE4
 uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints);
 uint64_t intersect_bitmaps_sse4_2way(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints);
@@ -948,5 +979,227 @@ uint64_t intersect_vector16_cardinality_roar(const std::vector<uint16_t>& v1, co
 
 // construct ewah
 void construct_ewah64(const uint64_t* input, const uint32_t n_vals);
+
+//
+struct bitmap_t {
+    bitmap_t() : n_set(0), n_bitmap(0), own(false), data(nullptr) {}
+    bitmap_t(uint64_t* in, uint32_t n, uint32_t m) : n_set(n), n_bitmap(m), own(false), data(in) {}
+    ~bitmap_t() {
+        if (own) aligned_free2(data);
+    }
+
+    int Allocate(uint32_t n) {
+        if (data == nullptr) {
+            n_bitmap = n;
+            data  = (uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmap*sizeof(uint64_t));
+            own = true;
+            n_set = 0;
+        } else {
+            if (own) aligned_free2(data);
+            n_bitmap = n;
+            data  = (uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmap*sizeof(uint64_t));
+            own = true;
+            n_set = 0;
+        }
+        memset(data,0,n_bitmap*sizeof(uint64_t));
+        return n;
+    }
+
+    int AllocateSamples(uint32_t n) {
+        const uint64_t n_vals = ceil(n / 64.0);
+        if (data == nullptr) {
+            n_bitmap = n_vals;
+            data  = (uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmap*sizeof(uint64_t));
+            own = true;
+            n_set = 0;
+        } else {
+            if (own) aligned_free2(data);
+            n_bitmap = n_vals;
+            data  = (uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmap*sizeof(uint64_t));
+            own = true;
+            n_set = 0;
+        }
+        memset(data,0,n_bitmap*sizeof(uint64_t));
+        return n;
+    }
+
+    inline void Add(const uint64_t pos) { data[pos / 64] |= 1ULL << (pos % 64); }
+
+    void clear() {
+        memset(data, 0, n_bitmap*sizeof(uint64_t));
+    }
+
+    uint64_t intersect(const bitmap_t& other) const;
+
+    // uint32_t intersect_count(const bitmap_t& other) const {
+    //     return intersect_bitmaps_avx512_csa(data, other.data, n_bitmap);
+    // }
+
+    uint32_t n_set, n_bitmap: 31, own: 1; // number of values set, number of bitmaps, ownership
+    uint64_t* data;
+};
+
+struct bitmap_container_t {
+    bitmap_container_t(uint32_t n, uint32_t m) : 
+        n_alt_cutoff(0),
+        n_bitmaps(n), 
+        n_samples(m), 
+        own(true), 
+        type(0),
+        n_bitmaps_sample(ceil(n_samples / 64.0)),
+        bmaps(nullptr), 
+        bitmaps(new bitmap_t[n]),
+        n_alts_tot(0), m_alts(0),
+        alt_positions(nullptr),
+        alt_offsets(nullptr),
+        n_alts(nullptr)
+    {
+        for (int i = 0; i < n_bitmaps; ++i) {
+            bitmaps[i].AllocateSamples(n_samples);
+        }
+    }
+
+    bitmap_container_t(uint32_t n, uint32_t m, bool yes) : 
+        n_alt_cutoff(0),
+        n_bitmaps(n), 
+        n_samples(m), 
+        own(true), 
+        type(1),
+        n_bitmaps_sample(ceil(n_samples / 64.0)),
+        bmaps((uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
+        bitmaps(nullptr),
+        n_alts_tot(0), m_alts(0),
+        alt_positions(nullptr),
+        alt_offsets(nullptr),
+        n_alts((uint32_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmaps*sizeof(uint32_t)))
+    {
+        memset(bmaps,0,n_bitmaps*n_bitmaps_sample*sizeof(uint64_t));
+        memset(n_alts,0,n_bitmaps*sizeof(uint32_t));
+        // for (int i = 0; i < n_bitmaps; ++i) {
+        //     bitmaps[i].data = &bmaps[i*n_bitmaps_sample];
+        //     bitmaps[i].own = false;
+        //     bitmaps[i].n_set = 0;
+        //     bitmaps[i].n_bitmap = n_bitmaps_sample;
+        // }
+    }
+
+    bitmap_container_t(uint32_t n, uint32_t m, bool yes, bool yes2) : 
+        n_alt_cutoff(10),
+        n_bitmaps(n), 
+        n_samples(m), 
+        own(true), 
+        type(1),
+        n_bitmaps_sample(ceil(n_samples / 64.0)),
+        bmaps((uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
+        bitmaps(nullptr),
+        alt_positions(nullptr),
+        alt_offsets((uint32_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmaps*sizeof(uint32_t))),
+        n_alts((uint32_t*)aligned_malloc2(SIMD_ALIGNMENT, n_bitmaps*sizeof(uint32_t)))
+    {
+        memset(bmaps,0,n_bitmaps*n_bitmaps_sample*sizeof(uint64_t));
+        memset(n_alts,0,n_bitmaps*sizeof(uint32_t));
+        // for (int i = 0; i < n_bitmaps; ++i) {
+        //     bitmaps[i].data = &bmaps[i*n_bitmaps_sample];
+        //     bitmaps[i].own = false;
+        //     bitmaps[i].n_set = 0;
+        //     bitmaps[i].n_bitmap = n_bitmaps_sample;
+        // }
+    }
+
+    ~bitmap_container_t() {
+        if (own) {
+            delete[] bitmaps;
+            aligned_free2(bmaps);
+        }
+        aligned_free2(alt_offsets);
+        aligned_free2(n_alts);
+        aligned_free2(alt_positions);
+    }
+
+    void Add(const uint32_t target, uint32_t value) { 
+        if (type == 0) {
+            assert(bitmaps!=nullptr);
+            bitmaps[target].Add(value); 
+        }
+        else {
+            assert(bmaps!=nullptr);
+            uint64_t* x = &bmaps[target*n_bitmaps_sample];
+            x[value / 64] |= 1ULL << (value % 64);
+            ++n_alts[target]; // increment the number of alts for this site
+        }
+    }
+
+    void Add(const uint32_t target, const std::vector<uint32_t>& values) { 
+        if (type == 0) {
+            assert(bitmaps!=nullptr);
+            for (int i = 0; i < values.size(); ++i)
+                bitmaps[target].Add(values[i]); 
+        }
+        else { // if type is 1
+            assert(bmaps!=nullptr);
+            uint64_t* x = &bmaps[target*n_bitmaps_sample];
+            for (int i = 0; i < values.size(); ++i) {
+                x[values[i] / 64] |= 1ULL << (values[i] % 64);
+            }
+            n_alts[target] = values.size(); // set the number of alts for this site
+
+            alt_offsets[target] = n_alts_tot; // always set offset
+
+            // todo: fix
+            if (values.size() < n_alt_cutoff) {
+                // resize if required
+                if (n_alts_tot + values.size() >= m_alts) {
+                    uint32_t* old = alt_positions;
+                    uint32_t new_pos = (n_alts_tot == 0 ? 65535 : n_alts_tot + 65535);
+                    std::cerr << "rsizing: " << n_alts_tot << "->" << new_pos << std::endl;
+                    alt_positions = (uint32_t*)aligned_malloc2(SIMD_ALIGNMENT, new_pos*sizeof(uint32_t));
+                    memcpy(alt_positions, old, n_alts_tot*sizeof(uint32_t));
+                    m_alts = new_pos;
+                    aligned_free2(old);
+                }
+
+                // std::cerr << "adding: " << values.size() << " at " << alt_offsets[target] << std::endl;
+    
+                uint32_t* tgt = &alt_positions[alt_offsets[target]];
+                for (int i = 0; i < values.size(); ++i) {
+                    // std::cerr << values[i] << std::endl;
+                    tgt[i] = values[i];
+                }
+                n_alts_tot += values.size();
+            }
+        }
+    }
+    
+    void clear() {
+        if (type == 0) {
+        for (int i = 0; i < n_bitmaps; ++i)
+            bitmaps[i].clear();
+        } else {
+            memset(bmaps,0,n_bitmaps*n_bitmaps_sample*sizeof(uint64_t));
+            if (n_alts != nullptr) memset(n_alts,0,n_bitmaps*sizeof(uint32_t));
+            if (alt_positions != nullptr) memset(alt_positions,0,m_alts*sizeof(uint32_t));
+            if (alt_offsets != nullptr) memset(alt_offsets,0,n_bitmaps*sizeof(uint32_t));
+            n_alts_tot = 0;
+        }
+    }
+
+    uint64_t intersect() const;
+    uint64_t intersect_cont() const;
+    uint64_t intersect_blocked(uint32_t bsize) const;
+    uint64_t intersect_blocked_cont(uint32_t bsize) const;
+    uint64_t intersect_cont_auto() const;
+    uint64_t intersect_cont_blocked_auto(uint32_t bsize) const;
+
+    uint32_t n_alt_cutoff;
+    uint32_t n_bitmaps, n_samples: 30, own: 1, type: 1;
+    uint32_t n_bitmaps_sample;
+    uint64_t* bmaps;
+    bitmap_t* bitmaps;
+    //
+    uint32_t n_alts_tot, m_alts;
+    uint32_t* alt_positions; // positions of alts at a site
+    uint32_t* alt_offsets; // virtual offsets to start of alt_positions for a site
+    uint32_t* n_alts; // number of alts at a position
+};
 
 #endif /* FAST_INTERSECT_COUNT_H_ */
