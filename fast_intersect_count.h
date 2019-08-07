@@ -1202,4 +1202,12 @@ struct bitmap_container_t {
     uint32_t* n_alts; // number of alts at a position
 };
 
+struct roaring2_t {
+    // N containers (blocks) per site
+    // each container share memory region
+    uint32_t* n_blocks;
+    uint16_t* blocks; // block id (count order)
+    uint64_t* data_bitmaps; // shared array for bitmap data
+};
+
 #endif /* FAST_INTERSECT_COUNT_H_ */

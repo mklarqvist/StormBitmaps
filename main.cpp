@@ -528,10 +528,10 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         assert(!posix_memalign((void**)&vals_reduced, SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t)));
 
         // 1:500, 1:167, 1:22
-        std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
+        // std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
         // std::vector<uint32_t> n_alts = {21,269,9506}; // HRC dist
 
-        // std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20}; //, samples[s]/10, samples[s]/4, samples[s]/2};
+        std::vector<uint32_t> n_alts = {1, 2, 5, samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
         // std::vector<uint32_t> n_alts = {samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
