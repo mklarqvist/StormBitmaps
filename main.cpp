@@ -951,6 +951,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("test-avx2-cont-auto-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
         }
 
+        const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
+
+
 #if SIMD_VERSION >= 6
             // SIMD AVX512
             bench_t m8 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
@@ -1117,8 +1120,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("roaring",broaring);
 #endif
             // SIMD SSE4
-            const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
-
 #if SIMD_VERSION >= 3
 
             for (int k = 0; k < block_range.size(); ++k) {
