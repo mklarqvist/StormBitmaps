@@ -506,7 +506,7 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_vals_actual, ro
 
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // Setup
-    std::vector<uint32_t> samples = {65536, 131072, 196608, 589824};
+    std::vector<uint32_t> samples = {4096, 65536, 131072, 196608, 589824};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     
     std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
@@ -515,9 +515,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         uint32_t n_ints_sample = samples[s] / 64;
 
         // Limit memory usage to 10e6 but no more than 50k records.
-        uint32_t desired_mem = 20 * 1024 * 1024;
+        uint32_t desired_mem = 40 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
-        uint32_t n_variants = std::max(std::min((uint32_t)50000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t)))), (uint32_t)64);
+        uint32_t n_variants = std::max(std::min((uint32_t)150000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t)))), (uint32_t)64);
         // uint32_t n_variants = 10000;
 
         std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;

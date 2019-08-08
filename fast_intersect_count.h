@@ -1203,9 +1203,61 @@ struct bitmap_container_t {
 };
 
 struct roaring2_t {
+    roaring2_t(uint32_t n_s, uint32_t n_ss) : n_samples(n_s), n_sites(n_ss), block_size(65535), n_total_blocks(0),
+        n_total_bitmaps(0), m_blocks(0), m_bitmaps(0), n_blocks(nullptr), blocks(nullptr), data_bitmaps(nullptr)
+    {}
+
+    ~roaring2_t() {
+        aligned_free2(n_blocks);
+        aligned_free2(blocks);
+        aligned_free2(data_bitmaps);
+    }
+
+    int Add(const uint32_t target, const std::vector<uint32_t>& pos) {
+        if (pos.size() == 0) return 0;
+
+        if (n_blocks == nullptr) {
+            n_blocks = (uint32_t*)aligned_malloc2(SIMD_ALIGNMENT, n_sites*sizeof(uint32_t));
+        }
+
+        if (blocks == nullptr) {
+            m_blocks = n_blocks_site * 25;
+            blocks = (uint16_t*)aligned_malloc2(SIMD_ALIGNMENT, m_blocks*sizeof(uint16_t));
+            n_total_blocks = 0;
+        }
+
+        if (data_bitmaps == nullptr) {
+            m_bitmaps = 65535;
+            data_bitmaps = (uint64_t*)aligned_malloc2(SIMD_ALIGNMENT, m_bitmaps*sizeof(uint64_t));
+            memset(data_bitmaps, 0, m_bitmaps*sizeof(uint64_t));
+            n_total_bitmaps = 0;
+        }
+
+
+        // First target block
+        uint32_t current_block = pos[0] / 8192; // block_size
+        // Allocate
+        uint64_t* tgt_bitmap = &data_bitmaps[n_total_bitmaps];
+        n_total_bitmaps += 128; // 8192 bits = 16 * 512
+        
+        for (int i = 0; i < pos.size(); ++i) {
+            uint32_t adj_pos = pos[i] - (current_block*8192);
+            tgt_bitmap[adj_pos / 64] |= 1ULL << (adj_pos % 64);
+        }
+
+        return 1;
+    }
+
     // N containers (blocks) per site
     // each container share memory region
-    uint32_t* n_blocks;
+    uint32_t n_samples; // number of samples per site
+    uint32_t n_sites; // number of sites
+    uint32_t block_size; // 8192 values per block by default
+    uint32_t n_blocks_site; // Maximum number of blocks for a site
+    uint32_t n_total_blocks; // total sum of blocks
+    uint32_t n_total_bitmaps; // total sum for data_bitmaps
+    uint32_t m_blocks, m_bitmaps; // allocation for blocks,bitmaps
+    uint32_t* n_blocks; // number of set blocks per site (fixed size of n_sites)
     uint16_t* blocks; // block id (count order)
     uint64_t* data_bitmaps; // shared array for bitmap data
 };
