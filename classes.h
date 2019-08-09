@@ -681,7 +681,8 @@ struct bitmap_container_t {
                 bitmaps[target].Add(values[i]); 
         }
         else { // if type is 1
-            assert(bmaps!=nullptr);
+            assert(bmaps != nullptr);
+
             uint64_t* x = &bmaps[target*n_bitmaps_sample];
             for (int i = 0; i < values.size(); ++i) {
                 x[values[i] / 64] |= 1ULL << (values[i] % 64);
@@ -693,10 +694,11 @@ struct bitmap_container_t {
             // todo: fix
             if (values.size() < n_alt_cutoff) {
                 // resize if required
-                if (n_alts_tot + values.size() >= m_alts) {
+                if (n_alts_tot + values.size() >= m_alts || alt_positions == nullptr) {
                     uint32_t* old = alt_positions;
-                    uint32_t new_pos = (n_alts_tot == 0 ? 65535 : n_alts_tot + 65535);
-                    std::cerr << "rsizing: " << n_alts_tot << "->" << new_pos << std::endl;
+                    const uint32_t add = values.size() < 65535 ? 65535 : values.size() * 5;
+                    uint32_t new_pos = (n_alts_tot == 0 ? add : n_alts_tot + add);
+                    // std::cerr << "resizing: " << n_alts_tot << "->" << new_pos << std::endl;
                     alt_positions = (uint32_t*)aligned_malloc_port(SIMD_ALIGNMENT, new_pos*sizeof(uint32_t));
                     memcpy(alt_positions, old, n_alts_tot*sizeof(uint32_t));
                     m_alts = new_pos;
