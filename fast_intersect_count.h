@@ -262,11 +262,13 @@ extern "C" {
 #endif
 
 /* %ecx bit flags */
-#define bit_POPCNT (1 << 23)
+#define bit_POPCNT   (1 << 23) // POPCNT instruction 
+#define bit_SSE41    (1 << 19) // CPUID.01H:ECX.SSE41[Bit 19]
+#define bit_SSE42    (1 << 20) // CPUID.01H:ECX.SSE41[Bit 20]
 
 /* %ebx bit flags */
-#define bit_AVX2   (1 << 5)
-#define bit_AVX512BW (1 << 30)
+#define bit_AVX2     (1 << 5)  // CPUID.(EAX=07H, ECX=0H):EBX.AVX2[bit 5]
+#define bit_AVX512BW (1 << 30) // AVX-512 Byte and Word Instructions
 
 /* xgetbv bit flags */
 #define XSTATE_SSE (1 << 1)
@@ -329,11 +331,19 @@ static inline int get_cpuid() {
 
     run_cpuid(1, 0, abcd);
 
+    // Check for POPCNT instruction
     if ((abcd[2] & bit_POPCNT) == bit_POPCNT)
-    flags |= bit_POPCNT;
+        flags |= bit_POPCNT;
 
-#if defined(HAVE_SSE41)  || \
-    defined(HAVE_AVX2) || \
+    // Check for SSE4.1 instruction set
+    if ((abcd[2] & bit_SSE41) == bit_SSE41)
+        flags |= bit_SSE41;
+
+    // Check for SSE4.2 instruction set
+    if ((abcd[2] & bit_SSE42) == bit_SSE42)
+        flags |= bit_SSE42;
+
+#if defined(HAVE_AVX2) || \
     defined(HAVE_AVX512)
 
     int osxsave_mask = (1 << 27);
@@ -844,6 +854,98 @@ uint64_t intersect_raw_gallop_sse4(const uint16_t* __restrict__ v1, const uint16
 uint64_t intersect_raw_binary(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
 uint64_t intersect_roaring_cardinality(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
 uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
+
+////
+/*
+ * Count the number of 1 bits in the data array
+ * @data: An array
+ * @size: Size of data in bytes
+ */
+
+// static inline 
+// uint64_t intersect(const void* data1, const void* data2, const uint32_t size) {
+//   const uint8_t* ptr = (const uint8_t*) data;
+//   uint64_t cnt = 0;
+//   uint64_t i;
+
+// #if defined(HAVE_CPUID)
+//   #if defined(__cplusplus)
+//     /* C++11 thread-safe singleton */
+//     static const int cpuid = get_cpuid();
+//   #else
+//     static int cpuid_ = -1;
+//     int cpuid = cpuid_;
+//     if (cpuid == -1)
+//     {
+//       cpuid = get_cpuid();
+
+//       #if defined(_MSC_VER)
+//         _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+//       #else
+//         __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+//       #endif
+//     }
+//   #endif
+// #endif
+
+// #if defined(HAVE_AVX512)
+
+//   /* AVX512 requires arrays >= 1024 bytes */
+//   if ((cpuid & bit_AVX512) &&
+//       size >= 1024)
+//   {
+//     align_avx512(&ptr, &size, &cnt);
+//     cnt += popcnt_avx512((const __m512i*) ptr, size / 64);
+//     ptr += size - size % 64;
+//     size = size % 64;
+//   }
+
+// #endif
+
+// #if defined(HAVE_AVX2)
+
+//   /* AVX2 requires arrays >= 512 bytes */
+//   if ((cpuid & bit_AVX2) &&
+//       size >= 512)
+//   {
+//     align_avx2(&ptr, &size, &cnt);
+//     cnt += popcnt_avx2((const __m256i*) ptr, size / 32);
+//     ptr += size - size % 32;
+//     size = size % 32;
+//   }
+
+// #endif
+
+// #if defined(HAVE_POPCNT)
+
+//   if (cpuid & bit_POPCNT)
+//   {
+//     cnt += popcnt64_unrolled((const uint64_t*) ptr, size / 8);
+//     ptr += size - size % 8;
+//     size = size % 8;
+//     for (i = 0; i < size; i++)
+//       cnt += popcnt64(ptr[i]);
+
+//     return cnt;
+//   }
+
+// #endif
+
+//   /* pure integer popcount algorithm */
+//   if (size >= 8)
+//   {
+//     align_8(&ptr, &size, &cnt);
+//     cnt += popcount64_unrolled((const uint64_t*) ptr, size / 8);
+//     ptr += size - size % 8;
+//     size = size % 8;
+//   }
+
+//   /* pure integer popcount algorithm */
+//   for (i = 0; i < size; i++)
+//     cnt += popcount64(ptr[i]);
+
+//   return cnt;
+// }
 
 #ifdef __cplusplus
 } /* extern "C" */
