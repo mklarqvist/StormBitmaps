@@ -409,7 +409,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         // std::vector<uint32_t> n_alts = {21,269,9506}; // HRC dist
 
         // std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
-        std::vector<uint32_t> n_alts = {samples[s]/2, samples[s]/4, samples[s]/10, samples[s]/25, samples[s]/50, samples[s]/100, samples[s]/250, samples[s]/1000, samples[s]/5000};
+        std::vector<uint32_t> n_alts = {samples[s]/2, samples[s]/4, samples[s]/10, samples[s]/25, samples[s]/50, samples[s]/100, samples[s]/250, samples[s]/1000, samples[s]/5000, 5, 1};
         // std::vector<uint32_t> n_alts = {samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
@@ -595,7 +595,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
             const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
-
 #if SIMD_VERSION >= 6
             // SIMD AVX512
             for (int k = 0; k < block_range.size(); ++k) {
@@ -643,7 +642,11 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             PRINT("bitmap-sse4-csa",m2);
 #endif
 
-            if (n_alts[a] <= 0) {
+            if (n_alts[a] <= 300) {
+                bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
+                PRINT("bitmap-scalar-skip-list",m4);
+
+                /*
                 bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
                 PRINT("bitmap-scalar-popcnt",m1);
 
@@ -674,15 +677,14 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 bench_t raw_roaring2 = frawwrapper<&intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-roaring2",raw_roaring2);
 
-
-                bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
-                PRINT("bitmap-scalar-skip-list",m4);
+                
 
                 bench_t raw1_roaring_sse4 = frawwrapper<&intersect_raw_rotl_gallop_sse4>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-rotl-gallop-sse4",raw1_roaring_sse4);
 
                 bench_t raw1_roaring_avx2= frawwrapper<&intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-rotl-gallop-avx2",raw1_roaring_avx2);
+                */
 
                 /*
                 std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
