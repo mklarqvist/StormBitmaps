@@ -416,7 +416,7 @@ uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size) {
 ****************************/
 
 #if defined(HAVE_SSE41)
-#if SIMD_VERSION >= 3
+// #if SIMD_VERSION >= 3
 
 #include <immintrin.h>
 
@@ -518,7 +518,7 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1,
     return(count);
 }
 
-#endif
+// #endif
 #endif
 
 /****************************
@@ -526,7 +526,7 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1,
 ****************************/
 
 #if defined(HAVE_AVX2)
-#if SIMD_VERSION >= 5
+// #if SIMD_VERSION >= 5
 
 #include <immintrin.h>
 
@@ -655,8 +655,6 @@ static uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1,
     const uint32_t n_cycles = n_ints / 4;
 
     count += popcnt_avx2_csa_intersect(r1, r2, n_cycles);
-    // count += popcnt_avx2_csa32_intersect(r1, r2, n_cycles);
-    // count += popcnt_avx2_csaB_intersect(r1, r2, n_cycles);
 
     for (int i = n_cycles*4; i < n_ints; ++i) {
         count += _mm_popcnt_u64(b1[i] & b2[i]);
@@ -664,7 +662,7 @@ static uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1,
 
     return(count);
 }
-#endif
+// #endif
 #endif
 
 /****************************
@@ -672,7 +670,7 @@ static uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1,
 ****************************/
 
 #if defined(HAVE_AVX512)
-#if SIMD_VERSION >= 6
+// #if SIMD_VERSION >= 6
 
 #include <immintrin.h>
 
@@ -788,7 +786,7 @@ static uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1,
 
     return(count);
 }
-#endif
+// #endif
 #endif
 
 /****************************
@@ -829,6 +827,215 @@ uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const ui
 }
 
 /****************************
+*  Wrappers
+****************************/
+
+typedef uint64_t (*ftype)(const uint64_t*, const uint64_t*, const uint32_t);
+typedef uint64_t (*fltype)(const uint64_t*, const uint64_t*, 
+    const uint32_t*, const uint32_t*,
+    const uint32_t, const uint32_t);
+
+static
+uint64_t c_fwrapper(const uint32_t n_vectors, 
+                    const uint64_t* vals, 
+                    const uint32_t n_ints, 
+                    const ftype f)
+{
+    uint32_t offset = 0;
+    uint32_t inner_offset = 0;
+    uint64_t total = 0;
+    
+    for (int i = 0; i < n_vectors; ++i) {
+        inner_offset = offset + n_ints;
+        for (int j = i + 1; j < n_vectors; ++j, inner_offset += n_ints) {
+            total += (*f)(&vals[offset], &vals[inner_offset], n_ints);
+        }
+        offset += n_ints;
+    }
+
+    return total;
+}
+
+static
+uint64_t c_flwrapper(const uint32_t n_vectors, 
+                     const uint64_t* __restrict__ vals,
+                     const uint32_t n_ints,
+                     const uint32_t* __restrict__ n_alts,
+                     const uint32_t* __restrict__ alt_positions,
+                     const uint32_t* __restrict__ alt_offsets, 
+                     const ftype f, 
+                     const fltype fl, 
+                     const uint32_t cutoff)
+{
+    uint64_t count = 0;
+    uint64_t offset1 = 0;
+    uint64_t offset2 = n_ints;
+
+    for (int i = 0; i < n_vectors; ++i, offset1 += n_ints) {
+        offset2 = offset1 + n_ints;
+        for (int j = i+1; j < n_vectors; ++j, offset2 += n_ints) {
+            if (n_alts[i] < cutoff || n_alts[j] < cutoff) {
+                count += (*fl)(&vals[offset1], &vals[offset2], &alt_positions[alt_offsets[i]], &alt_positions[alt_offsets[j]], n_alts[i], n_alts[j]);
+            } else {
+                count += (*f)(&vals[offset1], &vals[offset2], n_ints);
+            }
+        }
+    }
+    return count;
+}
+
+static
+uint64_t c_fwrapper_blocked(const uint32_t n_vectors, 
+                            const uint64_t* vals, 
+                            const uint32_t n_ints, 
+                            const ftype f,
+                            uint32_t block_size)
+{
+    uint64_t total = 0;
+
+    block_size = (block_size == 0 ? 3 : block_size);
+    const uint32_t n_blocks1 = n_vectors / block_size;
+    const uint32_t n_blocks2 = n_vectors / block_size;
+
+    uint32_t i  = 0;
+    uint32_t tt = 0;
+    for (/**/; i + block_size <= n_vectors; i += block_size) {
+        // diagonal component
+        uint32_t left = i*n_ints;
+        uint32_t right = 0;
+        for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
+            right = left + n_ints;
+            for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
+                total += (*f)(&vals[left], &vals[right], n_ints);
+            }
+        }
+
+        // square component
+        uint32_t curi = i;
+        uint32_t j = curi + block_size;
+        for (/**/; j + block_size <= n_vectors; j += block_size) {
+            left = curi*n_ints;
+            for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
+                right = j*n_ints;
+                for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
+                    total += (*f)(&vals[left], &vals[right], n_ints);
+                }
+            }
+        }
+
+        // residual
+        right = j*n_ints;
+        for (/**/; j < n_vectors; ++j, right += n_ints) {
+            left = curi*n_ints;
+            for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
+                total += (*f)(&vals[left], &vals[right], n_ints);
+            }
+        }
+    }
+    // residual tail
+    uint32_t left = i*n_ints;
+    for (/**/; i < n_vectors; ++i, left += n_ints) {
+        uint32_t right = left + n_ints;
+        for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
+            total += (*f)(&vals[left], &vals[right], n_ints);
+        }
+    }
+
+    return total;
+}
+
+static
+uint64_t c_flwrapper_blocked(const uint32_t n_vectors, 
+                             const uint64_t* __restrict__ vals,
+                             const uint32_t n_ints,
+                             const uint32_t* __restrict__ n_alts,
+                             const uint32_t* __restrict__ alt_positions,
+                             const uint32_t* __restrict__ alt_offsets, 
+                             const ftype f, 
+                             const fltype fl, 
+                             const uint32_t cutoff,
+                             uint32_t block_size)
+{
+    uint64_t total = 0;
+
+    block_size = (block_size == 0 ? 3 : block_size);
+    const uint32_t n_blocks1 = n_vectors / block_size;
+    const uint32_t n_blocks2 = n_vectors / block_size;
+
+    uint32_t i  = 0;
+    uint32_t tt = 0;
+
+    for (/**/; i + block_size <= n_vectors; i += block_size) {
+        // diagonal component
+        uint32_t left = i*n_ints;
+        uint32_t right = 0;
+        for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
+            right = left + n_ints;
+            for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
+                if (n_alts[i+j] < cutoff || n_alts[i+jj] < cutoff) {
+                    total += (*fl)(&vals[left], &vals[right], 
+                        &alt_positions[alt_offsets[i+j]], &alt_positions[alt_offsets[i+jj]], 
+                        n_alts[i+j], n_alts[i+jj]);
+                } else {
+                    total += (*f)(&vals[left], &vals[right], n_ints);
+                }
+            }
+        }
+
+        // square component
+        uint32_t curi = i;
+        uint32_t j = curi + block_size;
+        for (/**/; j + block_size <= n_vectors; j += block_size) {
+            left = curi*n_ints;
+            for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
+                right = j*n_ints;
+                for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
+                    if (n_alts[curi+ii] < cutoff || n_alts[j+jj] < cutoff) {
+                        total += (*fl)(&vals[left], &vals[right], 
+                            &alt_positions[alt_offsets[curi+ii]], &alt_positions[alt_offsets[j+jj]], 
+                            n_alts[curi+ii], n_alts[j+jj]);
+                    } else {
+                        total += (*f)(&vals[left], &vals[right], n_ints);
+                    }
+                }
+            }
+        }
+
+        // residual
+        right = j*n_ints;
+        for (/**/; j < n_vectors; ++j, right += n_ints) {
+            left = curi*n_ints;
+            for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
+                if (n_alts[curi+jj] < cutoff || n_alts[j] < cutoff) {
+                    total += (*fl)(&vals[left], &vals[right], 
+                        &alt_positions[alt_offsets[curi+jj]], &alt_positions[alt_offsets[j]], 
+                        n_alts[curi+jj], n_alts[j]);
+                } else {
+                    total += (*f)(&vals[left], &vals[right], n_ints);
+                }
+            }
+        }
+    }
+    // residual tail
+    uint32_t left = i*n_ints;
+    for (/**/; i < n_vectors; ++i, left += n_ints) {
+        uint32_t right = left + n_ints;
+        for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
+            if (n_alts[i] < cutoff || n_alts[j] < cutoff) {
+                total += (*fl)(&vals[left], &vals[right], 
+                    &alt_positions[alt_offsets[i]], &alt_positions[alt_offsets[j]], 
+                    n_alts[i], n_alts[j]);
+            } else {
+                total += (*f)(&vals[left], &vals[right], n_ints);
+            }
+        }
+    }
+
+    return total;
+}
+
+
+/****************************
 *  Intersect vectors of values directly
 ****************************/
 /**<
@@ -855,97 +1062,121 @@ uint64_t intersect_raw_binary(const uint16_t* __restrict__ v1, const uint16_t* _
 uint64_t intersect_roaring_cardinality(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
 uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
 
-////
-/*
- * Count the number of 1 bits in the data array
- * @data: An array
- * @size: Size of data in bytes
- */
+// Intersect
 
-// static inline 
-// uint64_t intersect(const void* data1, const void* data2, const uint32_t size) {
-//   const uint8_t* ptr = (const uint8_t*) data;
-//   uint64_t cnt = 0;
-//   uint64_t i;
+static 
+uint64_t intersect(const void* data, const uint32_t n_vectors, const uint32_t n_bitmaps_vector) {
 
-// #if defined(HAVE_CPUID)
-//   #if defined(__cplusplus)
-//     /* C++11 thread-safe singleton */
-//     static const int cpuid = get_cpuid();
-//   #else
-//     static int cpuid_ = -1;
-//     int cpuid = cpuid_;
-//     if (cpuid == -1)
-//     {
-//       cpuid = get_cpuid();
+#if defined(HAVE_CPUID)
+  #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+  #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+      cpuid = get_cpuid();
 
-//       #if defined(_MSC_VER)
-//         _InterlockedCompareExchange(&cpuid_, cpuid, -1);
-//       #else
-//         __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
-//       #endif
-//     }
-//   #endif
-// #endif
+      #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+      #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+      #endif
+    }
+  #endif
+#endif
 
-// #if defined(HAVE_AVX512)
+#if defined(HAVE_AVX512)
+    if ((cpuid & bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx512_csa, 256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-//   /* AVX512 requires arrays >= 1024 bytes */
-//   if ((cpuid & bit_AVX512) &&
-//       size >= 1024)
-//   {
-//     align_avx512(&ptr, &size, &cnt);
-//     cnt += popcnt_avx512((const __m512i*) ptr, size / 64);
-//     ptr += size - size % 64;
-//     size = size % 64;
-//   }
+#if defined(HAVE_AVX2)
+    if ((cpuid & bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx2, 256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-// #endif
+#if defined(HAVE_SSE41)
+    if ((cpuid & bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_sse4, 256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-// #if defined(HAVE_AVX2)
+    return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_scalar, 256e3/(n_bitmaps_vector*8));
+}
 
-//   /* AVX2 requires arrays >= 512 bytes */
-//   if ((cpuid & bit_AVX2) &&
-//       size >= 512)
-//   {
-//     align_avx2(&ptr, &size, &cnt);
-//     cnt += popcnt_avx2((const __m256i*) ptr, size / 32);
-//     ptr += size - size % 32;
-//     size = size % 32;
-//   }
+static 
+uint64_t intersect_list(const void* data, 
+                        const uint32_t n_vectors, 
+                        const uint32_t n_bitmaps_vector, 
+                        const uint32_t* n_alts, 
+                        const uint32_t* alt_pos, 
+                        const uint32_t* alt_offsets,
+                        const uint32_t cutoff)
+{
 
-// #endif
+#if defined(HAVE_CPUID)
+  #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+  #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+      cpuid = get_cpuid();
 
-// #if defined(HAVE_POPCNT)
+      #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+      #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+      #endif
+    }
+  #endif
+#endif
 
-//   if (cpuid & bit_POPCNT)
-//   {
-//     cnt += popcnt64_unrolled((const uint64_t*) ptr, size / 8);
-//     ptr += size - size % 8;
-//     size = size % 8;
-//     for (i = 0; i < size; i++)
-//       cnt += popcnt64(ptr[i]);
 
-//     return cnt;
-//   }
+#if defined(HAVE_AVX512)
+    if ((cpuid & bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
+        return c_flwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
+            n_alts, alt_pos, alt_offsets, 
+            &intersect_bitmaps_avx512_csa, 
+            &intersect_bitmaps_scalar_list, 
+            50,
+            256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-// #endif
+#if defined(HAVE_AVX2)
+    if ((cpuid & bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
+        return c_flwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
+            n_alts, alt_pos, alt_offsets, 
+            &intersect_bitmaps_avx2, 
+            &intersect_bitmaps_scalar_list, 
+            50,
+            256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-//   /* pure integer popcount algorithm */
-//   if (size >= 8)
-//   {
-//     align_8(&ptr, &size, &cnt);
-//     cnt += popcount64_unrolled((const uint64_t*) ptr, size / 8);
-//     ptr += size - size % 8;
-//     size = size % 8;
-//   }
+#if defined(HAVE_SSE41)
+    if ((cpuid & bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
+        return c_flwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
+            n_alts, alt_pos, alt_offsets, 
+            &intersect_bitmaps_sse4, 
+            &intersect_bitmaps_scalar_list, 
+            50,
+            256e3/(n_bitmaps_vector*8));
+    }
+#endif
 
-//   /* pure integer popcount algorithm */
-//   for (i = 0; i < size; i++)
-//     cnt += popcount64(ptr[i]);
-
-//   return cnt;
-// }
+    return c_flwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
+            n_alts, alt_pos, alt_offsets, 
+            &intersect_bitmaps_scalar, 
+            &intersect_bitmaps_scalar_list, 
+            50,
+            256e3/(n_bitmaps_vector*8));
+}
 
 #ifdef __cplusplus
 } /* extern "C" */

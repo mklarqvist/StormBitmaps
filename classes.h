@@ -19,9 +19,11 @@
 #define FAST_INTERSECT_CLASSES_COUNT_H_
 
 #include "fast_intersect_count.h"
+
 #include <vector>
 #include <memory> //unique_ptr
 #include <iostream>//debug
+#include <bitset> //debug
 
 static uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, const ssize_t len1, const uint16_t* __restrict__ v2, const ssize_t len2) {
     size_t count = 0;
@@ -808,5 +810,6 @@ struct roaring2_t {
     uint16_t* blocks; // block id (count order)
     uint64_t* data_bitmaps; // shared array for bitmap data
 };
+
 
 #endif /* FAST_INTERSECT_COUNT_H_ */
