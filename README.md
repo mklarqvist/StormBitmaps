@@ -5,7 +5,7 @@ These functions compute the set intersection count (|A \in B|) of pairs of integ
 The core algorithms are described in the papers
 * [Faster Population Counts using AVX2 Instructions](https://arxiv.org/abs/1611.07612)
 by Daniel Lemire, Nathan Kurz and Wojciech Muła (23 Nov 2016).
-* Efficient Computation of Positional Population Counts Using SIMD Instructions, by Marcus D. R. Klarqvist
+* Efficient Computation of Positional Population Counts Using SIMD Instructions, by Marcus D. R. Klarqvist,
 Wojciech Muła, and Daniel Lemire (upcoming)
 
 Compile test suite with: `make` and run `./fast_intersect_count`
@@ -23,9 +23,9 @@ These functions were originally developed for [Tomahawk](https://github.com/mkla
 
 ## Problem statement
 
-To implement a set of integers, a particularly appealing strategy is the bitmap (also called bitset or bit vector). Using n bits, we can represent any set made of the integers from the range [0,n): it suffices to set the ith bit is set to one if integer i is present in the set. Commodity processors use words of W=32 or W=64 bits. By combining many such words, we can support large values of n. Intersections, unions and differences can then be implemented as bitwise AND, OR and ANDNOT operations.
+To implement a set of integers, a particularly appealing strategy is the bitmap (also called bitset or bit vector). Using n bits, we can represent any set made of the integers from the range [0,N): it suffices to set the ith bit is set to one if integer i is present in the set. Commodity processors use words of W=32 or W=64 bits. By combining many such words, we can support large values of n. Intersections, unions and differences can then be implemented as bitwise AND, OR and ANDNOT operations.
 
-In [Tomahawk](https://github.com/mklarqvist/Tomahawk), we must compute N!2 set intersections of size M, where N and M are typically in the many millions and thousands, respectively.
+Here we focus on computing the count of set intersections. Without loss of generality, given M integer lists in the range [0, N) we want to compute the all-vs-all pairwise intersection count as fast as possible. This is the core algorithmic approach in [Tomahawk](https://github.com/mklarqvist/Tomahawk). In that space, N and M are typically in the many millions and hundreds of thousands, respectively.
 
 ## Goals
 
@@ -35,6 +35,8 @@ In [Tomahawk](https://github.com/mklarqvist/Tomahawk), we must compute N!2 set i
 ## Technical approach
 
 In all the methods below, `b1` and `b2` are pointers to the start of each `uint64_t` vector and `n_ints` is the length of the vectors.
+
+**The following list is not complete!**
 
 ### Approach 0a: Scalar bitmap accumulator
 
