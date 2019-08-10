@@ -116,7 +116,7 @@ uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uin
             for(; j < n_cycles; ++j) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j*8]);
                 count += _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //TWK_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+                //FIC_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
             }
             j *= 8;
             for(; j < len2; ++j) count += (v1[i] == v2[j]);
@@ -141,7 +141,7 @@ uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uin
             int j = 0;
             for(; j < n_cycles; ++j) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j*8]);
-                //TWK_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+                //FIC_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
                 count += _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
             }
             j *= 8;
@@ -323,7 +323,7 @@ uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, cons
             for(; j + 8 < len2; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j]);
                 loc = _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //loc = TWK_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
+                //loc = FIC_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
                 from = (loc ? j + 1 : from);
                 count += loc;
             }
@@ -350,7 +350,7 @@ uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, cons
             for(; j + 8 < len1; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j]);
                 loc = _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //loc = TWK_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
+                //loc = FIC_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
                 from = (loc ? j + 1 : from);
                 count += loc;
             }
@@ -383,7 +383,7 @@ uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uin
             int j = 0;
             for(; j < n_cycles; ++j) {
                 const __m256i y = _mm256_loadu_si256((const __m256i*)&v2[j*16]);
-                TWK_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+                FIC_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
             }
             j *= 16;
             for(; j < len2; ++j) count += (v1[i] == v2[j]);
@@ -402,7 +402,7 @@ uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uin
             int j = 0;
             for(; j < n_cycles; ++j) {
                 const __m256i y = _mm256_loadu_si256((const __m256i*)&v1[j*16]);
-                TWK_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+                FIC_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
             }
             j *= 16;
             for(; j < len1; ++j)  count += (v1[j] == v2[i]);
@@ -577,7 +577,7 @@ uint64_t intersect_raw_gallop_sse4(const uint16_t* __restrict__ v1, const uint16
             for(; j + 8 < len2; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j]);
                 const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = TWK_POPCOUNT(_mm_extract_epi64(x, 0)) + TWK_POPCOUNT(_mm_extract_epi64(x, 1));
+                uint32_t l = FIC_POPCOUNT(_mm_extract_epi64(x, 0)) + FIC_POPCOUNT(_mm_extract_epi64(x, 1));
                 if(l) {
                     count += l;
                     j = len2;
@@ -612,7 +612,7 @@ uint64_t intersect_raw_gallop_sse4(const uint16_t* __restrict__ v1, const uint16
             for(; j + 8 < len1; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j]);
                 const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = TWK_POPCOUNT(_mm_extract_epi64(x, 0)) + TWK_POPCOUNT(_mm_extract_epi64(x, 1));
+                uint32_t l = FIC_POPCOUNT(_mm_extract_epi64(x, 0)) + FIC_POPCOUNT(_mm_extract_epi64(x, 1));
                 if(l) {
                     count += l;
                     j = len1;

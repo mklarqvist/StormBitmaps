@@ -24,6 +24,10 @@
 #include <string.h>
 #include <math.h>
 
+#ifndef FIC_DEFAULT_BLOCK
+#define FIC_DEFAULT_BLOCK 256e3
+#endif
+
 /*
  * Reference data transfer rates:
  *
@@ -47,6 +51,15 @@
  ***************************************/
 #if defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ != 8
 #error This code assumes 64-bit long longs (by use of the GCC intrinsics). Your system is not currently supported.
+#endif
+
+/* ===   Compiler specifics   === */
+
+#if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* >= C99 */
+#  define FIC_RESTRICT   restrict
+#else
+/* note : it might be useful to define __restrict or __restrict__ for some C++ compilers */
+#  define FIC_RESTRICT   /* disable */
 #endif
 
 #include <x86intrin.h>
@@ -109,56 +122,9 @@ void aligned_free_port(void* memblock) {
 
 /*------ SIMD definitions --------*/
 
-// these will eventually be removed
-#if defined(_MSC_VER)
-     /* Microsoft C/C++-compatible compiler */
-     #include <intrin.h>
-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
-     /* GCC-compatible compiler, targeting x86/x86-64 */
-     #include <x86intrin.h>
-#elif defined(__GNUC__) && defined(__ARM_NEON__)
-     /* GCC-compatible compiler, targeting ARM with NEON */
-     #include <arm_neon.h>
-#elif defined(__GNUC__) && defined(__IWMMXT__)
-     /* GCC-compatible compiler, targeting ARM with WMMX */
-     #include <mmintrin.h>
-#elif (defined(__GNUC__) || defined(__xlC__)) && (defined(__VEC__) || defined(__ALTIVEC__))
-     /* XLC or GCC-compatible compiler, targeting PowerPC with VMX/VSX */
-     #include <altivec.h>
-#elif defined(__GNUC__) && defined(__SPE__)
-     /* GCC-compatible compiler, targeting PowerPC with SPE */
-     #include <spe.h>
-#endif
-
-#if defined(__AVX512F__) && __AVX512F__ == 1
-#define SIMD_AVAILABLE  1
-#define SIMD_VERSION    6
-#define SIMD_ALIGNMENT  64
-#elif defined(__AVX2__) && __AVX2__ == 1
-#define SIMD_AVAILABLE  1
-#define SIMD_VERSION    5
-#define SIMD_ALIGNMENT  32
-#elif defined(__AVX__) && __AVX__ == 1
-#define SIMD_AVAILABLE  1
-#define SIMD_VERSION    4
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE4_1__) && __SSE4_1__ == 1
-#define SIMD_AVAILABLE  1
-#define SIMD_VERSION    3
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE2__) && __SSE2__ == 1
-#define SIMD_AVAILABLE  0 // unsupported version
-#define SIMD_VERSION    0
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE__) && __SSE__ == 1
-#define SIMD_AVAILABLE  0 // unsupported version
-#define SIMD_VERSION    0
-#define SIMD_ALIGNMENT  16
-#else
-#define SIMD_AVAILABLE  0
-#define SIMD_VERSION    0
-#define SIMD_ALIGNMENT  16
-#endif
+#define FIC_SSE_ALIGNMENT    16
+#define FIC_AVX2_ALIGNMENT   32
+#define FIC_AVX512_ALIGNMENT 64
 
 /****************************
 *  General checks
@@ -387,9 +353,9 @@ static inline int get_cpuid() {
 
 /// TODO: Fixme
 #ifdef _mm_popcnt_u64
-#define TWK_POPCOUNT _mm_popcnt_u64
+#define FIC_POPCOUNT _mm_popcnt_u64
 #else
-#define TWK_POPCOUNT __builtin_popcountll
+#define FIC_POPCOUNT __builtin_popcountll
 #endif
 
 // Todo: fixme
@@ -399,7 +365,7 @@ static inline uint32_t fastrange32(uint32_t word, uint32_t p) {
 
 static inline
 uint64_t builtin_popcnt_unrolled(const __m128i val) {
-    return TWK_POPCOUNT(*((uint64_t*)&val + 0)) + TWK_POPCOUNT(*((uint64_t*)&val + 1));
+    return FIC_POPCOUNT(*((uint64_t*)&val + 0)) + FIC_POPCOUNT(*((uint64_t*)&val + 1));
 }
 
 static inline
@@ -409,14 +375,14 @@ uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size) {
     uint64_t i   = 0;
 
     for (/**/;i < limit; i += 4) {
-        cnt += TWK_POPCOUNT(data[i+0]);
-        cnt += TWK_POPCOUNT(data[i+1]);
-        cnt += TWK_POPCOUNT(data[i+2]);
-        cnt += TWK_POPCOUNT(data[i+3]);
+        cnt += FIC_POPCOUNT(data[i+0]);
+        cnt += FIC_POPCOUNT(data[i+1]);
+        cnt += FIC_POPCOUNT(data[i+2]);
+        cnt += FIC_POPCOUNT(data[i+3]);
     }
 
     for (/**/;i < size; ++i)
-        cnt += TWK_POPCOUNT(data[i]);
+        cnt += FIC_POPCOUNT(data[i]);
 
     return cnt;
 }
@@ -430,10 +396,10 @@ uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size) {
 
 #include <immintrin.h>
 
-#ifndef TWK_POPCOUNT_SSE4
-#define TWK_POPCOUNT_SSE4(A, B) {               \
-    A += TWK_POPCOUNT(_mm_extract_epi64(B, 0)); \
-    A += TWK_POPCOUNT(_mm_extract_epi64(B, 1)); \
+#ifndef FIC_POPCOUNT_SSE4
+#define FIC_POPCOUNT_SSE4(A, B) {               \
+    A += FIC_POPCOUNT(_mm_extract_epi64(B, 0)); \
+    A += FIC_POPCOUNT(_mm_extract_epi64(B, 1)); \
 }
 #endif
 
@@ -441,8 +407,8 @@ uint64_t popcount64_unrolled(const uint64_t* data, uint64_t size) {
   __attribute__ ((target ("sse4.1")))
 #endif
 static inline 
-uint64_t TWK_POPCOUNT_SSE(const __m128i n) {
-    return(TWK_POPCOUNT(_mm_cvtsi128_si64(n)) + TWK_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n))));
+uint64_t FIC_POPCOUNT_SSE(const __m128i n) {
+    return(FIC_POPCOUNT(_mm_cvtsi128_si64(n)) + FIC_POPCOUNT(_mm_cvtsi128_si64(_mm_unpackhi_epi64(n, n))));
 }
 
 #if !defined(_MSC_VER)
@@ -459,8 +425,8 @@ void CSA128(__m128i* h, __m128i* l, __m128i a, __m128i b, __m128i c) {
   __attribute__ ((target ("sse4.1")))
 #endif
 static 
-uint64_t popcnt_sse4_csa_intersect(const __m128i* __restrict__ data1, 
-                                   const __m128i* __restrict__ data2, 
+uint64_t popcnt_sse4_csa_intersect(const __m128i* FIC_RESTRICT data1, 
+                                   const __m128i* FIC_RESTRICT data2, 
                                    uint64_t size)
 {
     __m128i ones     = _mm_setzero_si128();
@@ -491,17 +457,17 @@ uint64_t popcnt_sse4_csa_intersect(const __m128i* __restrict__ data1,
         CSA128(&eightsB, &fours,  fours, foursA, foursB);
         CSA128(&sixteens,&eights, eights,eightsA,eightsB);
 
-        cnt64 += TWK_POPCOUNT_SSE(sixteens);
+        cnt64 += FIC_POPCOUNT_SSE(sixteens);
     }
 
     cnt64 <<= 4;
-    cnt64 += TWK_POPCOUNT_SSE(eights) << 3;
-    cnt64 += TWK_POPCOUNT_SSE(fours)  << 2;
-    cnt64 += TWK_POPCOUNT_SSE(twos)   << 1;
-    cnt64 += TWK_POPCOUNT_SSE(ones)   << 0;
+    cnt64 += FIC_POPCOUNT_SSE(eights) << 3;
+    cnt64 += FIC_POPCOUNT_SSE(fours)  << 2;
+    cnt64 += FIC_POPCOUNT_SSE(twos)   << 1;
+    cnt64 += FIC_POPCOUNT_SSE(ones)   << 0;
 
     for (/**/; i < size; ++i)
-        cnt64 = TWK_POPCOUNT_SSE(data1[i] & data2[i]);
+        cnt64 = FIC_POPCOUNT_SSE(data1[i] & data2[i]);
 
     return cnt64;
 }
@@ -510,8 +476,8 @@ uint64_t popcnt_sse4_csa_intersect(const __m128i* __restrict__ data1,
   __attribute__ ((target ("sse4.1")))
 #endif
 static 
-uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1, 
-                                const uint64_t* __restrict__ b2, 
+uint64_t intersect_bitmaps_sse4(const uint64_t* FIC_RESTRICT b1, 
+                                const uint64_t* FIC_RESTRICT b2, 
                                 const uint32_t n_ints) 
 {
     uint64_t count = 0;
@@ -540,12 +506,12 @@ uint64_t intersect_bitmaps_sse4(const uint64_t* __restrict__ b1,
 
 #include <immintrin.h>
 
-#ifndef TWK_POPCOUNT_AVX2
-#define TWK_POPCOUNT_AVX2(A, B) {                  \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 0)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 1)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 2)); \
-    A += TWK_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+#ifndef FIC_POPCOUNT_AVX2
+#define FIC_POPCOUNT_AVX2(A, B) {                  \
+    A += FIC_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += FIC_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += FIC_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += FIC_POPCOUNT(_mm256_extract_epi64(B, 3)); \
 }
 #endif
 
@@ -599,8 +565,8 @@ __m256i popcnt256(__m256i v) {
   __attribute__ ((target ("avx2")))
 #endif
 static 
-uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1, 
-                                   const __m256i* __restrict__ data2, 
+uint64_t popcnt_avx2_csa_intersect(const __m256i* FIC_RESTRICT data1, 
+                                   const __m256i* FIC_RESTRICT data2, 
                                    uint64_t size)
 {
     __m256i cnt      = _mm256_setzero_si256();
@@ -655,8 +621,8 @@ uint64_t popcnt_avx2_csa_intersect(const __m256i* __restrict__ data1,
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
 #endif
-static uint64_t intersect_bitmaps_avx2(const uint64_t* __restrict__ b1, 
-                                       const uint64_t* __restrict__ b2, 
+static uint64_t intersect_bitmaps_avx2(const uint64_t* FIC_RESTRICT b1, 
+                                       const uint64_t* FIC_RESTRICT b2, 
                                        const uint32_t n_ints)
 {
     uint64_t count = 0;
@@ -717,8 +683,8 @@ static inline void CSA512(__m512i* h, __m512i* l, __m512i a, __m512i b, __m512i 
   __attribute__ ((target ("avx512bw")))
 #endif
 static inline
-uint64_t popcnt_avx512_csa_intersect(const __m512i* __restrict__ data1, 
-                                     const __m512i* __restrict__ data2, 
+uint64_t popcnt_avx512_csa_intersect(const __m512i* FIC_RESTRICT data1, 
+                                     const __m512i* FIC_RESTRICT data2, 
                                      uint64_t size)
 {
     __m512i cnt      = _mm512_setzero_si512();
@@ -779,8 +745,8 @@ uint64_t popcnt_avx512_csa_intersect(const __m512i* __restrict__ data1,
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx512bw")))
 #endif
-static uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1, 
-                                             const uint64_t* __restrict__ b2, 
+static uint64_t intersect_bitmaps_avx512_csa(const uint64_t* FIC_RESTRICT b1, 
+                                             const uint64_t* FIC_RESTRICT b2, 
                                              const uint32_t n_ints) 
 {
     uint64_t count = 0;
@@ -804,25 +770,25 @@ static uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1,
 ****************************/
 
 static
-uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
+uint64_t intersect_bitmaps_scalar(const uint64_t* FIC_RESTRICT b1, const uint64_t* FIC_RESTRICT b2, const uint32_t n_ints) {
     uint64_t count = 0;
     int i = 0;
     for(/**/; i + 4 < n_ints; i += 4) {
-        count += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
-        count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
-        count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
-        count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+        count += FIC_POPCOUNT(b1[i+0] & b2[i+0]);
+        count += FIC_POPCOUNT(b1[i+1] & b2[i+1]);
+        count += FIC_POPCOUNT(b1[i+2] & b2[i+2]);
+        count += FIC_POPCOUNT(b1[i+3] & b2[i+3]);
     }
 
     for (/**/; i < n_ints; ++i) {
-        count += TWK_POPCOUNT(b1[i] & b2[i]);
+        count += FIC_POPCOUNT(b1[i] & b2[i]);
     }
 
     return(count);
 }
 
 static
-uint64_t intersect_bitmaps_scalar_list(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, 
+uint64_t intersect_bitmaps_scalar_list(const uint64_t* FIC_RESTRICT b1, const uint64_t* FIC_RESTRICT b2, 
     const uint32_t* l1, const uint32_t* l2,
     const uint32_t n1, const uint32_t n2) 
 {
@@ -876,11 +842,11 @@ uint64_t c_fwrapper(const uint32_t n_vectors,
 
 static
 uint64_t c_flwrapper(const uint32_t n_vectors, 
-                     const uint64_t* __restrict__ vals,
+                     const uint64_t* FIC_RESTRICT vals,
                      const uint32_t n_ints,
-                     const uint32_t* __restrict__ n_alts,
-                     const uint32_t* __restrict__ alt_positions,
-                     const uint32_t* __restrict__ alt_offsets, 
+                     const uint32_t* FIC_RESTRICT n_alts,
+                     const uint32_t* FIC_RESTRICT alt_positions,
+                     const uint32_t* FIC_RESTRICT alt_offsets, 
                      const ftype f, 
                      const fltype fl, 
                      const uint32_t cutoff)
@@ -964,11 +930,11 @@ uint64_t c_fwrapper_blocked(const uint32_t n_vectors,
 
 static
 uint64_t c_flwrapper_blocked(const uint32_t n_vectors, 
-                             const uint64_t* __restrict__ vals,
+                             const uint64_t* FIC_RESTRICT vals,
                              const uint32_t n_ints,
-                             const uint32_t* __restrict__ n_alts,
-                             const uint32_t* __restrict__ alt_positions,
-                             const uint32_t* __restrict__ alt_offsets, 
+                             const uint32_t* FIC_RESTRICT n_alts,
+                             const uint32_t* FIC_RESTRICT alt_positions,
+                             const uint32_t* FIC_RESTRICT alt_offsets, 
                              const ftype f, 
                              const fltype fl, 
                              const uint32_t cutoff,
@@ -1052,36 +1018,7 @@ uint64_t c_flwrapper_blocked(const uint32_t n_vectors,
     return total;
 }
 
-
-/****************************
-*  Intersect vectors of values directly
-****************************/
-/**<
- * Compare pairs of uncompressed 16-bit integers from two sets pairwise.
- * Naive: This function compares values from the two lists pairwise in
- *    O(n*m)-time.
- * Broadcast: Vectorized approach where a value from the smaller vector is broadcast
- *    to a reference vector and compared against N values from the other vector.
- * @param v1
- * @param v2
- * @return
- */
-uint64_t intersect_raw_naive(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_binary(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_roaring_cardinality(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2);
-
 // Intersect
-
 static 
 uint64_t intersect(const void* data, const uint32_t n_vectors, const uint32_t n_bitmaps_vector) {
 
@@ -1106,23 +1043,68 @@ uint64_t intersect(const void* data, const uint32_t n_vectors, const uint32_t n_
 
 #if defined(HAVE_AVX512)
     if ((cpuid & bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
-        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx512_csa, 256e3/(n_bitmaps_vector*8));
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx512_csa, FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
 #if defined(HAVE_AVX2)
     if ((cpuid & bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
-        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx2, 256e3/(n_bitmaps_vector*8));
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_avx2, FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
 #if defined(HAVE_SSE41)
     if ((cpuid & bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
-        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_sse4, 256e3/(n_bitmaps_vector*8));
+        return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_sse4, FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
-    return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_scalar, 256e3/(n_bitmaps_vector*8));
+    return c_fwrapper_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, &intersect_bitmaps_scalar, FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
+}
+
+static 
+uint32_t get_alignment() {
+
+#if defined(HAVE_CPUID)
+  #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+  #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+      cpuid = get_cpuid();
+
+      #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+      #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+      #endif
+    }
+  #endif
+#endif
+
+        uint32_t alignment = 0;
+#if defined(HAVE_AVX512)
+        if ((cpuid & bit_AVX512BW)) { // 16*512
+            alignment = FIC_AVX512_ALIGNMENT;
+        }
+#endif
+
+#if defined(HAVE_AVX2)
+        if ((cpuid & bit_AVX2) && alignment == 0) { // 16*256
+            alignment = FIC_AVX2_ALIGNMENT;
+        }
+#endif
+
+#if defined(HAVE_SSE41)
+        if ((cpuid & bit_SSE41) && alignment == 0) { // 16*128
+            alignment = FIC_SSE_ALIGNMENT;
+        }
+#endif
+
+        if (alignment == 0) alignment = 8;
+        return alignment;
 }
 
 static 
@@ -1162,7 +1144,7 @@ uint64_t intersect_list(const void* data,
             &intersect_bitmaps_avx512_csa, 
             &intersect_bitmaps_scalar_list, 
             50,
-            256e3/(n_bitmaps_vector*8));
+            FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
@@ -1173,7 +1155,7 @@ uint64_t intersect_list(const void* data,
             &intersect_bitmaps_avx2, 
             &intersect_bitmaps_scalar_list, 
             50,
-            256e3/(n_bitmaps_vector*8));
+            FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
@@ -1184,7 +1166,7 @@ uint64_t intersect_list(const void* data,
             &intersect_bitmaps_sse4, 
             &intersect_bitmaps_scalar_list, 
             50,
-            256e3/(n_bitmaps_vector*8));
+            FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
     }
 #endif
 
@@ -1193,7 +1175,7 @@ uint64_t intersect_list(const void* data,
             &intersect_bitmaps_scalar, 
             &intersect_bitmaps_scalar_list, 
             50,
-            256e3/(n_bitmaps_vector*8));
+            FIC_DEFAULT_BLOCK/(n_bitmaps_vector*8));
 }
 
 #ifdef __cplusplus

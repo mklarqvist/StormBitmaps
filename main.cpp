@@ -16,6 +16,36 @@
 #include "fast_intersect_count.h"
 #include "classes.h"
 
+#if defined(__AVX512F__) && __AVX512F__ == 1
+#define SIMD_AVAILABLE  1
+#define SIMD_VERSION    6
+#define SIMD_ALIGNMENT  64
+#elif defined(__AVX2__) && __AVX2__ == 1
+#define SIMD_AVAILABLE  1
+#define SIMD_VERSION    5
+#define SIMD_ALIGNMENT  32
+#elif defined(__AVX__) && __AVX__ == 1
+#define SIMD_AVAILABLE  1
+#define SIMD_VERSION    4
+#define SIMD_ALIGNMENT  16
+#elif defined(__SSE4_1__) && __SSE4_1__ == 1
+#define SIMD_AVAILABLE  1
+#define SIMD_VERSION    3
+#define SIMD_ALIGNMENT  16
+#elif defined(__SSE2__) && __SSE2__ == 1
+#define SIMD_AVAILABLE  0 // unsupported version
+#define SIMD_VERSION    0
+#define SIMD_ALIGNMENT  16
+#elif defined(__SSE__) && __SSE__ == 1
+#define SIMD_AVAILABLE  0 // unsupported version
+#define SIMD_VERSION    0
+#define SIMD_ALIGNMENT  16
+#else
+#define SIMD_AVAILABLE  0
+#define SIMD_VERSION    0
+#define SIMD_ALIGNMENT  16
+#endif
+
 uint64_t get_cpu_cycles() {
     uint64_t result;
     __asm__ volatile(".byte 15;.byte 49;shlq $32,%%rdx;orq %%rdx,%%rax":"=a"
@@ -653,7 +683,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // PRINT("bitmap-avx512-csa",m8_2);
 
             bench_t m8_avx512_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample, optimal_b);
-            PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block);
+            PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
 #endif
 
 #ifdef USE_ROARING
