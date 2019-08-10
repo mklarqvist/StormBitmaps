@@ -653,7 +653,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // PRINT("bitmap-avx512-csa",m8_2);
 
             bench_t m8_2_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample, optimal_b);
-            PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b,m8_2_block), m8_2_block);
+            PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_2_block);
 #endif
 
 #ifdef USE_ROARING
