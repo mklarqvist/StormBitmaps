@@ -385,6 +385,15 @@ bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_vals_ac
 void intersect_test(uint32_t n, uint32_t cycles = 1) {
     // uint64_t* a = nullptr;
     // intersect(a,0,0);
+
+#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
+        bench.throughput << "\t" << \
+        (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
+        (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
+        (bench.milliseconds == 0 ? 0 : n_total_integer_cmps*sizeof(uint64_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
+        (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
+
     
     // Setup
     std::vector<uint32_t> samples = {2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
@@ -506,15 +515,6 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // Debug
             std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
             // uint64_t d = 0, diag = 0;
-
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
-            bench.throughput << "\t" << \
-            (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
-            (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
-            (bench.milliseconds == 0 ? 0 : n_total_integer_cmps*sizeof(uint64_t) / (bench.milliseconds/1000.0) / (1024.0*1024.0)) << "\t" << \
-            (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
-            (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
-
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();

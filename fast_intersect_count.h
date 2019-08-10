@@ -53,6 +53,11 @@
 
 /****************************
 *  Memory management
+* 
+*  The subroutines aligned_malloc and aligned_free had to e renamed to
+*  aligned_malloc_port and aligned_free_port to stop clashing with the
+*  same subroutines in Roaring. These subroutines are included here
+*  since there is no hard dependency on using Roaring bitmaps.
 ****************************/
 // portable version of  posix_memalign
 #ifndef aligned_malloc_port
@@ -86,6 +91,7 @@ void aligned_free_port(void* memblock) {
 }
 #endif
 
+// portable alignment
 #if defined(_MSC_VER)
 #define ALIGNED(x) __declspec(align(x))
 #else
@@ -94,6 +100,7 @@ void aligned_free_port(void* memblock) {
 #endif
 #endif
 
+// disable noise
 #ifdef __GNUC__
 #define WARN_UNUSED __attribute__((warn_unused_result))
 #else
@@ -101,6 +108,8 @@ void aligned_free_port(void* memblock) {
 #endif
 
 /*------ SIMD definitions --------*/
+
+// these will eventually be removed
 #if defined(_MSC_VER)
      /* Microsoft C/C++-compatible compiler */
      #include <intrin.h>
@@ -261,6 +270,7 @@ extern "C" {
   #include <immintrin.h>
 #endif
 
+// CPUID flags. See https://en.wikipedia.org/wiki/CPUID for more info.
 /* %ecx bit flags */
 #define bit_POPCNT   (1 << 23) // POPCNT instruction 
 #define bit_SSE41    (1 << 19) // CPUID.01H:ECX.SSE41[Bit 19]
@@ -375,14 +385,14 @@ static inline int get_cpuid() {
 }
 #endif // defined(HAVE_CPUID)
 
-///
-
+/// TODO: Fixme
 #ifdef _mm_popcnt_u64
 #define TWK_POPCOUNT _mm_popcnt_u64
 #else
 #define TWK_POPCOUNT __builtin_popcountll
 #endif
 
+// Todo: fixme
 static inline uint32_t fastrange32(uint32_t word, uint32_t p) {
 	return (uint32_t)(((uint64_t)word * (uint64_t)p) >> 32);
 }
@@ -796,7 +806,15 @@ static uint64_t intersect_bitmaps_avx512_csa(const uint64_t* __restrict__ b1,
 static
 uint64_t intersect_bitmaps_scalar(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints) {
     uint64_t count = 0;
-    for(int i = 0; i < n_ints; ++i) {
+    int i = 0;
+    for(/**/; i + 4 < n_ints; i += 4) {
+        count += TWK_POPCOUNT(b1[i+0] & b2[i+0]);
+        count += TWK_POPCOUNT(b1[i+1] & b2[i+1]);
+        count += TWK_POPCOUNT(b1[i+2] & b2[i+2]);
+        count += TWK_POPCOUNT(b1[i+3] & b2[i+3]);
+    }
+
+    for (/**/; i < n_ints; ++i) {
         count += TWK_POPCOUNT(b1[i] & b2[i]);
     }
 
