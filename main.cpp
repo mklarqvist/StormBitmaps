@@ -596,39 +596,39 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 PRINT("test-avx2-cont-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
             }
 
-            {
-                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-                const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = bcont2.intersect_cont_auto();
-                const uint64_t cycles_end = get_cpu_cycles();
+            // {
+            //     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            //     const uint64_t cycles_start = get_cpu_cycles();
+            //     uint64_t cont_count = bcont2.intersect_cont_auto();
+            //     const uint64_t cycles_end = get_cpu_cycles();
 
-                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+            //     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            //     auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
 
-                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
-                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
-                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
-                b.cpu_cycles = cycles_end - cycles_start;
-                // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                PRINT("test-avx2-cont-auto",b);
-            }
+            //     bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            //     uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            //     b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            //     b.cpu_cycles = cycles_end - cycles_start;
+            //     // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            //     PRINT("test-avx2-cont-auto",b);
+            // }
 
-            {
-                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-                const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = bcont2.intersect_cont_blocked_auto(256e3/(n_ints_sample*8));
-                const uint64_t cycles_end = get_cpu_cycles();
+            // {
+            //     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            //     const uint64_t cycles_start = get_cpu_cycles();
+            //     uint64_t cont_count = bcont2.intersect_cont_blocked_auto(256e3/(n_ints_sample*8));
+            //     const uint64_t cycles_end = get_cpu_cycles();
 
-                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+            //     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            //     auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
 
-                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
-                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
-                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
-                b.cpu_cycles = cycles_end - cycles_start;
-                // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                PRINT("test-avx2-cont-auto-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
-            }
+            //     bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            //     uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            //     b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+            //     b.cpu_cycles = cycles_end - cycles_start;
+            //     // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            //     PRINT("test-avx2-cont-auto-blocked-" + std::to_string(256e3/(n_ints_sample*8)),b);
+            // }
 
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -696,14 +696,16 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
             // PRINT("roaring",broaring);
 
-            bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, optimal_b);
-            PRINT("roaring-blocked-" + std::to_string(optimal_b),m8_2_block);
-
             uint64_t roaring_bytes_used = 0;
             for (int k = 0; k < n_variants; ++k) {
                 roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
             }
             std::cerr << "Memory used by roaring=" << roaring_bytes_used << "(" << (float)memory_used/roaring_bytes_used << ")" << std::endl;
+
+            uint32_t roaring_optimal_b = 256e3/ (roaring_bytes_used / n_variants);
+
+            bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
+            PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
 #endif
 
 #if SIMD_VERSION >= 5
