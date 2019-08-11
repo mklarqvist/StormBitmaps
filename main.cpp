@@ -426,7 +426,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
     
     // Setup
-    std::vector<uint32_t> samples = {2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
+    std::vector<uint32_t> samples = {128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     
     std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
@@ -647,13 +647,14 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 PRINT("automatic",b);
             }
 
-            std::vector<uint32_t> o = {10, 50, 100, 250, 500};
+            // std::vector<uint32_t> o = {10, 50, 100, 250, 500};
 
-            for (int z = 0; z < 5; ++z) {
+            // for (int z = 0; z < 5; ++z) {
             {
+                uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = intersect_list(bcont2.bmaps, n_variants, n_ints_sample, bcont2.n_alts, bcont2.alt_positions, bcont2.alt_offsets, o[z]);
+                uint64_t cont_count = intersect_list(bcont2.bmaps, n_variants, n_ints_sample, bcont2.n_alts, bcont2.alt_positions, bcont2.alt_offsets, cutoff);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -664,9 +665,9 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
                 b.cpu_cycles = cycles_end - cycles_start;
                 // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                PRINT("automatic-list-" + std::to_string(o[z]),b);
+                PRINT("automatic-list-" + std::to_string(cutoff),b);
             }
-            }
+            // }
 
             const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 

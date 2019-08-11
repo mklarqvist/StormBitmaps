@@ -255,8 +255,10 @@ struct bitmap_container_t {
 };
 
 struct roaring2_t {
-    roaring2_t(uint32_t n_s, uint32_t n_ss) : alignment(get_alignment()), n_samples(n_s), n_sites(n_ss), block_size(65535), n_total_blocks(0),
-        n_total_bitmaps(0), m_blocks(0), m_bitmaps(0), n_blocks(nullptr), blocks(nullptr), data_bitmaps(nullptr)
+    roaring2_t(uint32_t n_s, uint32_t n_ss) : alignment(get_alignment()), n_samples(n_s), 
+        n_sites(n_ss), block_size(128), n_total_blocks(0),
+        n_total_bitmaps(0), m_blocks(0), m_bitmaps(0), n_blocks(nullptr), 
+        blocks(nullptr), data_bitmaps(nullptr)
     {}
 
     ~roaring2_t() {
@@ -285,9 +287,8 @@ struct roaring2_t {
             n_total_bitmaps = 0;
         }
 
-
         // First target block
-        uint32_t current_block = pos[0] / 8192; // block_size
+        uint32_t current_block = pos[0] / 128; // block_size
         // Allocate
         uint64_t* tgt_bitmap = &data_bitmaps[n_total_bitmaps];
         n_total_bitmaps += 128; // 8192 bits = 16 * 512
