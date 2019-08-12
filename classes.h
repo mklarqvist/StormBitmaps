@@ -15,8 +15,8 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-#ifndef FAST_INTERSECT_CLASSES_COUNT_H_
-#define FAST_INTERSECT_CLASSES_COUNT_H_
+#ifndef FAST_INTERSECT_COUNT_CLASSES_H_
+#define FAST_INTERSECT_COUNT_CLASSES_H_
 
 #include "fast_intersect_count.h"
 
@@ -68,21 +68,21 @@ struct bitmap_t {
         return n;
     }
 
-    inline void Add(const uint64_t pos) { data[pos / 64] |= 1ULL << (pos % 64); }
-
-    void clear() {
-        memset(data, 0, n_bitmap*sizeof(uint64_t));
+    inline void Add(const uint64_t pos) {
+        n_set += (data[pos / 64] & 1ULL << (pos % 64)) == 0; // predicate add
+        data[pos / 64] |= 1ULL << (pos % 64); 
     }
 
-    uint64_t intersect(const bitmap_t& other) const;
-
-    // uint32_t intersect_count(const bitmap_t& other) const {
-    //     return intersect_bitmaps_avx512_csa(data, other.data, n_bitmap);
-    // }
+    void clear() {
+        n_set = 0;
+        memset(data, 0, n_bitmap*sizeof(uint64_t));
+    }
 
     uint32_t alignment;
     uint32_t n_set, n_bitmap: 31, own: 1; // number of values set, number of bitmaps, ownership
     uint64_t* data;
+    // uint32_t n_alts: 31, n_alts_set: 1, n_missing
+    // uint32_t* alts
 };
 
 struct bitmap_container_t {

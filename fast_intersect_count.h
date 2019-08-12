@@ -529,13 +529,11 @@ const uint8_t TWK_lookup8bit[256] = {
 	/* fc */ 6, /* fd */ 7, /* fe */ 7, /* ff */ 8
 };
 
-
 /****************************
 *  SSE4.1 functions
 ****************************/
 
 #if defined(HAVE_SSE42)
-// #if SIMD_VERSION >= 3
 
 #include <immintrin.h>
 
@@ -637,8 +635,6 @@ uint64_t TWK_intersect_sse4(const uint64_t* TWK_RESTRICT b1,
 
     return(count);
 }
-
-// #endif
 #endif
 
 /****************************
@@ -646,7 +642,6 @@ uint64_t TWK_intersect_sse4(const uint64_t* TWK_RESTRICT b1,
 ****************************/
 
 #if defined(HAVE_AVX2)
-// #if SIMD_VERSION >= 5
 
 #include <immintrin.h>
 
@@ -865,7 +860,6 @@ uint64_t TWK_intersect_lookup_avx2(const uint64_t* TWK_RESTRICT b1,
 {
     return TWK_intersect_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
 }
-// #endif
 #endif
 
 /****************************
@@ -873,7 +867,6 @@ uint64_t TWK_intersect_lookup_avx2(const uint64_t* TWK_RESTRICT b1,
 ****************************/
 
 #if defined(HAVE_AVX512)
-// #if SIMD_VERSION >= 6
 
 #include <immintrin.h>
 
@@ -992,7 +985,6 @@ uint64_t TWK_intersect_avx512(const uint64_t* TWK_RESTRICT b1,
 
     return(count);
 }
-// #endif
 #endif
 
 /****************************
@@ -1033,6 +1025,113 @@ uint64_t TWK_intersect_scalar_list(const uint64_t* TWK_RESTRICT b1,
     return(count);
 }
 
+
+/* *************************************
+*  Alignment and retrieve intersection function
+***************************************/
+// Function pointer definitions.
+typedef uint64_t (*TWK_intersect_func)(const uint64_t*, const uint64_t*, const uint32_t);
+typedef uint64_t (*TWK_intersect_lfunc)(const uint64_t*, const uint64_t*, 
+    const uint32_t*, const uint32_t*,
+    const uint32_t, const uint32_t);
+
+
+// Return the best alignment given the available instruction set at
+// run-time.
+static 
+uint32_t TWK_get_alignment() {
+
+#if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+        #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+        #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+        #endif
+    }
+    #endif
+#endif
+
+    uint32_t alignment = 0;
+#if defined(HAVE_AVX512)
+    if ((cpuid & TWK_bit_AVX512BW)) { // 16*512
+        alignment = TWK_AVX512_ALIGNMENT;
+    }
+#endif
+
+#if defined(HAVE_AVX2)
+    if ((cpuid & TWK_bit_AVX2) && alignment == 0) { // 16*256
+        alignment = TWK_AVX2_ALIGNMENT;
+    }
+#endif
+
+#if defined(HAVE_SSE42)
+    if ((cpuid & TWK_bit_SSE41) && alignment == 0) { // 16*128
+        alignment = TWK_SSE_ALIGNMENT;
+    }
+#endif
+
+    if (alignment == 0) alignment = 8;
+    return alignment;
+}
+
+// Return the optimal intersection function given the range [0, n_bitmaps_vector)
+// and the available instruction set at run-time.
+static
+TWK_intersect_func TWK_get_intersect_func(const uint32_t n_bitmaps_vector) {
+    #if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+        #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+        #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+        #endif
+    }
+    #endif
+#endif
+
+
+#if defined(HAVE_AVX512)
+    if ((cpuid & TWK_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
+        return &TWK_intersect_avx512;
+    }
+#endif
+
+#if defined(HAVE_AVX2)
+    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
+        return &TWK_intersect_avx2;
+    }
+    
+    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 4) {
+        return &TWK_intersect_lookup_avx2;
+    }
+#endif
+
+#if defined(HAVE_SSE42)
+    if ((cpuid & TWK_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
+        return &TWK_intersect_sse4;
+    }
+#endif
+
+    return &TWK_intersect_scalar;
+}
+
 /* *************************************
 *  Example wrappers
 *
@@ -1047,12 +1146,6 @@ uint64_t TWK_intersect_scalar_list(const uint64_t* TWK_RESTRICT b1,
 *  to accelerate computation when the vectors are very sparse.
 *
 ***************************************/
-
-// Function pointer definitions.
-typedef uint64_t (*TWK_wrapper_ftype)(const uint64_t*, const uint64_t*, const uint32_t);
-typedef uint64_t (*TWK_wrapper_fltype)(const uint64_t*, const uint64_t*, 
-    const uint32_t*, const uint32_t*,
-    const uint32_t, const uint32_t);
 
 /**
  * This within-block wrapper computes the n_vectors choose 2
@@ -1069,7 +1162,7 @@ static
 uint64_t TWK_wrapper_diag(const uint32_t n_vectors, 
                     const uint64_t* vals, 
                     const uint32_t n_ints, 
-                    const TWK_wrapper_ftype f)
+                    const TWK_intersect_func f)
 {
     uint32_t offset = 0;
     uint32_t inner_offset = 0;
@@ -1092,7 +1185,7 @@ uint64_t TWK_wrapper_square(const uint32_t n_vectors1,
                            const uint32_t n_vectors2,
                            const uint64_t* TWK_RESTRICT vals2, 
                            const uint32_t n_ints, 
-                           const TWK_wrapper_ftype f)
+                           const TWK_intersect_func f)
 {
     uint32_t offset1 = 0;
     uint32_t offset2 = 0;
@@ -1130,8 +1223,8 @@ uint64_t TWK_wrapper_diag_list(const uint32_t n_vectors,
                      const uint32_t* TWK_RESTRICT n_alts,
                      const uint32_t* TWK_RESTRICT alt_positions,
                      const uint32_t* TWK_RESTRICT alt_offsets, 
-                     const TWK_wrapper_ftype f, 
-                     const TWK_wrapper_fltype fl, 
+                     const TWK_intersect_func f, 
+                     const TWK_intersect_lfunc fl, 
                      const uint32_t cutoff)
 {
     uint64_t offset1 = 0;
@@ -1159,7 +1252,7 @@ static
 uint64_t TWK_wrapper_diag_blocked(const uint32_t n_vectors, 
                             const uint64_t* vals, 
                             const uint32_t n_ints, 
-                            const TWK_wrapper_ftype f,
+                            const TWK_intersect_func f,
                             uint32_t block_size)
 {
     uint64_t total = 0;
@@ -1222,8 +1315,8 @@ uint64_t TWK_wrapper_diag_list_blocked(const uint32_t n_vectors,
                              const uint32_t* TWK_RESTRICT n_alts,
                              const uint32_t* TWK_RESTRICT alt_positions,
                              const uint32_t* TWK_RESTRICT alt_offsets, 
-                             const TWK_wrapper_ftype f, 
-                             const TWK_wrapper_fltype fl, 
+                             const TWK_intersect_func f, 
+                             const TWK_intersect_lfunc fl, 
                              const uint32_t cutoff,
                              uint32_t block_size)
 {
@@ -1305,129 +1398,26 @@ uint64_t TWK_wrapper_diag_list_blocked(const uint32_t n_vectors,
     return total;
 }
 
-// alignment
-
-static 
-uint32_t TWK_get_alignment() {
-
-#if defined(HAVE_CPUID)
-    #if defined(__cplusplus)
-    /* C++11 thread-safe singleton */
-    static const int cpuid = get_cpuid();
-    #else
-    static int cpuid_ = -1;
-    int cpuid = cpuid_;
-    if (cpuid == -1) {
-        cpuid = get_cpuid();
-
-        #if defined(_MSC_VER)
-        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
-        #else
-        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
-        #endif
-    }
-    #endif
-#endif
-
-    uint32_t alignment = 0;
-#if defined(HAVE_AVX512)
-    if ((cpuid & TWK_bit_AVX512BW)) { // 16*512
-        alignment = TWK_AVX512_ALIGNMENT;
-    }
-#endif
-
-#if defined(HAVE_AVX2)
-    if ((cpuid & TWK_bit_AVX2) && alignment == 0) { // 16*256
-        alignment = TWK_AVX2_ALIGNMENT;
-    }
-#endif
-
-#if defined(HAVE_SSE42)
-    if ((cpuid & TWK_bit_SSE41) && alignment == 0) { // 16*128
-        alignment = TWK_SSE_ALIGNMENT;
-    }
-#endif
-
-    if (alignment == 0) alignment = 8;
-    return alignment;
-}
 
 // Intersect
 static 
-uint64_t TWK_intersect(const void* data, 
+uint64_t TWK_intersect(const uint64_t* data, 
                        const uint32_t n_vectors, 
                        const uint32_t n_bitmaps_vector,
                        uint32_t bsize = 0) 
 {
-
-#if defined(HAVE_CPUID)
-    #if defined(__cplusplus)
-    /* C++11 thread-safe singleton */
-    static const int cpuid = get_cpuid();
-    #else
-    static int cpuid_ = -1;
-    int cpuid = cpuid_;
-    if (cpuid == -1) {
-        cpuid = get_cpuid();
-
-        #if defined(_MSC_VER)
-        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
-        #else
-        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
-        #endif
-    }
-    #endif
-#endif
-
     bsize = (bsize == 0 ? TWK_CACHE_BLOCK_SIZE/(n_bitmaps_vector*8) : bsize);
-
-#if defined(HAVE_AVX512)
-    if ((cpuid & TWK_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
-        return TWK_wrapper_diag_blocked(n_vectors, 
-            (uint64_t*)data, 
-            n_bitmaps_vector, 
-            &TWK_intersect_avx512, 
-            bsize);
-    }
-#endif
-
-#if defined(HAVE_AVX2)
-    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
-        return TWK_wrapper_diag_blocked(n_vectors, 
-            (uint64_t*)data, 
-            n_bitmaps_vector, 
-            &TWK_intersect_avx2, 
-            bsize);
-    }
-    
-    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 4) {
-        return TWK_wrapper_diag_blocked(n_vectors, 
-            (uint64_t*)data, 
-            n_bitmaps_vector, 
-            &TWK_intersect_lookup_avx2, 
-            bsize);
-    }
-#endif
-
-#if defined(HAVE_SSE42)
-    if ((cpuid & TWK_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
-        return TWK_wrapper_diag_blocked(n_vectors, 
-            (uint64_t*)data, 
-            n_bitmaps_vector, 
-            &TWK_intersect_sse4, 
-            bsize);
-    }
-#endif
+    bsize = bsize < 5 ? 5 : bsize;
 
     return TWK_wrapper_diag_blocked(n_vectors, 
-        (uint64_t*)data, 
+        data, 
         n_bitmaps_vector, 
-        &TWK_intersect_scalar, 
+        TWK_get_intersect_func(n_bitmaps_vector), 
         bsize);
 }
 
 static 
-uint64_t TWK_intersect_list(const void* data, 
+uint64_t TWK_intersect_list(const uint64_t* TWK_RESTRICT data, 
                             const uint32_t n_vectors, 
                             const uint32_t n_bitmaps_vector, 
                             const uint32_t* TWK_RESTRICT n_alts, 
@@ -1436,76 +1426,17 @@ uint64_t TWK_intersect_list(const void* data,
                             const uint32_t cutoff,
                             uint32_t bsize = 0)
 {
-
-#if defined(HAVE_CPUID)
-  #if defined(__cplusplus)
-    /* C++11 thread-safe singleton */
-    static const int cpuid = get_cpuid();
-  #else
-    static int cpuid_ = -1;
-    int cpuid = cpuid_;
-    if (cpuid == -1) {
-      cpuid = get_cpuid();
-
-      #if defined(_MSC_VER)
-        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
-      #else
-        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
-      #endif
-    }
-  #endif
-#endif
-
     bsize = (bsize == 0 ? TWK_CACHE_BLOCK_SIZE/(n_bitmaps_vector*8) : bsize);
+    bsize = bsize < 5 ? 5 : bsize;
 
-#if defined(HAVE_AVX512)
-    if ((cpuid & TWK_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
-        return TWK_wrapper_diag_list_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
-            n_alts, alt_pos, alt_offsets, 
-            &TWK_intersect_avx512, 
-            &TWK_intersect_scalar_list, 
-            cutoff,
-            bsize);
-    }
-#endif
-
-#if defined(HAVE_AVX2)
-    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
-        return TWK_wrapper_diag_list_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
-            n_alts, alt_pos, alt_offsets, 
-            &TWK_intersect_avx2, 
-            &TWK_intersect_scalar_list, 
-            cutoff,
-            bsize);
-    }
-
-    if ((cpuid & TWK_bit_AVX2) && n_bitmaps_vector >= 4) {
-        return TWK_wrapper_diag_list_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
-            n_alts, alt_pos, alt_offsets, 
-            &TWK_intersect_lookup_avx2, 
-            &TWK_intersect_scalar_list, 
-            cutoff,
-            bsize);
-    }
-#endif
-
-#if defined(HAVE_SSE42)
-    if ((cpuid & TWK_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
-        return TWK_wrapper_diag_list_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
-            n_alts, alt_pos, alt_offsets, 
-            &TWK_intersect_sse4, 
-            &TWK_intersect_scalar_list, 
-            cutoff,
-            bsize);
-    }
-#endif
-
-    return TWK_wrapper_diag_list_blocked(n_vectors, (uint64_t*)data, n_bitmaps_vector, 
-            n_alts, alt_pos, alt_offsets, 
-            &TWK_intersect_scalar, 
-            &TWK_intersect_scalar_list, 
-            cutoff,
-            bsize);
+    return TWK_wrapper_diag_list_blocked(n_vectors, 
+        data, 
+        n_bitmaps_vector, 
+        n_alts, 
+        alt_pos, 
+        alt_offsets, 
+        TWK_get_intersect_func(n_bitmaps_vector), 
+        &TWK_intersect_scalar_list, cutoff, bsize);
 }
 
 #ifdef __cplusplus

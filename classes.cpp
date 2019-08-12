@@ -1,29 +1,64 @@
 #include "classes.h"
 
-uint64_t bitmap_t::intersect(const bitmap_t& other) const {
-    return TWK_intersect_avx2(data, other.data, n_bitmap);
-}
-
 uint64_t bitmap_container_t::intersect_blocked(uint32_t bsize) const {
-    return TWK_wrapper_diag_blocked(n_bitmaps, bmaps, n_bitmaps_sample, &TWK_intersect_avx2, bsize);
+    uint64_t count = 0;
+    uint32_t i = 0;
+    const TWK_intersect_func func = TWK_get_intersect_func(n_bitmaps_sample);
+
+    for (/**/; i + bsize <= n_bitmaps; i += bsize) {
+        // diagonal component
+        for (uint32_t j = 0; j < bsize; ++j) {
+            for (uint32_t jj = j + 1; jj < bsize; ++jj) {
+                count += (*func)(bitmaps[i+j].data, bitmaps[i+jj].data, n_bitmaps_sample);
+            }
+        }
+
+        // square component
+        uint32_t curi = i;
+        uint32_t j = curi + bsize;
+        for (/**/; j + bsize <= n_bitmaps; j += bsize) {
+            for (uint32_t ii = 0; ii < bsize; ++ii) {
+                for (uint32_t jj = 0; jj < bsize; ++jj) {
+                    count += (*func)(bitmaps[curi+ii].data, bitmaps[j+jj].data, n_bitmaps_sample);
+                }
+            }
+        }
+
+        // residual
+        for (/**/; j < n_bitmaps; ++j) {
+            for (uint32_t jj = 0; jj < bsize; ++jj) {
+                count += (*func)(bitmaps[curi+jj].data, bitmaps[j].data, n_bitmaps_sample);
+            }
+        }
+    }
+    // residual tail
+    for (/**/; i < n_bitmaps; ++i) {
+        for (uint32_t j = i + 1; j < n_bitmaps; ++j) {
+            count += (*func)(bitmaps[i].data, bitmaps[j].data, n_bitmaps_sample);
+        }
+    }
+
+    return count;
 }
 
 uint64_t bitmap_container_t::intersect() const {
     uint64_t count = 0;
+    const TWK_intersect_func func = TWK_get_intersect_func(n_bitmaps_sample);
+
     for (int i = 0; i < n_bitmaps; ++i) {
         for (int j = i+1; j < n_bitmaps; ++j) {
-            count += bitmaps[i].intersect(bitmaps[j]);
+            count += (*func)(bitmaps[i].data, bitmaps[j].data, n_bitmaps_sample);
         }
     }
     return count;
 }
 
 uint64_t bitmap_container_t::intersect_cont() const {
-    return TWK_wrapper_diag(n_bitmaps, bmaps, n_bitmaps_sample, &TWK_intersect_avx2);
+    return TWK_wrapper_diag(n_bitmaps, bmaps, n_bitmaps_sample, TWK_get_intersect_func(n_bitmaps_sample));
 }
 
 uint64_t bitmap_container_t::intersect_blocked_cont(uint32_t bsize) const {
-    return TWK_wrapper_diag_blocked(n_bitmaps, bmaps, n_bitmaps_sample, &TWK_intersect_avx2, bsize);
+    return TWK_wrapper_diag_blocked(n_bitmaps, bmaps, n_bitmaps_sample, TWK_get_intersect_func(n_bitmaps_sample), bsize);
 }
 
 uint64_t bitmap_container_t::intersect_cont_auto() const {
