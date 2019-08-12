@@ -26,6 +26,88 @@
 #include <iostream>//debug
 #include <bitset> //debug
 
+// temp C
+
+// Fixed width bitmaps
+struct TWK_bitmap_t {
+    TWK_ALIGN(64) uint64_t* data;
+    TWK_ALIGN(64) uint32_t* alts;
+    uint32_t n_bitmap: 30, own_data: 1, own_alts: 1;
+    uint32_t n_alts: 31, n_alts_set: 1, n_missing;
+    uint32_t m_alts;
+};
+
+static
+TWK_bitmap_t* TWK_bitmap_new(const uint32_t n_samples) {
+    TWK_bitmap_t* all = (TWK_bitmap_t*)malloc(sizeof(TWK_bitmap_t));
+    if (all == NULL) return NULL;
+    uint32_t n_bitmap = ceil(n_samples / 64.0);
+    all->data = (uint64_t*)calloc(n_bitmap, sizeof(uint64_t));
+    all->alts = NULL;
+    all->n_bitmap = n_bitmap;
+    all->own_data = 1;
+    all->own_alts = 1;
+    all->n_alts = 0;
+    all->n_alts_set = 0;
+    all->n_missing = 0;
+    all->m_alts = 0;
+    return all;
+}
+
+static
+void TWK_bitmap_free(TWK_bitmap_t* bitmap) {
+    if (bitmap == NULL) return;
+    if (bitmap->own_data) free(bitmap->data);
+    if (bitmap->own_alts) free(bitmap->alts);
+    free(bitmap);
+}
+
+static 
+int TWK_bitmap_add(TWK_bitmap_t* bitmap, const uint32_t value) {
+    if (bitmap == NULL) return -1;
+    bitmap->n_alts += (bitmap->data[value / 64] & 1ULL << (value % 64)) == 0;
+    bitmap->data[value / 64] |= 1ULL << (value % 64);
+    return value;
+}
+
+static 
+int TWK_bitmap_add_with_alts(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values) {
+    if (bitmap == NULL) return -1;
+    if (bitmap->alts == NULL) return -2;
+    if (values == NULL) return -3;
+    if (n_values == 0) return -4;
+    
+    if (bitmap->alts == NULL) {
+        uint32_t new_m = 256 < n_values ? n_values + 256 : 256;
+        bitmap->alts = (uint32_t*)malloc(new_m*sizeof(uint32_t));
+        bitmap->m_alts = new_m;
+        bitmap->own_alts = 1;
+    }
+
+    if (bitmap->n_alts >= bitmap->m_alts) {
+        uint32_t new_m = bitmap->n_alts + n_values + 1024;
+        bitmap->m_alts = new_m;
+        bitmap->alts = (uint32_t*)realloc(bitmap->alts, bitmap->m_alts * sizeof(uint32_t));
+        bitmap->own_alts = 1;
+    }
+
+    for (int i = 0; i < n_values; ++i) {
+        bitmap->data[values[i] / 64] |= 1ULL << (values[i] % 64);
+        
+        int is_unique = (bitmap->data[values[i] / 64] & 1ULL << (values[i] % 64)) == 0;
+        if (is_unique) {
+            bitmap->alts[bitmap->n_alts] = values[i];
+            ++bitmap->n_alts;
+        }
+    }
+    return n_values;
+}
+
+// use TWK_bitmap_add if value > threshold
+// otherwise use TWK_bitmap_add_with_alts
+
+//
+
 struct bitmap_t {
     bitmap_t() : alignment(TWK_get_alignment()), n_set(0), n_bitmap(0), own(false), data(nullptr) {}
     bitmap_t(uint64_t* in, uint32_t n, uint32_t m) : alignment(TWK_get_alignment()), n_set(n), n_bitmap(m), own(false), data(in) {}
