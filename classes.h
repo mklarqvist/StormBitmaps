@@ -127,7 +127,7 @@ struct bitmap_container_t {
 
     bitmap_container_t(uint32_t n, uint32_t m, bool yes, bool yes2) : 
         alignment(TWK_get_alignment()),
-        n_alt_cutoff(300),
+        n_alt_cutoff(0),
         n_bitmaps(n), 
         n_samples(m), 
         own(true), 
@@ -139,6 +139,9 @@ struct bitmap_container_t {
         alt_offsets((uint32_t*)TWK_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t))),
         n_alts((uint32_t*)TWK_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t)))
     {
+        n_alt_cutoff = ceil(n_samples / 200.0);
+        // Cap cutoff to values over 1024.
+        n_alt_cutoff = n_samples < 1024 ? 0 : n_alt_cutoff;
         memset(bmaps,0,n_bitmaps*n_bitmaps_sample*sizeof(uint64_t));
         memset(n_alts,0,n_bitmaps*sizeof(uint32_t));
     }

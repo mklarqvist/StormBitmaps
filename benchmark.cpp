@@ -656,7 +656,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = TWK_intersect(vals, n_variants, n_ints_sample);
+                uint64_t cont_count = bcont2.intersect_cont_auto();
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -677,7 +677,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = TWK_intersect_list(bcont2.bmaps, n_variants, n_ints_sample, bcont2.n_alts, bcont2.alt_positions, bcont2.alt_offsets, cutoff);
+                uint64_t cont_count = bcont2.intersect_cont_blocked_auto(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8));
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();

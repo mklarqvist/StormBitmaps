@@ -62,10 +62,9 @@ uint64_t bitmap_container_t::intersect_blocked_cont(uint32_t bsize) const {
 }
 
 uint64_t bitmap_container_t::intersect_cont_auto() const {
-    return TWK_intersect_list(bmaps, n_bitmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, n_alt_cutoff);
+    return TWK_wrapper_diag_list(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, TWK_get_intersect_func(n_bitmaps_sample), &TWK_intersect_scalar_list, n_alt_cutoff);
 }
 
-
 uint64_t bitmap_container_t::intersect_cont_blocked_auto(uint32_t bsize) const {
-    return TWK_intersect_list(bmaps, n_bitmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, n_alt_cutoff, bsize);
+    return TWK_wrapper_diag_list_blocked(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, TWK_get_intersect_func(n_bitmaps_sample), &TWK_intersect_scalar_list, n_alt_cutoff, bsize);
 }

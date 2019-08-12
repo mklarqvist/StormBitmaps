@@ -1398,47 +1398,6 @@ uint64_t TWK_wrapper_diag_list_blocked(const uint32_t n_vectors,
     return total;
 }
 
-
-// Intersect
-static 
-uint64_t TWK_intersect(const uint64_t* data, 
-                       const uint32_t n_vectors, 
-                       const uint32_t n_bitmaps_vector,
-                       uint32_t bsize = 0) 
-{
-    bsize = (bsize == 0 ? TWK_CACHE_BLOCK_SIZE/(n_bitmaps_vector*8) : bsize);
-    bsize = bsize < 5 ? 5 : bsize;
-
-    return TWK_wrapper_diag_blocked(n_vectors, 
-        data, 
-        n_bitmaps_vector, 
-        TWK_get_intersect_func(n_bitmaps_vector), 
-        bsize);
-}
-
-static 
-uint64_t TWK_intersect_list(const uint64_t* TWK_RESTRICT data, 
-                            const uint32_t n_vectors, 
-                            const uint32_t n_bitmaps_vector, 
-                            const uint32_t* TWK_RESTRICT n_alts, 
-                            const uint32_t* TWK_RESTRICT alt_pos, 
-                            const uint32_t* TWK_RESTRICT alt_offsets,
-                            const uint32_t cutoff,
-                            uint32_t bsize = 0)
-{
-    bsize = (bsize == 0 ? TWK_CACHE_BLOCK_SIZE/(n_bitmaps_vector*8) : bsize);
-    bsize = bsize < 5 ? 5 : bsize;
-
-    return TWK_wrapper_diag_list_blocked(n_vectors, 
-        data, 
-        n_bitmaps_vector, 
-        n_alts, 
-        alt_pos, 
-        alt_offsets, 
-        TWK_get_intersect_func(n_bitmaps_vector), 
-        &TWK_intersect_scalar_list, cutoff, bsize);
-}
-
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
