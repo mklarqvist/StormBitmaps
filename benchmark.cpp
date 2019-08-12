@@ -412,11 +412,11 @@ bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_vals_ac
 }
 #endif
 
-void intersect_test(uint32_t n, uint32_t cycles = 1) {
+void intersect_test(uint32_t n_samples, uint32_t n_variants) {
     // uint64_t* a = nullptr;
     // intersect(a,0,0);
 
-#define PRINT(name,bench) std::cout << samples[s] << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
+#define PRINT(name,bench) std::cout << n_samples << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
         bench.throughput << "\t" << \
         (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
         (n_intersects*1000.0 / (bench.milliseconds) / 1000000.0) << "\t" << \
@@ -426,21 +426,21 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
     
     // Setup
-    std::vector<uint32_t> samples = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
+    // std::vector<uint32_t> samples = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     
     std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
 
-    for (int s = 0; s < samples.size(); ++s) {
-        uint32_t n_ints_sample = std::ceil(samples[s] / 64.0);
+    // for (int s = 0; s < samples.size(); ++s) {
+        uint32_t n_ints_sample = std::ceil(n_samples / 64.0);
 
         // Limit memory usage to 10e6 but no more than 50k records.
         uint32_t desired_mem = 40 * 1024 * 1024;
         // b_total / (b/obj) = n_ints
         // uint32_t n_variants = std::max(std::min((uint32_t)150000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t)))), (uint32_t)64);
-        uint32_t n_variants = 10000;
+        // uint32_t n_variants = 10000;
 
-        std::cerr << "Generating: " << samples[s] << " samples for " << n_variants << " variants" << std::endl;
+        std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
         const uint64_t memory_used = n_ints_sample*n_variants*sizeof(uint64_t);
         std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
 
@@ -450,20 +450,26 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         // std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
         // std::vector<uint32_t> n_alts = {21,269,9506}; // HRC dist
 
-        // std::vector<uint32_t> n_alts = {samples[s]/1000, samples[s]/500, samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
-        std::vector<uint32_t> n_alts = {samples[s]/2, samples[s]/4, samples[s]/10, samples[s]/25, samples[s]/50, samples[s]/100, samples[s]/250, samples[s]/1000, samples[s]/5000, 5, 1};
-        // std::vector<uint32_t> n_alts = {samples[s]/100, samples[s]/20, samples[s]/10, samples[s]/4, samples[s]/2};
+        // std::vector<uint32_t> n_alts = {n_samples/1000, n_samples/500, n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
+        std::vector<uint32_t> n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
+        // std::vector<uint32_t> n_alts = {n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
 
-        bitmap_container_t bcont(n_variants,samples[s]);
-        bitmap_container_t bcont2(n_variants,samples[s],true,true);
+        bitmap_container_t bcont(n_variants,n_samples);
+        bitmap_container_t bcont2(n_variants,n_samples,true,true);
 
         for (int a = 0; a < n_alts.size(); ++a) {
-             // break if no more data
-             if (n_alts[a] == 0) {
-                std::cerr << "there are no alts..." << std::endl;
-                break;
+            // break if no more data
+            if (n_alts[a] == 0) {
+                // Make sure we always compute n_alts = 1
+                if (a != 0) {
+                    if (n_alts[a-1] != 1) 
+                        n_alts[a] = 1;
+                } else {
+                    std::cerr << "there are no alts..." << std::endl;
+                    break;
+                }
             }
 
             // Break if data has converged
@@ -484,7 +490,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             memset(vals, 0, n_ints_sample*n_variants*sizeof(uint64_t));
 
             // PRNG
-            std::uniform_int_distribution<uint32_t> distr(0, samples[s]-1); // right inclusive
+            std::uniform_int_distribution<uint32_t> distr(0, n_samples-1); // right inclusive
 
             // Positional information
             std::vector< std::vector<uint32_t> > pos(n_variants, std::vector<uint32_t>());
@@ -795,19 +801,19 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 }
 
                 bench_t mrle32 = frlewrapper< uint32_t, &intersect_rle<uint32_t> >(rle_32, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
+                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
                 PRINT("rle-32",mrle32);
 
                 bench_t mrle32_b = frlewrapper< uint32_t, &intersect_rle_branchless<uint32_t> >(rle_32, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.milliseconds << "\t" << mrle32_b.count << "\t" << mrle32_b.throughput << std::endl;
+                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.milliseconds << "\t" << mrle32_b.count << "\t" << mrle32_b.throughput << std::endl;
                 PRINT("rle-32-branchless",mrle32_b);
 
                 bench_t mrle64 = frlewrapper< uint64_t, &intersect_rle<uint64_t> >(rle_64, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
+                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
                 PRINT("rle-64",mrle64);
 
                 bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
-                //std::cout << samples[s] << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.milliseconds << "\t" << mrle64_b.count << "\t" << mrle64_b.throughput << std::endl;
+                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.milliseconds << "\t" << mrle64_b.count << "\t" << mrle64_b.throughput << std::endl;
                 PRINT("rle-64-branchless",mrle64_b);
 
                 rle_32.clear(); rle_64.clear();
@@ -821,10 +827,32 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 #endif
         }
         TWK_aligned_free(vals);
-    }
+    // }
+}
+
+const char* usage(void) {
+    return
+        "\n"
+        "About:   Computes sum(popcnt(A & B)) for the all-vs-all comparison of N integer\n"
+        "         lists bounded by [0, M). This benchmark will compute this statistics using\n"
+        "         different algorithms.\n"
+        "Usage:   benchmark <M> <N> \n"
+        "\n"
+        "Example:\n"
+        "   benchmark 4092 10000 \n"
+        "\n";
 }
 
 int main(int argc, char **argv) { 
-    intersect_test(100000000, 10);
-    return(0);
+    if (argc == 1) {
+        printf("%s",usage());
+        return EXIT_FAILURE;
+    }
+
+    if (argc == 2) {
+        intersect_test(std::atoi(argv[1]), 10000);
+    } else {
+        intersect_test(std::atoi(argv[1]), std::atoi(argv[2]));
+    }
+    return EXIT_SUCCESS;
 }
