@@ -30,19 +30,22 @@
 
 // Fixed width bitmaps
 struct TWK_bitmap_t {
-    TWK_ALIGN(64) uint64_t* data;
-    TWK_ALIGN(64) uint32_t* alts;
+    uint64_t* data;
+    uint32_t* alts;
     uint32_t n_bitmap: 30, own_data: 1, own_alts: 1;
     uint32_t n_alts: 31, n_alts_set: 1, n_missing;
     uint32_t m_alts;
+    uint32_t id; // block id
 };
 
 static
 TWK_bitmap_t* TWK_bitmap_new(const uint32_t n_samples) {
     TWK_bitmap_t* all = (TWK_bitmap_t*)malloc(sizeof(TWK_bitmap_t));
     if (all == NULL) return NULL;
+    uint32_t alignment = TWK_get_alignment();
     uint32_t n_bitmap = ceil(n_samples / 64.0);
-    all->data = (uint64_t*)calloc(n_bitmap, sizeof(uint64_t));
+    // all->data = (uint64_t*)calloc(n_bitmap, sizeof(uint64_t));
+    all->data = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
     all->alts = NULL;
     all->n_bitmap = n_bitmap;
     all->own_data = 1;
@@ -51,23 +54,33 @@ TWK_bitmap_t* TWK_bitmap_new(const uint32_t n_samples) {
     all->n_alts_set = 0;
     all->n_missing = 0;
     all->m_alts = 0;
+    all->id = 0;
     return all;
 }
 
 static
 void TWK_bitmap_free(TWK_bitmap_t* bitmap) {
     if (bitmap == NULL) return;
-    if (bitmap->own_data) free(bitmap->data);
+    if (bitmap->own_data) TWK_aligned_free(bitmap->data);
     if (bitmap->own_alts) free(bitmap->alts);
     free(bitmap);
 }
 
 static 
-int TWK_bitmap_add(TWK_bitmap_t* bitmap, const uint32_t value) {
+int TWK_bitmap_add(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values) {
     if (bitmap == NULL) return -1;
-    bitmap->n_alts += (bitmap->data[value / 64] & 1ULL << (value % 64)) == 0;
-    bitmap->data[value / 64] |= 1ULL << (value % 64);
-    return value;
+    if (values == NULL) return -2;
+    if (n_values == 0) return -3;
+
+    uint32_t adjust = bitmap->id * 8192;
+
+    for (int i = 0; i < n_values; ++i) {
+        assert(adjust <= values[i]);
+        uint32_t v = values[i] - adjust;
+        bitmap->n_alts += (bitmap->data[v / 64] & 1ULL << (v % 64)) == 0;
+        bitmap->data[v / 64] |= 1ULL << (v % 64);
+    }
+    return n_values;
 }
 
 static 
@@ -91,21 +104,75 @@ int TWK_bitmap_add_with_alts(TWK_bitmap_t* bitmap, const uint32_t* values, const
         bitmap->own_alts = 1;
     }
 
+    uint32_t adjust = bitmap->id * 8192;
+
     for (int i = 0; i < n_values; ++i) {
-        bitmap->data[values[i] / 64] |= 1ULL << (values[i] % 64);
+        assert(adjust <= values[i]);
+        uint32_t v = values[i] - adjust;
+        bitmap->data[v / 64] |= 1ULL << (v % 64);
         
-        int is_unique = (bitmap->data[values[i] / 64] & 1ULL << (values[i] % 64)) == 0;
+        int is_unique = (bitmap->data[v / 64] & 1ULL << (v % 64)) == 0;
         if (is_unique) {
-            bitmap->alts[bitmap->n_alts] = values[i];
+            bitmap->alts[bitmap->n_alts] = v;
             ++bitmap->n_alts;
         }
     }
     return n_values;
 }
 
+static 
+int TWK_bitmap_clear(TWK_bitmap_t* bitmap) {
+    if (bitmap == NULL) return -1;
+    memset(bitmap->data, 0, sizeof(uint32_t)*bitmap->n_bitmap);
+    bitmap->n_alts = 0;
+    return 1;
+}
+
 // use TWK_bitmap_add if value > threshold
 // otherwise use TWK_bitmap_add_with_alts
 
+
+class TWK_bitmap_container {
+public:
+    TWK_bitmap_container(const uint32_t n, const uint32_t m) :
+        n_samples(n), m_vectors(m),
+        n_bitmaps_vector(ceil(n_samples / 64.0)),
+        bitmaps(new TWK_bitmap_t*[m_vectors]),
+        store_alts(true),
+        alt_limit(0)
+    {
+        if (n > 1024) {
+            alt_limit = n / 200 < 5 ? 5 : n / 200;
+            store_alts = true;
+        } else store_alts = false;
+        
+        for (int i = 0; i < m_vectors; ++i)
+            bitmaps[i] = TWK_bitmap_new(n_samples);
+    }
+
+    ~TWK_bitmap_container() {
+        for (int i = 0; i < m_vectors; ++i)
+            TWK_bitmap_free(bitmaps[i]);
+        delete[] bitmaps;
+    }
+
+    void Add(const uint32_t pos, const uint32_t* vals, const uint32_t n_vals) {
+        if (store_alts) TWK_bitmap_add_with_alts(bitmaps[pos], vals, n_vals);
+        else TWK_bitmap_add(bitmaps[pos], vals, n_vals);
+    }
+
+    void clear() {
+        for (int i = 0; i < m_vectors; ++i)
+            TWK_bitmap_clear(bitmaps[i]);
+    }
+
+public:
+    uint32_t n_samples, m_vectors;
+    uint32_t n_bitmaps_vector;
+    bool store_alts;
+    uint32_t alt_limit;
+    TWK_bitmap_t** bitmaps;
+};
 //
 
 struct bitmap_t {

@@ -458,6 +458,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
         bitmap_container_t bcont(n_variants,n_samples);
         bitmap_container_t bcont2(n_variants,n_samples,true,true);
+        TWK_bitmap_container twk(n_samples, n_variants);
 
         for (int a = 0; a < n_alts.size(); ++a) {
             // break if no more data
@@ -480,6 +481,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
             bcont.clear();
             bcont2.clear();
+            twk.clear();
 
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -494,7 +496,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
             // Positional information
             std::vector< std::vector<uint32_t> > pos(n_variants, std::vector<uint32_t>());
-            std::vector< std::vector<uint16_t> > pos16(n_variants, std::vector<uint16_t>());
+            // std::vector< std::vector<uint16_t> > pos16(n_variants, std::vector<uint16_t>());
 
             std::random_device rd;  // obtain a random number from hardware
             std::mt19937 eng(rd()); // seed the generator
@@ -514,8 +516,8 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 // Sort to simplify
                 std::sort(pos[j].begin(), pos[j].end());
 
-                for (int p = 0; p < pos[j].size(); ++p)
-                    pos16[j].push_back(pos[j][p]);
+                // for (int p = 0; p < pos[j].size(); ++p)
+                //     pos16[j].push_back(pos[j][p]);
 
                 // Assertion of sortedness.
                 for (int p = 1; p < pos[j].size(); ++p) {
@@ -531,6 +533,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                     bcont.Add(j,pos[j][p]);
                 }
                 bcont2.Add(j,pos[j]);
+                twk.Add(j, &pos[j][0], pos[j].size());
 #endif
                 vals2 += n_ints_sample;
             }
