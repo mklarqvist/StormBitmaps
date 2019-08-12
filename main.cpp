@@ -426,7 +426,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
 
     
     // Setup
-    std::vector<uint32_t> samples = {128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
+    std::vector<uint32_t> samples = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
     
     std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
@@ -444,7 +444,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         const uint64_t memory_used = n_ints_sample*n_variants*sizeof(uint64_t);
         std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
 
-        uint64_t* vals = (uint64_t*)aligned_malloc_port(SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t));
+        uint64_t* vals = (uint64_t*)TWK_aligned_malloc(SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t));
         
         // 1:500, 1:167, 1:22
         // std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
@@ -462,7 +462,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
         for (int a = 0; a < n_alts.size(); ++a) {
              // break if no more data
              if (n_alts[a] == 0) {
-                std::cerr << "there's no alts..." << std::endl;
+                std::cerr << "there are no alts..." << std::endl;
                 break;
             }
 
@@ -633,7 +633,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = intersect(vals, n_variants, n_ints_sample);
+                uint64_t cont_count = TWK_intersect(vals, n_variants, n_ints_sample);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -654,7 +654,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
                 uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = intersect_list(bcont2.bmaps, n_variants, n_ints_sample, bcont2.n_alts, bcont2.alt_positions, bcont2.alt_offsets, cutoff);
+                uint64_t cont_count = TWK_intersect_list(bcont2.bmaps, n_variants, n_ints_sample, bcont2.n_alts, bcont2.alt_positions, bcont2.alt_offsets, cutoff);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -723,7 +723,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx256",m3_0);
 
-            bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m3_block3 = fwrapper_blocked<&TWK_intersect_avx2>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx256-blocked-" + std::to_string(optimal_b), m3_block3);
 #endif
             // SIMD SSE4
@@ -735,12 +735,12 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             // bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-sse4-csa",m2);
 
-            bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m2_block3 = fwrapper_blocked<&TWK_intersect_sse4>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-sse4-csa-blocked-" + std::to_string(optimal_b), m2_block3);
 #endif
 
             if (n_alts[a] <= 300) {
-                bench_t m4 = flwrapper<&intersect_bitmaps_scalar_list>(n_variants, vals, n_ints_sample, pos);
+                bench_t m4 = flwrapper<&TWK_intersect_scalar_list>(n_variants, vals, n_ints_sample, pos);
                 PRINT("bitmap-scalar-skip-list",m4);
 
                 /*
@@ -820,7 +820,7 @@ void intersect_test(uint32_t n, uint32_t cycles = 1) {
             delete[] roaring;
 #endif
         }
-        aligned_free_port(vals);
+        TWK_aligned_free(vals);
     }
 }
 
