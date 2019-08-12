@@ -689,7 +689,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             // bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx512-csa",m8_2);
 
-            bench_t m8_avx512_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m8_avx512_block = fwrapper_blocked<&TWK_intersect_avx512>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
 #endif
 
