@@ -538,7 +538,7 @@ uint64_t TWK_bitmap_cont_intersect_cardinality(const TWK_bitmap_cont_t* TWK_REST
     return count;
 }
 
-uint64_t TWK_bitmap_cont_intersect_cardinality_buffer(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, uint32_t* out) {
+uint64_t TWK_bitmap_cont_intersect_cardinality_premade(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out) {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
     if (bitmap1->n_bitmaps == 0) return 0;
@@ -546,12 +546,12 @@ uint64_t TWK_bitmap_cont_intersect_cardinality_buffer(const TWK_bitmap_cont_t* T
     if (out == NULL) return 0;
 
     uint32_t ret = intersect_vector32_unsafe(bitmap1->block_ids, bitmap2->block_ids, bitmap1->n_bitmaps, bitmap2->n_bitmaps, out);
-    const TWK_intersect_func f = TWK_get_intersect_func(bitmap1->n_bitmaps);
+    // const TWK_intersect_func f = TWK_get_intersect_func(bitmap1->n_bitmaps);
 
     uint64_t count = 0;
     for (uint32_t i = 0; i < ret; i += 2) {
         assert(bitmap1->bitmaps[out[i+0]].id == bitmap2->bitmaps[out[i+1]].id);
-        count += TWK_bitmap_intersect_cardinality_func(&bitmap1->bitmaps[out[i+0]], &bitmap2->bitmaps[out[i+1]], f);
+        count += TWK_bitmap_intersect_cardinality_func(&bitmap1->bitmaps[out[i+0]], &bitmap2->bitmaps[out[i+1]], func);
     }
     
     return count;
@@ -617,23 +617,98 @@ int TWK_cont_clear(TWK_cont_t* bitmap) {
     return 1;
 }
 
-uint64_t TWK_cont_intersect_cardinality(TWK_cont_t* bitmap) {
+uint64_t TWK_cont_pairw_intersect_cardinality(TWK_cont_t* bitmap) {
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*TWK_DEFAULT_SCALAR_THRESHOLD);
+    const TWK_intersect_func f = TWK_get_intersect_func(ceil(TWK_DEFAULT_BLOCK_SIZE/64.0));
 
     printf("running for: %u vectors\n", bitmap->n_conts);
 
     uint64_t total = 0;
     for (uint32_t i = 0; i < bitmap->n_conts; ++i) {
         for (uint32_t j = i + 1; j < bitmap->n_conts; ++j) {
-            total += TWK_bitmap_cont_intersect_cardinality_buffer(&bitmap->conts[i], &bitmap->conts[j], out);
+            total += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[i], &bitmap->conts[j], f, out);
         }
     }
 
     free(out);
 
     return total;
+}
+
+uint64_t TWK_cont_pairw_intersect_cardinality_blocked(TWK_cont_t* bitmap, uint32_t bsize) {
+    if (bitmap == NULL) return -1;
+
+    uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*TWK_DEFAULT_SCALAR_THRESHOLD);
+    const TWK_intersect_func f = TWK_get_intersect_func(ceil(TWK_DEFAULT_BLOCK_SIZE/64.0));
+    
+    if (bsize == 0) {
+        uint64_t tot = 0;
+        for (uint32_t i = 0; i < bitmap->n_conts; ++i) {
+            tot += TWK_bitmap_cont_serialized_size(&bitmap->conts[i]);
+        }
+        uint32_t average_size = tot / bitmap->n_conts;
+        bsize = ceil((double)TWK_CACHE_BLOCK_SIZE / average_size);
+        printf("guestimating block-size to %u\n", bsize);
+    }
+    
+    bsize = bsize < 5 ? 5 : bsize;
+
+    printf("running for: %u vectors\n", bitmap->n_conts);
+
+    uint64_t count = 0;
+    uint32_t i = 0;
+
+    for (/**/; i + bsize <= bitmap->n_conts; i += bsize) {
+        // diagonal component
+        for (uint32_t j = 0; j < bsize; ++j) {
+            for (uint32_t jj = j + 1; jj < bsize; ++jj) {
+                // count += (*func)(bitmaps[i+j].data, bitmaps[i+jj].data, n_bitmaps_sample);
+                count += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[i+j], &bitmap->conts[i+jj], f, out);
+            }
+        }
+
+        // square component
+        uint32_t curi = i;
+        uint32_t j = curi + bsize;
+        for (/**/; j + bsize <= bitmap->n_conts; j += bsize) {
+            for (uint32_t ii = 0; ii < bsize; ++ii) {
+                for (uint32_t jj = 0; jj < bsize; ++jj) {
+                    // count += (*func)(bitmaps[curi+ii].data, bitmaps[j+jj].data, n_bitmaps_sample);
+                    count += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[curi+ii], &bitmap->conts[j+jj], f, out);
+                }
+            }
+        }
+
+        // residual
+        for (/**/; j < bitmap->n_conts; ++j) {
+            for (uint32_t jj = 0; jj < bsize; ++jj) {
+                // count += (*func)(bitmaps[curi+jj].data, bitmaps[j].data, n_bitmaps_sample);
+                count += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[curi+jj], &bitmap->conts[j], f, out);
+            }
+        }
+    }
+    // residual tail
+    for (/**/; i < bitmap->n_conts; ++i) {
+        for (uint32_t j = i + 1; j < bitmap->n_conts; ++j) {
+            // count += (*func)(bitmaps[i].data, bitmaps[j].data, n_bitmaps_sample);
+            count += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[i], &bitmap->conts[j], f, out);
+        }
+    }
+
+    // return count;
+
+    // uint64_t total = 0;
+    // for (uint32_t i = 0; i < bitmap->n_conts; ++i) {
+    //     for (uint32_t j = i + 1; j < bitmap->n_conts; ++j) {
+    //         count += TWK_bitmap_cont_intersect_cardinality_premade(&bitmap->conts[i], &bitmap->conts[j], out);
+    //     }
+    // }
+
+    free(out);
+
+    return count;
 }
 
 uint64_t TWK_cont_intersect_cardinality_square(const TWK_cont_t* TWK_RESTRICT bitmap1, const TWK_cont_t* TWK_RESTRICT bitmap2);

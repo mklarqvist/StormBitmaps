@@ -569,13 +569,16 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
             //
 
+            uint32_t optimal_b = TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8);
+            optimal_b = optimal_b < 5 ? 5 : optimal_b;
+
             // Debug
             std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
             // uint64_t d = 0, diag = 0;
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = TWK_cont_intersect_cardinality(twk2);
+                uint64_t cont_count = TWK_cont_pairw_intersect_cardinality(twk2);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -587,6 +590,23 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 b.cpu_cycles = cycles_end - cycles_start;
                 // std::cerr << "[cnt] count=" << cont_count << std::endl;
                 PRINT("storm",b);
+            }
+
+            {
+                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+                const uint64_t cycles_start = get_cpu_cycles();
+                uint64_t cont_count = TWK_cont_pairw_intersect_cardinality_blocked(twk2,0);
+                const uint64_t cycles_end = get_cpu_cycles();
+
+                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+                b.cpu_cycles = cycles_end - cycles_start;
+                // std::cerr << "[cnt] count=" << cont_count << std::endl;
+                PRINT("storm-blocked",b);
             }
 
             {
@@ -609,7 +629,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = bcont.intersect_blocked(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8));
+                uint64_t cont_count = bcont.intersect_blocked(optimal_b);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -620,7 +640,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
                 b.cpu_cycles = cycles_end - cycles_start;
                 // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                PRINT("test-opt-blocked-" + std::to_string(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8)),b);
+                PRINT("test-opt-blocked-" + std::to_string(optimal_b),b);
             }
 
             {
@@ -643,7 +663,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = bcont2.intersect_blocked_cont(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8));
+                uint64_t cont_count = bcont2.intersect_blocked_cont(optimal_b);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -654,7 +674,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
                 b.cpu_cycles = cycles_end - cycles_start;
                 // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                PRINT("test-opt-cont-blocked-" + std::to_string(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8)),b);
+                PRINT("test-opt-cont-blocked-" + std::to_string(optimal_b),b);
             }
 
             // {
@@ -677,7 +697,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             // {
             //     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             //     const uint64_t cycles_start = get_cpu_cycles();
-            //     uint64_t cont_count = bcont2.intersect_cont_blocked_auto(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8));
+            //     uint64_t cont_count = bcont2.intersect_cont_blocked_auto(bsize);
             //     const uint64_t cycles_end = get_cpu_cycles();
 
             //     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -688,7 +708,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             //     b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
             //     b.cpu_cycles = cycles_end - cycles_start;
             //     // std::cerr << "[cnt] count=" << cont_count << std::endl;
-            //     PRINT("test-avx2-cont-auto-blocked-" + std::to_string(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8)),b);
+            //     PRINT("test-avx2-cont-auto-blocked-" + std::to_string(bsize),b);
             // }
 
             {
@@ -715,7 +735,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                 uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = bcont2.intersect_cont_blocked_auto(TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8));
+                uint64_t cont_count = bcont2.intersect_cont_blocked_auto(optimal_b);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -732,7 +752,6 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
             const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
-            uint32_t optimal_b = TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8);
 
 #if SIMD_VERSION >= 6
             // SIMD AVX512
@@ -764,6 +783,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             std::cerr << "Memory used by roaring=" << roaring_bytes_used << "(" << (float)memory_used/roaring_bytes_used << ")" << std::endl;
 
             uint32_t roaring_optimal_b = TWK_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+            roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
 
             bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
             PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);

@@ -83,7 +83,7 @@ void TWK_bitmap_cont_free(TWK_bitmap_cont_t* bitmap);
 int TWK_bitmap_cont_add(TWK_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int TWK_bitmap_cont_clear(TWK_bitmap_cont_t* bitmap);
 uint64_t TWK_bitmap_cont_intersect_cardinality(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_bitmap_cont_intersect_cardinality_buffer(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, uint32_t* out);
+uint64_t TWK_bitmap_cont_intersect_cardinality_premade(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out);
 // use TWK_bitmap_add if value > threshold
 // otherwise use TWK_bitmap_add_with_alts
 
@@ -92,7 +92,8 @@ TWK_cont_t* TWK_cont_new();
 void TWK_cont_free(TWK_cont_t* bitmap);
 int TWK_cont_add(TWK_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int TWK_cont_clear(TWK_cont_t* bitmap);
-uint64_t TWK_cont_intersect_cardinality(TWK_cont_t* bitmap);
+uint64_t TWK_cont_pairw_intersect_cardinality(TWK_cont_t* bitmap);
+uint64_t TWK_cont_pairw_intersect_cardinality_blocked(TWK_cont_t* bitmap, uint32_t bsize);
 uint64_t TWK_cont_intersect_cardinality_square(const TWK_cont_t* TWK_RESTRICT bitmap1, const TWK_cont_t* TWK_RESTRICT bitmap2);
 
 //  c++ stuff

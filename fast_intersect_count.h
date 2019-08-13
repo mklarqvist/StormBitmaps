@@ -15,8 +15,8 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-#ifndef FAST_INTERSECT_COUNT_H_
-#define FAST_INTERSECT_COUNT_H_
+#ifndef TWK_H_9827563662203
+#define TWK_H_9827563662203
 
 /* *************************************
 *  Includes
@@ -1402,4 +1402,4 @@ uint64_t TWK_wrapper_diag_list_blocked(const uint32_t n_vectors,
 } /* extern "C" */
 #endif
 
-#endif /* FAST_INTERSECT_COUNT_H_ */
+#endif /* TWK_H_9827563662203 */
