@@ -20,7 +20,7 @@ OPTFLAGS  := -O3 -march=native
 CFLAGS     = -std=c99 $(OPTFLAGS) $(DEBUG_FLAGS)
 CPPFLAGS   = -std=c++0x $(OPTFLAGS) $(DEBUG_FLAGS)
 CPP_SOURCE = benchmark.cpp classes.cpp
-C_SOURCE   = experimental.c
+C_SOURCE   = 
 OBJECTS    = $(CPP_SOURCE:.cpp=.o) $(C_SOURCE:.c=.o)
 
 # Default target
@@ -33,7 +33,7 @@ all: benchmark
 %.o: %.cpp
 	$(CXX) $(CPPFLAGS) -c -o $@ $<
 
-benchmark.o: benchmark.cpp classes.h fast_intersect_count.h classes.o experimental.c
+benchmark.o: benchmark.cpp classes.h fast_intersect_count.h classes.o
 	$(CXX) $(CPPFLAGS) -I/home/marcus/CRoaring/include -c -o $@ $<
 
 benchmark: fast_intersect_count.o benchmark.o classes.h fast_intersect_count.h classes.o

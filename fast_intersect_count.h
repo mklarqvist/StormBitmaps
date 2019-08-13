@@ -751,10 +751,10 @@ uint64_t TWK_intersect_lookup_avx2_func(const uint8_t* TWK_RESTRICT data1,
 
     uint64_t result = 0;
 
-    result += static_cast<uint64_t>(_mm256_extract_epi64(acc, 0));
-    result += static_cast<uint64_t>(_mm256_extract_epi64(acc, 1));
-    result += static_cast<uint64_t>(_mm256_extract_epi64(acc, 2));
-    result += static_cast<uint64_t>(_mm256_extract_epi64(acc, 3));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 0));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 1));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 2));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 3));
 
     for (/**/; i < n; i++) {
         result += TWK_lookup8bit[data1[i] & data2[i]];

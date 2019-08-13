@@ -458,7 +458,12 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
         bitmap_container_t bcont(n_variants,n_samples);
         bitmap_container_t bcont2(n_variants,n_samples,true,true);
-        TWK_bitmap_container twk(n_samples, n_variants);
+        // TWK_bitmap_container twk(n_samples, n_variants);
+        // TWK_bitmap_cont_t** twk = new TWK_bitmap_cont_t*[n_variants];
+        // for (int i = 0; i < n_variants; ++i)
+            // twk[i] = TWK_bitmap_cont_new();
+        TWK_cont_t* twk2 = TWK_cont_new();
+        
 
         for (int a = 0; a < n_alts.size(); ++a) {
             // break if no more data
@@ -481,7 +486,11 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
             bcont.clear();
             bcont2.clear();
-            twk.clear();
+            // twk.clear();
+            // for (int i = 0; i < n_variants; ++i) {
+                // TWK_bitmap_cont_clear(twk[i]);
+            // }
+            TWK_cont_clear(twk2);
 
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -533,11 +542,19 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
                     bcont.Add(j,pos[j][p]);
                 }
                 bcont2.Add(j,pos[j]);
-                twk.Add(j, &pos[j][0], pos[j].size());
+                // twk.Add(j, &pos[j][0], pos[j].size());
+                // TWK_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
+                TWK_cont_add(twk2, &pos[j][0], pos[j].size());
 #endif
                 vals2 += n_ints_sample;
             }
             std::cerr << "Done!" << std::endl;
+
+            // uint32_t total_screech = 0;
+            // for (uint32_t i = 0; i < n_variants; ++i) {
+            //     total_screech += TWK_bitmap_cont_serialized_size(twk[i]);
+            // }
+            // std::cerr << "Memory used by screech=" << total_screech << "/" << memory_used << " (" << (double)memory_used/total_screech << "-fold)" << std::endl;
 
             uint64_t int_comparisons = 0;
             for (int k = 0; k < n_variants; ++k) {
@@ -550,10 +567,28 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
 
             const uint64_t n_total_integer_cmps = n_intersects * n_ints_sample;
             std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
+            //
 
             // Debug
             std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
             // uint64_t d = 0, diag = 0;
+            {
+                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+                const uint64_t cycles_start = get_cpu_cycles();
+                uint64_t cont_count = TWK_cont_intersect_cardinality(twk2);
+                const uint64_t cycles_end = get_cpu_cycles();
+
+                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+                b.cpu_cycles = cycles_end - cycles_start;
+                // std::cerr << "[cnt] count=" << cont_count << std::endl;
+                PRINT("storm",b);
+            }
+
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
@@ -846,6 +881,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
             delete[] roaring;
 #endif
         }
+        // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
+        // delete[] twk;
+        TWK_cont_free(twk2);
         TWK_aligned_free(vals);
     // }
 }

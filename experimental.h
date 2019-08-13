@@ -38,19 +38,19 @@
  * @param v2
  * @return
  */
-uint64_t intersect_raw_naive(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_avx2_broadcast(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_binary(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_roaring_cardinality(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_vector16_cardinality_roar(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_naive(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_naive_roaring(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_sse4_broadcast(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_avx2_broadcast(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_gallop(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_gallop_sse4(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_raw_binary(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_roaring_cardinality(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t intersect_vector16_cardinality_roar(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
 
 
 /****************************
