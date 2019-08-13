@@ -171,6 +171,7 @@ public:
     uint32_t n_bitmaps_vector;
     bool store_alts;
     uint32_t alt_limit;
+    uint32_t n_bitmaps, m_bitmaps;
     TWK_bitmap_t** bitmaps;
 };
 //
