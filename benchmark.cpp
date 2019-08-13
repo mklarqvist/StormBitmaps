@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include <bitset>
+#include <sstream>
 
 #define USE_ROARING
 
@@ -412,10 +413,6 @@ bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_vals_ac
 }
 #endif
 
-void intersect_test(uint32_t n_samples, uint32_t n_variants) {
-    // uint64_t* a = nullptr;
-    // intersect(a,0,0);
-
 #define PRINT(name,bench) std::cout << n_samples << "\t" << n_alts[a] << "\t" << name << "\t" << bench.milliseconds << "\t" << bench.cpu_cycles << "\t" << bench.count << "\t" << \
         bench.throughput << "\t" << \
         (bench.milliseconds == 0 ? 0 : (int_comparisons*1000.0 / bench.milliseconds / 1000000.0)) << "\t" << \
@@ -424,7 +421,159 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
         (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_total_integer_cmps) << "\t" << \
         (bench.cpu_cycles == 0 ? 0 : bench.cpu_cycles / (double)n_intersects) << std::endl
 
-    
+void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_t>* loads) {
+    std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
+    std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
+
+    std::vector<uint32_t> n_alts;
+    if (loads == nullptr) {
+        n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
+    } else {
+        n_alts = *loads;
+    }
+
+    // no use
+    uint64_t n_intersects = 0;
+    uint64_t n_total_integer_cmps = 0;
+    uint64_t int_comparisons = 0;
+
+    TWK_cont_t* twk2 = TWK_cont_new();
+
+    for (int a = 0; a < n_alts.size(); ++a) {
+        // break if no more data
+        if (n_alts[a] == 0) {
+            // Make sure we always compute n_alts = 1
+            if (a != 0) {
+                if (n_alts[a-1] != 1) 
+                    n_alts[a] = 1;
+            } else {
+                std::cerr << "there are no alts..." << std::endl;
+                break;
+            }
+        }
+
+        // Break if data has converged
+        if (a != 0) {
+            if (n_alts[a] == n_alts[a-1]) 
+                break;
+        }
+
+
+        TWK_cont_clear(twk2);
+
+#ifdef USE_ROARING
+        roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
+        for (int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
+#endif
+
+        // PRNG
+        std::uniform_int_distribution<uint32_t> distr(0, n_samples-1); // right inclusive
+
+        // Positional information
+        std::vector<uint32_t> pos;
+        
+        std::random_device rd;  // obtain a random number from hardware
+        std::mt19937 eng(rd()); // seed the generator
+
+        // Draw
+        std::cerr << "Constructing..."; std::cerr.flush();
+        
+        // For each variant site.
+        for (uint32_t j = 0; j < n_variants; ++j) {
+            // Generate n_alts[a] random positions.
+            for (uint32_t i = 0; i < n_alts[a]; ++i) {
+                uint64_t val = distr(eng);
+                pos.push_back(val);
+            }
+
+            // Sort to simplify
+            std::sort(pos.begin(), pos.end());
+            pos.erase( unique( pos.begin(), pos.end() ), pos.end() );
+
+#ifdef USE_ROARING
+            for (int p = 0; p < pos.size(); ++p) {
+                roaring_bitmap_add(roaring[j], pos[p]);
+            }
+#endif
+            TWK_cont_add(twk2, &pos[0], pos.size());
+            pos.clear();
+        }
+        std::cerr << "Done!" << std::endl;
+
+        // Debug
+        std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
+        // uint64_t d = 0, diag = 0;
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = TWK_cont_pairw_intersect_cardinality(twk2);
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = 1;
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("storm",b);
+        }
+
+        {
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            const uint64_t cycles_start = get_cpu_cycles();
+            uint64_t cont_count = TWK_cont_pairw_intersect_cardinality_blocked(twk2,0);
+            const uint64_t cycles_end = get_cpu_cycles();
+
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+            bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+            b.throughput = 1;
+            b.cpu_cycles = cycles_end - cycles_start;
+            // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            PRINT("storm-blocked",b);
+        }
+
+
+#ifdef USE_ROARING
+        // for (int k = 0; k < block_range.size(); ++k) {
+        //     bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, block_range[k]);
+        //     PRINT("roaring-blocked-" + std::to_string(block_range[k]),m8_2_block);
+        // }
+
+        // bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
+        // PRINT("roaring",broaring);
+
+        uint64_t roaring_bytes_used = 0;
+        for (int k = 0; k < n_variants; ++k) {
+            roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
+        }
+        std::cerr << "Memory used by roaring=" << roaring_bytes_used << std::endl;
+
+        uint32_t roaring_optimal_b = TWK_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+        roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
+
+        bench_t m8_2_block = froarwrapper_blocked(n_variants, 1, roaring, roaring_optimal_b);
+        PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
+#endif
+#ifdef USE_ROARING
+        for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
+        delete[] roaring;
+#endif
+    }
+    // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
+    // delete[] twk;
+    TWK_cont_free(twk2);
+
+}
+
+void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_t>* loads) {
+    // uint64_t* a = nullptr;
+    // intersect(a,0,0);
+
     // Setup
     // std::vector<uint32_t> samples = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
@@ -451,7 +600,14 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants) {
         // std::vector<uint32_t> n_alts = {21,269,9506}; // HRC dist
 
         // std::vector<uint32_t> n_alts = {n_samples/1000, n_samples/500, n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
-        std::vector<uint32_t> n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
+        std::vector<uint32_t> n_alts;
+        if (loads == nullptr) {
+            n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
+        } else {
+            n_alts = *loads;
+        }
+        
+
         // std::vector<uint32_t> n_alts = {n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
@@ -914,11 +1070,24 @@ const char* usage(void) {
         "About:   Computes sum(popcnt(A & B)) for the all-vs-all comparison of N integer\n"
         "         lists bounded by [0, M). This benchmark will compute this statistics using\n"
         "         different algorithms.\n"
-        "Usage:   benchmark <M> <N> \n"
+        "Usage:   benchmark <M> <N> [v1[,v2]] \n"
         "\n"
         "Example:\n"
-        "   benchmark 4092 10000 \n"
+        "   benchmark 4092 10000\n"
+        "   benchmark 4092 1,10,100,1000\n"
         "\n";
+}
+
+std::vector<std::string> split(const std::string& s, char delimiter)
+{
+   std::vector<std::string> tokens;
+   std::string token;
+   std::istringstream tokenStream(s);
+   while (std::getline(tokenStream, token, delimiter))
+   {
+      tokens.push_back(token);
+   }
+   return tokens;
 }
 
 int main(int argc, char **argv) { 
@@ -927,10 +1096,29 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    if (argc == 2) {
-        intersect_test(std::atoi(argv[1]), 10000);
-    } else {
-        intersect_test(std::atoi(argv[1]), std::atoi(argv[2]));
+    std::vector<uint32_t>* loads = nullptr;
+
+    if (argc > 2) {
+        std::string s(argv[3]);
+        std::vector<std::string> ret = split(s, ',');
+        loads = new std::vector<uint32_t>();
+        for (int i = 0; i < ret.size(); ++i) {
+            loads->push_back(std::atoi(ret[i].c_str()));
+            // std::cerr << ret[i] << std::endl;
+        }
     }
+    
+    if (argc == 2) {
+        intersect_test(std::atoi(argv[1]), 10000, loads);
+    } else {
+        uint64_t n_samples = std::atoi(argv[1]);
+        std::cerr << "n_samples is " << n_samples << std::endl;
+        if (n_samples < 256000) {
+            intersect_test(n_samples, std::atoi(argv[2]), loads);
+        } else {
+            benchmark_large(n_samples, std::atoi(argv[2]), loads);
+        }
+    }
+    delete loads;
     return EXIT_SUCCESS;
 }
