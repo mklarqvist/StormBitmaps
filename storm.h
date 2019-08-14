@@ -30,7 +30,7 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include "fast_intersect_count.h"
+#include "set_algebra.h"
 
 /* ===   Compiler specifics   === */
 

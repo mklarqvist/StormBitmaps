@@ -14,7 +14,7 @@
 #include <roaring/roaring.h>
 #endif
 
-#include "fast_intersect_count.h"
+#include "set_algebra.h"
 #include "storm.h"
 #include "classes.h"
 #include "experimental.h"

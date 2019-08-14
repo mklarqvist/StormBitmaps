@@ -33,11 +33,11 @@ all: benchmark
 %.o: %.cpp
 	$(CXX) $(CPPFLAGS) -c -o $@ $<
 
-benchmark.o: benchmark.cpp classes.h fast_intersect_count.h classes.o storm.h storm.o experimental.o experimental.h
+benchmark.o: benchmark.cpp classes.h set_algebra.h classes.o storm.h storm.o experimental.o experimental.h
 	$(CXX) $(CPPFLAGS) -I/home/marcus/CRoaring/include -c -o $@ $<
 
-benchmark: fast_intersect_count.o benchmark.o classes.h fast_intersect_count.h classes.o storm.h storm.o experimental.h experimental.o
-	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ fast_intersect_count.o storm.o experimental.o classes.o benchmark.o -o benchmark -lroaring
+benchmark: benchmark.o classes.h set_algebra.h classes.o storm.h storm.o experimental.h experimental.o
+	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ storm.o experimental.o classes.o benchmark.o -o benchmark -lroaring
 
 clean:
 	rm -f $(OBJECTS)

@@ -23,7 +23,7 @@
 // #include <iostream>//debug
 // #include <bitset> //
 
-#include "fast_intersect_count.h"
+#include "set_algebra.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
