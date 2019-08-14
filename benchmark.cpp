@@ -989,7 +989,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 PRINT("bitmap-scalar-skip-list",m4);
             }
 
-            if (n_alts[a] <= 4096) {
+            if (n_samples <= 4096) {
                 
                 // bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
                 // PRINT("bitmap-scalar-popcnt",m1);
