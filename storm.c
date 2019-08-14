@@ -342,7 +342,7 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
     } else if (bitmap1->n_bitmap && bitmap2->n_bitmap) {
         // bitmap-bitmap comparison
         const uint32_t n_bitmaps = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
-        const STORM_intersect_func f = STORM_get_intersect_func(n_bitmaps);
+        const STORM_compute_func f = STORM_get_intersect_func(n_bitmaps);
         return (*f)(bitmap1->data, bitmap2->data, n_bitmaps);
     } else {
         exit(EXIT_FAILURE);
@@ -353,7 +353,7 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
 
 uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, 
                                                STORM_bitmap_t* STORM_RESTRICT bitmap2, 
-                                               const STORM_intersect_func func)
+                                               const STORM_compute_func func)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
@@ -510,7 +510,7 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
                                                  bitmap2->n_bitmaps, 
                                                  out);
     // Retrieve optimal intersect function.
-    const STORM_intersect_func f = STORM_get_intersect_func(bitmap1->n_bitmaps);
+    const STORM_compute_func f = STORM_get_intersect_func(bitmap1->n_bitmaps);
 
     uint64_t count = 0;
     for (uint32_t i = 0; i < ret; i += 2) {
@@ -525,7 +525,7 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
 
 uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, 
                                                        const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, 
-                                                       const STORM_intersect_func func, 
+                                                       const STORM_compute_func func, 
                                                        uint32_t* out)
 {
     if (bitmap1 == NULL) return 0;
@@ -614,7 +614,7 @@ uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap) {
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const STORM_intersect_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_compute_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
 
     // printf("running for: %u vectors\n", bitmap->n_conts);
 
@@ -634,7 +634,7 @@ uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsi
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const STORM_intersect_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_compute_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
     
     if (bsize == 0) {
         uint64_t tot = 0;

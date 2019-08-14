@@ -5,7 +5,7 @@
 uint64_t bitmap_container_t::intersect_blocked(uint32_t bsize) const {
     uint64_t count = 0;
     uint32_t i = 0;
-    const STORM_intersect_func func = STORM_get_intersect_func(n_bitmaps_sample);
+    const STORM_compute_func func = STORM_get_intersect_func(n_bitmaps_sample);
 
     for (/**/; i + bsize <= n_bitmaps; i += bsize) {
         // diagonal component
@@ -45,7 +45,7 @@ uint64_t bitmap_container_t::intersect_blocked(uint32_t bsize) const {
 
 uint64_t bitmap_container_t::intersect() const {
     uint64_t count = 0;
-    const STORM_intersect_func func = STORM_get_intersect_func(n_bitmaps_sample);
+    const STORM_compute_func func = STORM_get_intersect_func(n_bitmaps_sample);
 
     for (int i = 0; i < n_bitmaps; ++i) {
         for (int j = i+1; j < n_bitmaps; ++j) {

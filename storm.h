@@ -101,7 +101,7 @@ struct STORM_contiguous_s {
     uint64_t n_data, m_data;
     uint64_t n_samples;
     uint32_t n_bitmaps_vector; // _MUST_ be divisible by largest alignment!
-    STORM_intersect_func intsec_func; // determined during ctor
+    STORM_compute_func intsec_func; // determined during ctor
     uint32_t alignment; // determined during ctor
 };
 
@@ -113,7 +113,7 @@ int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint3
 int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
 uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2);
-uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2, const STORM_intersect_func func);
+uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2, const STORM_compute_func func);
 int STORM_bitmap_clear(STORM_bitmap_t* bitmap);
 uint32_t STORM_bitmap_serialized_size(STORM_bitmap_t* bitmap);
 
@@ -124,7 +124,7 @@ void STORM_bitmap_cont_free(STORM_bitmap_cont_t* bitmap);
 int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_bitmap_cont_clear(STORM_bitmap_cont_t* bitmap);
 uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2);
-uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, const STORM_intersect_func func, uint32_t* out);
+uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, const STORM_compute_func func, uint32_t* out);
 uint32_t STORM_bitmap_cont_serialized_size(STORM_bitmap_cont_t* bitmap);
 
 // container

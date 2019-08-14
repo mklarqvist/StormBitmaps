@@ -8,8 +8,8 @@ The core algorithms are described in the papers:
   and Wojciech Muła (23 Nov 2016).
 * Efficient Computation of Positional Population Counts Using SIMD Instructions,
   by Marcus D. R. Klarqvist, Wojciech Muła, and Daniel Lemire (upcoming)
-* [Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/pdf/1603.06549.pdf) by D. Lemire, G. Ssi-Yan-Kai,
-  and O. Kaser.
+* [Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/abs/1603.06549) by D. Lemire, G. Ssi-Yan-Kai,
+  and O. Kaser (21 Mar 2016).
 
 Compile test suite with: `make` and run `./fast_intersect_count`
 
