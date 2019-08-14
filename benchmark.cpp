@@ -927,7 +927,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx512-csa",m8_2);
 
-            bench_t m8_avx512_block = fwrapper_blocked<&STORM_intersect_avx512>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m8_avx512_block = fwrapper_blocked<&STORM_intersect_count_avx512>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
 #endif
 
@@ -968,7 +968,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx256",m3_0);
 
-            bench_t m3_block3 = fwrapper_blocked<&STORM_intersect_avx2>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m3_block3 = fwrapper_blocked<&STORM_intersect_count_avx2>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx256-blocked-" + std::to_string(optimal_b), m3_block3);
 #endif
             // SIMD SSE4
@@ -980,12 +980,12 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-sse4-csa",m2);
 
-            bench_t m2_block3 = fwrapper_blocked<&STORM_intersect_sse4>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m2_block3 = fwrapper_blocked<&STORM_intersect_count_sse4>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-sse4-csa-blocked-" + std::to_string(optimal_b), m2_block3);
 #endif
 
             if (n_alts[a] <= 300) {
-                bench_t m4 = flwrapper<&STORM_intersect_scalar_list>(n_variants, vals, n_ints_sample, pos);
+                bench_t m4 = flwrapper<&STORM_intersect_count_scalar_list>(n_variants, vals, n_ints_sample, pos);
                 PRINT("bitmap-scalar-skip-list",m4);
             }
 

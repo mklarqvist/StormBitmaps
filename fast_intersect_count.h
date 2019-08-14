@@ -440,7 +440,7 @@ uint64_t STORM_POPCOUNT(uint64_t x) {
 
 
 static 
-uint64_t STORM_intersect_unrolled(const uint64_t* STORM_RESTRICT data1, 
+uint64_t STORM_intersect_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
                                 const uint64_t* STORM_RESTRICT data2, 
                                 uint64_t size)
 {
@@ -462,7 +462,7 @@ uint64_t STORM_intersect_unrolled(const uint64_t* STORM_RESTRICT data1,
 }
 
 static 
-uint64_t STORM_union_unrolled(const uint64_t* STORM_RESTRICT data1, 
+uint64_t STORM_union_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
                               const uint64_t* STORM_RESTRICT data2, 
                               uint64_t size)
 {
@@ -479,6 +479,28 @@ uint64_t STORM_union_unrolled(const uint64_t* STORM_RESTRICT data1,
 
     for (/**/; i < size; ++i)
         cnt += STORM_POPCOUNT(data1[i] | data2[i]);
+
+    return cnt;
+}
+
+static 
+uint64_t STORM_diff_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
+                              const uint64_t* STORM_RESTRICT data2, 
+                              uint64_t size)
+{
+    const uint64_t limit = size - size % 4;
+    uint64_t cnt = 0;
+    uint64_t i   = 0;
+
+    for (/**/; i < limit; i += 4) {
+        cnt += STORM_POPCOUNT(data1[i+0] ^ data2[i+0]);
+        cnt += STORM_POPCOUNT(data1[i+1] ^ data2[i+1]);
+        cnt += STORM_POPCOUNT(data1[i+2] ^ data2[i+2]);
+        cnt += STORM_POPCOUNT(data1[i+3] ^ data2[i+3]);
+    }
+
+    for (/**/; i < size; ++i)
+        cnt += STORM_POPCOUNT(data1[i] ^ data2[i]);
 
     return cnt;
 }
@@ -589,7 +611,7 @@ void STORM_CSA128(__m128i* h, __m128i* l, __m128i a, __m128i b, __m128i c) {
   __attribute__ ((target ("sse4.2")))
 #endif
 static 
-uint64_t STORM_intersect_csa_sse4(const __m128i* STORM_RESTRICT data1, 
+uint64_t STORM_intersect_count_csa_sse4(const __m128i* STORM_RESTRICT data1, 
                                 const __m128i* STORM_RESTRICT data2, 
                                 uint64_t size)
 {
@@ -643,7 +665,7 @@ uint64_t STORM_intersect_csa_sse4(const __m128i* STORM_RESTRICT data1,
   __attribute__ ((target ("sse4.2")))
 #endif
 static 
-uint64_t STORM_union_csa_sse4(const __m128i* STORM_RESTRICT data1, 
+uint64_t STORM_union_count_csa_sse4(const __m128i* STORM_RESTRICT data1, 
                               const __m128i* STORM_RESTRICT data2, 
                               uint64_t size)
 {
@@ -697,7 +719,61 @@ uint64_t STORM_union_csa_sse4(const __m128i* STORM_RESTRICT data1,
   __attribute__ ((target ("sse4.2")))
 #endif
 static 
-uint64_t STORM_intersect_sse4(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_diff_count_csa_sse4(const __m128i* STORM_RESTRICT data1, 
+                              const __m128i* STORM_RESTRICT data2, 
+                              uint64_t size)
+{
+    __m128i ones     = _mm_setzero_si128();
+    __m128i twos     = _mm_setzero_si128();
+    __m128i fours    = _mm_setzero_si128();
+    __m128i eights   = _mm_setzero_si128();
+    __m128i sixteens = _mm_setzero_si128();
+    __m128i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    uint64_t i = 0;
+    uint64_t limit = size - size % 16;
+    uint64_t cnt64 = 0;
+
+#define LOAD(a) (_mm_loadu_si128(&data1[i+a]) ^ _mm_loadu_si128(&data2[i+a]))
+
+    for (/**/; i < limit; i += 16) {
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA128(&eightsA, &fours,  fours, foursA, foursB);
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA128(&eightsB, &fours,  fours, foursA, foursB);
+        STORM_CSA128(&sixteens,&eights, eights,eightsA,eightsB);
+
+        cnt64 += STORM_POPCOUNT_SSE(sixteens);
+    }
+#undef LOAD
+
+    cnt64 <<= 4;
+    cnt64 += STORM_POPCOUNT_SSE(eights) << 3;
+    cnt64 += STORM_POPCOUNT_SSE(fours)  << 2;
+    cnt64 += STORM_POPCOUNT_SSE(twos)   << 1;
+    cnt64 += STORM_POPCOUNT_SSE(ones)   << 0;
+
+    for (/**/; i < size; ++i)
+        cnt64 = STORM_POPCOUNT_SSE(_mm_loadu_si128(&data1[i]) ^ _mm_loadu_si128(&data2[i]));
+
+    return cnt64;
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+static 
+uint64_t STORM_intersect_count_sse4(const uint64_t* STORM_RESTRICT b1, 
                             const uint64_t* STORM_RESTRICT b2, 
                             const uint32_t n_ints) 
 {
@@ -706,7 +782,7 @@ uint64_t STORM_intersect_sse4(const uint64_t* STORM_RESTRICT b1,
     const __m128i* r2 = (__m128i*)b2;
     const uint32_t n_cycles = n_ints / 2;
 
-    count += STORM_intersect_csa_sse4(r1, r2, n_cycles);
+    count += STORM_intersect_count_csa_sse4(r1, r2, n_cycles);
 
     for (int i = n_cycles*2; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] & b2[i]);
@@ -719,7 +795,7 @@ uint64_t STORM_intersect_sse4(const uint64_t* STORM_RESTRICT b1,
   __attribute__ ((target ("sse4.2")))
 #endif
 static 
-uint64_t STORM_union_sse4(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_union_count_sse4(const uint64_t* STORM_RESTRICT b1, 
                             const uint64_t* STORM_RESTRICT b2, 
                             const uint32_t n_ints) 
 {
@@ -728,10 +804,32 @@ uint64_t STORM_union_sse4(const uint64_t* STORM_RESTRICT b1,
     const __m128i* r2 = (__m128i*)b2;
     const uint32_t n_cycles = n_ints / 2;
 
-    count += STORM_union_csa_sse4(r1, r2, n_cycles);
+    count += STORM_union_count_csa_sse4(r1, r2, n_cycles);
 
     for (int i = n_cycles*2; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] | b2[i]);
+    }
+
+    return(count);
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+static 
+uint64_t STORM_diff_count_sse4(const uint64_t* STORM_RESTRICT b1, 
+                            const uint64_t* STORM_RESTRICT b2, 
+                            const uint32_t n_ints) 
+{
+    uint64_t count = 0;
+    const __m128i* r1 = (__m128i*)b1;
+    const __m128i* r2 = (__m128i*)b2;
+    const uint32_t n_cycles = n_ints / 2;
+
+    count += STORM_diff_count_csa_sse4(r1, r2, n_cycles);
+
+    for (int i = n_cycles*2; i < n_ints; ++i) {
+        count += STORM_POPCOUNT(b1[i] ^ b2[i]);
     }
 
     return(count);
@@ -798,7 +896,7 @@ __m256i STORM_popcnt256(__m256i v) {
   __attribute__ ((target ("avx2")))
 #endif
 static
-uint64_t STORM_intersect_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1, 
+uint64_t STORM_intersect_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1, 
                                         const uint8_t* STORM_RESTRICT data2, 
                                         const size_t n)
 {
@@ -869,7 +967,7 @@ uint64_t STORM_intersect_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1,
   __attribute__ ((target ("avx2")))
 #endif
 static
-uint64_t STORM_union_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1, 
+uint64_t STORM_union_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1, 
                                         const uint8_t* STORM_RESTRICT data2, 
                                         const size_t n)
 {
@@ -935,6 +1033,77 @@ uint64_t STORM_union_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1,
     return result;
 }
 
+// modified from https://github.com/WojciechMula/sse-popcount
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+static
+uint64_t STORM_diff_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1, 
+                                        const uint8_t* STORM_RESTRICT data2, 
+                                        const size_t n)
+{
+
+    size_t i = 0;
+
+    const __m256i lookup = _mm256_setr_epi8(
+        /* 0 */ 0, /* 1 */ 1, /* 2 */ 1, /* 3 */ 2,
+        /* 4 */ 1, /* 5 */ 2, /* 6 */ 2, /* 7 */ 3,
+        /* 8 */ 1, /* 9 */ 2, /* a */ 2, /* b */ 3,
+        /* c */ 2, /* d */ 3, /* e */ 3, /* f */ 4,
+
+        /* 0 */ 0, /* 1 */ 1, /* 2 */ 1, /* 3 */ 2,
+        /* 4 */ 1, /* 5 */ 2, /* 6 */ 2, /* 7 */ 3,
+        /* 8 */ 1, /* 9 */ 2, /* a */ 2, /* b */ 3,
+        /* c */ 2, /* d */ 3, /* e */ 3, /* f */ 4
+    );
+
+    const __m256i low_mask = _mm256_set1_epi8(0x0f);
+
+    __m256i acc = _mm256_setzero_si256();
+
+#define ITER { \
+        const __m256i vec = _mm256_xor_si256(_mm256_loadu_si256((const __m256i*)(data1 + i)), \
+            _mm256_loadu_si256((const __m256i*)(data2 + i))); \
+        const __m256i lo  = _mm256_and_si256(vec, low_mask); \
+        const __m256i hi  = _mm256_and_si256(_mm256_srli_epi16(vec, 4), low_mask); \
+        const __m256i popcnt1 = _mm256_shuffle_epi8(lookup, lo); \
+        const __m256i popcnt2 = _mm256_shuffle_epi8(lookup, hi); \
+        local = _mm256_add_epi8(local, popcnt1); \
+        local = _mm256_add_epi8(local, popcnt2); \
+        i += 32; \
+    }
+
+    while (i + 8*32 <= n) {
+        __m256i local = _mm256_setzero_si256();
+        ITER ITER ITER ITER
+        ITER ITER ITER ITER
+        acc = _mm256_add_epi64(acc, _mm256_sad_epu8(local, _mm256_setzero_si256()));
+    }
+
+    __m256i local = _mm256_setzero_si256();
+
+    while (i + 32 <= n) {
+        ITER;
+    }
+
+    acc = _mm256_add_epi64(acc, _mm256_sad_epu8(local, _mm256_setzero_si256()));
+
+#undef ITER
+
+    uint64_t result = 0;
+
+    result += (uint64_t)(_mm256_extract_epi64(acc, 0));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 1));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 2));
+    result += (uint64_t)(_mm256_extract_epi64(acc, 3));
+
+    for (/**/; i < n; i++) {
+        result += STORM_lookup8bit[data1[i] ^ data2[i]];
+    }
+
+    return result;
+}
+
 /*
  * AVX2 Harley-Seal popcount (4th iteration).
  * The algorithm is based on the paper "Faster Population Counts
@@ -947,7 +1116,7 @@ uint64_t STORM_union_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1,
   __attribute__ ((target ("avx2")))
 #endif
 static 
-uint64_t STORM_intersect_csa_avx2(const __m256i* STORM_RESTRICT data1, 
+uint64_t STORM_intersect_count_csa_avx2(const __m256i* STORM_RESTRICT data1, 
                                 const __m256i* STORM_RESTRICT data2, 
                                 uint64_t size)
 {
@@ -1003,12 +1172,12 @@ uint64_t STORM_intersect_csa_avx2(const __m256i* STORM_RESTRICT data1,
             cnt64[3];
 }
 
-// In this version we perform the operation A&B as input into the CSA operator.
+// In this version we perform the operation A|B as input into the CSA operator.
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
 #endif
 static 
-uint64_t STORM_union_csa_avx2(const __m256i* STORM_RESTRICT data1, 
+uint64_t STORM_union_count_csa_avx2(const __m256i* STORM_RESTRICT data1, 
                                 const __m256i* STORM_RESTRICT data2, 
                                 uint64_t size)
 {
@@ -1064,11 +1233,72 @@ uint64_t STORM_union_csa_avx2(const __m256i* STORM_RESTRICT data1,
             cnt64[3];
 }
 
+// In this version we perform the operation A^B as input into the CSA operator.
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
 #endif
 static 
-uint64_t STORM_intersect_avx2(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_diff_count_csa_avx2(const __m256i* STORM_RESTRICT data1, 
+                                const __m256i* STORM_RESTRICT data2, 
+                                uint64_t size)
+{
+    __m256i cnt      = _mm256_setzero_si256();
+    __m256i ones     = _mm256_setzero_si256();
+    __m256i twos     = _mm256_setzero_si256();
+    __m256i fours    = _mm256_setzero_si256();
+    __m256i eights   = _mm256_setzero_si256();
+    __m256i sixteens = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    uint64_t i = 0;
+    uint64_t limit = size - size % 16;
+    uint64_t* cnt64;
+
+#define LOAD(a) (_mm256_loadu_si256(&data1[i+a]) ^ _mm256_loadu_si256(&data2[i+a]))
+
+    for (/**/; i < limit; i += 16) {
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&eightsA, &fours,  fours, foursA, foursB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&eightsB, &fours,  fours, foursA, foursB);
+        STORM_CSA256(&sixteens,&eights, eights,eightsA,eightsB);
+
+        cnt = _mm256_add_epi64(cnt, STORM_popcnt256(sixteens));
+    }
+#undef LOAD
+
+    cnt = _mm256_slli_epi64(cnt, 4);
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(STORM_popcnt256(eights), 3));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(STORM_popcnt256(fours),  2));
+    cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(STORM_popcnt256(twos),   1));
+    cnt = _mm256_add_epi64(cnt, STORM_popcnt256(ones));
+
+    for (/**/; i < size; ++i)
+        cnt = _mm256_add_epi64(cnt, STORM_popcnt256(_mm256_loadu_si256(&data1[i]) ^ _mm256_loadu_si256(&data2[i])));
+
+    cnt64 = (uint64_t*) &cnt;
+
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3];
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+static 
+uint64_t STORM_intersect_count_avx2(const uint64_t* STORM_RESTRICT b1, 
                    const uint64_t* STORM_RESTRICT b2, 
                    const uint32_t n_ints)
 {
@@ -1077,7 +1307,7 @@ uint64_t STORM_intersect_avx2(const uint64_t* STORM_RESTRICT b1,
     const __m256i* r2 = (__m256i*)b2;
     const uint32_t n_cycles = n_ints / 4;
 
-    count += STORM_intersect_csa_avx2(r1, r2, n_cycles);
+    count += STORM_intersect_count_csa_avx2(r1, r2, n_cycles);
 
     for (int i = n_cycles*4; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] & b2[i]);
@@ -1090,7 +1320,7 @@ uint64_t STORM_intersect_avx2(const uint64_t* STORM_RESTRICT b1,
   __attribute__ ((target ("avx2")))
 #endif
 static 
-uint64_t STORM_union_avx2(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_union_count_avx2(const uint64_t* STORM_RESTRICT b1, 
                    const uint64_t* STORM_RESTRICT b2, 
                    const uint32_t n_ints)
 {
@@ -1099,7 +1329,7 @@ uint64_t STORM_union_avx2(const uint64_t* STORM_RESTRICT b1,
     const __m256i* r2 = (__m256i*)b2;
     const uint32_t n_cycles = n_ints / 4;
 
-    count += STORM_union_csa_avx2(r1, r2, n_cycles);
+    count += STORM_union_count_csa_avx2(r1, r2, n_cycles);
 
     for (int i = n_cycles*4; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] | b2[i]);
@@ -1111,23 +1341,56 @@ uint64_t STORM_union_avx2(const uint64_t* STORM_RESTRICT b1,
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
 #endif
-STORM_FORCE_INLINE 
-uint64_t STORM_intersect_lookup_avx2(const uint64_t* STORM_RESTRICT b1, 
-                                   const uint64_t* STORM_RESTRICT b2, 
-                                   const uint32_t n_ints)
+static 
+uint64_t STORM_diff_count_avx2(const uint64_t* STORM_RESTRICT b1, 
+                   const uint64_t* STORM_RESTRICT b2, 
+                   const uint32_t n_ints)
 {
-    return STORM_intersect_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
+    uint64_t count = 0;
+    const __m256i* r1 = (__m256i*)b1;
+    const __m256i* r2 = (__m256i*)b2;
+    const uint32_t n_cycles = n_ints / 4;
+
+    count += STORM_diff_count_csa_avx2(r1, r2, n_cycles);
+
+    for (int i = n_cycles*4; i < n_ints; ++i) {
+        count += STORM_POPCOUNT(b1[i] ^ b2[i]);
+    }
+
+    return(count);
 }
 
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
 #endif
 STORM_FORCE_INLINE 
-uint64_t STORM_union_lookup_avx2(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_intersect_count_lookup_avx2(const uint64_t* STORM_RESTRICT b1, 
                                    const uint64_t* STORM_RESTRICT b2, 
                                    const uint32_t n_ints)
 {
-    return STORM_union_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
+    return STORM_intersect_count_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+STORM_FORCE_INLINE 
+uint64_t STORM_union_count_lookup_avx2(const uint64_t* STORM_RESTRICT b1, 
+                                   const uint64_t* STORM_RESTRICT b2, 
+                                   const uint32_t n_ints)
+{
+    return STORM_union_count_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+STORM_FORCE_INLINE 
+uint64_t STORM_diff_count_lookup_avx2(const uint64_t* STORM_RESTRICT b1, 
+                                   const uint64_t* STORM_RESTRICT b2, 
+                                   const uint32_t n_ints)
+{
+    return STORM_diff_count_lookup_avx2_func((uint8_t*)b1, (uint8_t*)b2, n_ints*8);
 }
 #endif
 
@@ -1174,7 +1437,7 @@ void STORM_CSA512(__m512i* h, __m512i* l, __m512i a, __m512i b, __m512i c) {
   __attribute__ ((target ("avx512bw")))
 #endif
 static 
-uint64_t STORM_intersect_csa_avx512(const __m512i* STORM_RESTRICT data1, 
+uint64_t STORM_intersect_count_csa_avx512(const __m512i* STORM_RESTRICT data1, 
                                   const __m512i* STORM_RESTRICT data2, 
                                   uint64_t size)
 {
@@ -1238,7 +1501,7 @@ uint64_t STORM_intersect_csa_avx512(const __m512i* STORM_RESTRICT data1,
   __attribute__ ((target ("avx512bw")))
 #endif
 static 
-uint64_t STORM_union_csa_avx512(const __m512i* STORM_RESTRICT data1, 
+uint64_t STORM_union_count_csa_avx512(const __m512i* STORM_RESTRICT data1, 
                                   const __m512i* STORM_RESTRICT data2, 
                                   uint64_t size)
 {
@@ -1298,13 +1561,77 @@ uint64_t STORM_union_csa_avx512(const __m512i* STORM_RESTRICT data1,
             cnt64[7];
 }
 
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static 
+uint64_t STORM_diff_count_csa_avx512(const __m512i* STORM_RESTRICT data1, 
+                                  const __m512i* STORM_RESTRICT data2, 
+                                  uint64_t size)
+{
+    __m512i cnt      = _mm512_setzero_si512();
+    __m512i ones     = _mm512_setzero_si512();
+    __m512i twos     = _mm512_setzero_si512();
+    __m512i fours    = _mm512_setzero_si512();
+    __m512i eights   = _mm512_setzero_si512();
+    __m512i sixteens = _mm512_setzero_si512();
+    __m512i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    uint64_t i = 0;
+    uint64_t limit = size - size % 16;
+    uint64_t* cnt64;
+
+#define LOAD(a) (_mm512_loadu_si512(&data1[i+a]) ^ _mm512_loadu_si512(&data2[i+a]))
+
+    for (/**/; i < limit; i += 16) {
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&eightsA, &fours,  fours, foursA, foursB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&eightsB, &fours,  fours, foursA, foursB);
+        STORM_CSA512(&sixteens,&eights, eights,eightsA,eightsB);
+
+        cnt = _mm512_add_epi64(cnt, STORM_popcnt512(sixteens));
+    }
+#undef LOAD
+
+    cnt = _mm512_slli_epi64(cnt, 4);
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(eights), 3));
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(fours), 2));
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(twos), 1));
+    cnt = _mm512_add_epi64(cnt,  STORM_popcnt512(ones));
+
+    for (/**/; i < size; ++i)
+        cnt = _mm512_add_epi64(cnt, STORM_popcnt512(_mm512_loadu_si512(&data1[i]) ^ _mm512_loadu_si512(&data2[i])));
+
+    cnt64 = (uint64_t*)&cnt;
+
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3] +
+            cnt64[4] +
+            cnt64[5] +
+            cnt64[6] +
+            cnt64[7];
+}
+
 // Functions
 // AVX512
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx512bw")))
 #endif
 static 
-uint64_t STORM_intersect_avx512(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_intersect_count_avx512(const uint64_t* STORM_RESTRICT b1, 
                               const uint64_t* STORM_RESTRICT b2, 
                               const uint32_t n_ints) 
 {
@@ -1313,7 +1640,7 @@ uint64_t STORM_intersect_avx512(const uint64_t* STORM_RESTRICT b1,
     const __m512i* r2 = (const __m512i*)(b2);
     const uint32_t n_cycles = n_ints / 8;
 
-    count += STORM_intersect_csa_avx512(r1, r2, n_cycles);
+    count += STORM_intersect_count_csa_avx512(r1, r2, n_cycles);
 
     for (int i = n_cycles*8; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] & b2[i]);
@@ -1326,7 +1653,7 @@ uint64_t STORM_intersect_avx512(const uint64_t* STORM_RESTRICT b1,
   __attribute__ ((target ("avx512bw")))
 #endif
 static 
-uint64_t STORM_union_avx512(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_union_count_avx512(const uint64_t* STORM_RESTRICT b1, 
                               const uint64_t* STORM_RESTRICT b2, 
                               const uint32_t n_ints) 
 {
@@ -1335,10 +1662,32 @@ uint64_t STORM_union_avx512(const uint64_t* STORM_RESTRICT b1,
     const __m512i* r2 = (const __m512i*)(b2);
     const uint32_t n_cycles = n_ints / 8;
 
-    count += STORM_union_csa_avx512(r1, r2, n_cycles);
+    count += STORM_union_count_csa_avx512(r1, r2, n_cycles);
 
     for (int i = n_cycles*8; i < n_ints; ++i) {
         count += STORM_POPCOUNT(b1[i] | b2[i]);
+    }
+
+    return(count);
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static 
+uint64_t STORM_diff_count_avx512(const uint64_t* STORM_RESTRICT b1, 
+                              const uint64_t* STORM_RESTRICT b2, 
+                              const uint32_t n_ints) 
+{
+    uint64_t count = 0;
+    const __m512i* r1 = (const __m512i*)(b1);
+    const __m512i* r2 = (const __m512i*)(b2);
+    const uint32_t n_cycles = n_ints / 8;
+
+    count += STORM_diff_count_csa_avx512(r1, r2, n_cycles);
+
+    for (int i = n_cycles*8; i < n_ints; ++i) {
+        count += STORM_POPCOUNT(b1[i] ^ b2[i]);
     }
 
     return(count);
@@ -1350,23 +1699,31 @@ uint64_t STORM_union_avx512(const uint64_t* STORM_RESTRICT b1,
 ****************************/
 
 STORM_FORCE_INLINE 
-uint64_t STORM_intersect_scalar(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_intersect_count_scalar(const uint64_t* STORM_RESTRICT b1, 
                               const uint64_t* STORM_RESTRICT b2, 
                               const uint32_t n_ints)
 {
-    return STORM_intersect_unrolled(b1, b2, n_ints);
+    return STORM_intersect_count_unrolled(b1, b2, n_ints);
 }
 
 STORM_FORCE_INLINE 
-uint64_t STORM_union_scalar(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_union_count_scalar(const uint64_t* STORM_RESTRICT b1, 
                               const uint64_t* STORM_RESTRICT b2, 
                               const uint32_t n_ints)
 {
-    return STORM_union_unrolled(b1, b2, n_ints);
+    return STORM_union_count_unrolled(b1, b2, n_ints);
+}
+
+STORM_FORCE_INLINE 
+uint64_t STORM_diff_count_scalar(const uint64_t* STORM_RESTRICT b1, 
+                              const uint64_t* STORM_RESTRICT b2, 
+                              const uint32_t n_ints)
+{
+    return STORM_diff_count_unrolled(b1, b2, n_ints);
 }
 
 static
-uint64_t STORM_intersect_scalar_list(const uint64_t* STORM_RESTRICT b1, 
+uint64_t STORM_intersect_count_scalar_list(const uint64_t* STORM_RESTRICT b1, 
                                      const uint64_t* STORM_RESTRICT b2, 
                                      const uint32_t* STORM_RESTRICT l1, 
                                      const uint32_t* STORM_RESTRICT l2,
@@ -1450,8 +1807,9 @@ uint32_t STORM_get_alignment() {
 // Return the optimal intersection function given the range [0, n_bitmaps_vector)
 // and the available instruction set at run-time.
 static
-STORM_compute_func STORM_get_intersect_func(const uint32_t n_bitmaps_vector) {
-    #if defined(HAVE_CPUID)
+STORM_compute_func STORM_get_intersect_count_func(const uint32_t n_bitmaps_vector) {
+
+#if defined(HAVE_CPUID)
     #if defined(__cplusplus)
     /* C++11 thread-safe singleton */
     static const int cpuid = get_cpuid();
@@ -1473,27 +1831,123 @@ STORM_compute_func STORM_get_intersect_func(const uint32_t n_bitmaps_vector) {
 
 #if defined(HAVE_AVX512)
     if ((cpuid & STORM_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
-        return &STORM_intersect_avx512;
+        return &STORM_intersect_count_avx512;
     }
 #endif
 
 #if defined(HAVE_AVX2)
     if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
-        return &STORM_intersect_avx2;
+        return &STORM_intersect_count_avx2;
     }
     
     if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 4) {
-        return &STORM_intersect_lookup_avx2;
+        return &STORM_intersect_count_lookup_avx2;
     }
 #endif
 
 #if defined(HAVE_SSE42)
     if ((cpuid & STORM_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
-        return &STORM_intersect_sse4;
+        return &STORM_intersect_count_sse4;
     }
 #endif
 
-    return &STORM_intersect_scalar;
+    return &STORM_intersect_count_scalar;
+}
+
+static
+STORM_compute_func STORM_get_union_count_func(const uint32_t n_bitmaps_vector) {
+
+#if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+        #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+        #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+        #endif
+    }
+    #endif
+#endif
+
+
+#if defined(HAVE_AVX512)
+    if ((cpuid & STORM_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
+        return &STORM_union_count_avx512;
+    }
+#endif
+
+#if defined(HAVE_AVX2)
+    if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
+        return &STORM_union_count_avx2;
+    }
+    
+    if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 4) {
+        return &STORM_union_count_lookup_avx2;
+    }
+#endif
+
+#if defined(HAVE_SSE42)
+    if ((cpuid & STORM_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
+        return &STORM_union_count_sse4;
+    }
+#endif
+
+    return &STORM_union_count_scalar;
+}
+
+static
+STORM_compute_func STORM_get_diff_count_func(const uint32_t n_bitmaps_vector) {
+
+#if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+        #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+        #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+        #endif
+    }
+    #endif
+#endif
+
+
+#if defined(HAVE_AVX512)
+    if ((cpuid & STORM_bit_AVX512BW) && n_bitmaps_vector >= 128) { // 16*512
+        return &STORM_diff_count_avx512;
+    }
+#endif
+
+#if defined(HAVE_AVX2)
+    if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 64) { // 16*256
+        return &STORM_diff_count_avx2;
+    }
+    
+    if ((cpuid & STORM_bit_AVX2) && n_bitmaps_vector >= 4) {
+        return &STORM_diff_count_lookup_avx2;
+    }
+#endif
+
+#if defined(HAVE_SSE42)
+    if ((cpuid & STORM_bit_SSE41) && n_bitmaps_vector >= 32) { // 16*128
+        return &STORM_diff_count_sse4;
+    }
+#endif
+
+    return &STORM_diff_count_scalar;
 }
 
 /* *************************************
