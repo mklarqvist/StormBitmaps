@@ -33,12 +33,27 @@
 ***************************************/
 #include "fast_intersect_count.h"
 
-#ifndef TWK_DEFAULT_BLOCK_SIZE
-#define TWK_DEFAULT_BLOCK_SIZE 65536
+/* ===   Compiler specifics   === */
+
+#if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* >= C99 */
+#  define STORM_RESTRICT   restrict
+#else
+/* note : it might be useful to define __restrict or __restrict__ for some C++ compilers */
+#  define STORM_RESTRICT   /* disable */
 #endif
 
-#ifndef TWK_DEFAULT_SCALAR_THRESHOLD
-#define TWK_DEFAULT_SCALAR_THRESHOLD 4096
+#ifndef STORM_DEFAULT_BLOCK_SIZE
+#define STORM_DEFAULT_BLOCK_SIZE 65536
+#endif
+
+#ifndef STORM_DEFAULT_SCALAR_THRESHOLD
+#define STORM_DEFAULT_SCALAR_THRESHOLD 4096
+#endif
+
+// Default size of a memory block. This is by default set to 256kb which is what
+// most commodity processors have as L2/L3 cache.
+#ifndef STORM_CACHE_BLOCK_SIZE
+#define STORM_CACHE_BLOCK_SIZE 256e3
 #endif
 
 #ifdef __cplusplus
@@ -46,18 +61,18 @@ extern "C" {
 #endif
 
 //
-uint64_t TWK_intersect_vector16_cardinality(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t TWK_intersect_vector32_unsafe(const uint32_t* TWK_RESTRICT v1, const uint32_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* TWK_RESTRICT out);
+uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t STORM_intersect_vector32_unsafe(const uint32_t* STORM_RESTRICT v1, const uint32_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* STORM_RESTRICT out);
 //
 
-typedef struct TWK_bitmap_s TWK_bitmap_t;
-typedef struct TWK_bitmap_cont_s TWK_bitmap_cont_t;
-typedef struct TWK_cont_s TWK_cont_t;
-typedef struct TWK_contiguous_bitmap_s TWK_contiguous_bitmap_t;
-typedef struct TWK_contiguous_s TWK_contiguous_t;
+typedef struct STORM_bitmap_s STORM_bitmap_t;
+typedef struct STORM_bitmap_cont_s STORM_bitmap_cont_t;
+typedef struct STORM_cont_s STORM_cont_t;
+typedef struct STORM_contiguous_bitmap_s STORM_contiguous_bitmap_t;
+typedef struct STORM_contiguous_s STORM_contiguous_t;
 
 // Storm bitmaps
-struct TWK_bitmap_s {
+struct STORM_bitmap_s {
     TWK_ALIGN(64) uint64_t* data; // data array
     TWK_ALIGN(64) uint16_t* scalar; // scalar array
     uint32_t n_bitmap: 30, own_data: 1, own_scalar: 1;
@@ -67,63 +82,63 @@ struct TWK_bitmap_s {
     uint32_t id; // block id
 };
 
-struct TWK_bitmap_cont_s {
-    TWK_bitmap_t* bitmaps; // bitmaps array
+struct STORM_bitmap_cont_s {
+    STORM_bitmap_t* bitmaps; // bitmaps array
     uint32_t* block_ids; // block ids (redundant but better data locality)
     uint32_t n_bitmaps, m_bitmaps;
     uint32_t prev_inserted_value;
 };
 
-struct TWK_cont_s {
-    TWK_bitmap_cont_t* conts;
+struct STORM_cont_s {
+    STORM_bitmap_cont_t* conts;
     uint32_t n_conts, m_conts;
 };
 
 // Contiguous memory bitmaps
-struct TWK_contiguous_bitmap_s {
+struct STORM_contiguous_bitmap_s {
     uint64_t* data; // not owner of this data
     // width of data is described outside
 };
 
-struct TWK_contiguous_s {
+struct STORM_contiguous_s {
     TWK_ALIGN(64) uint64_t* data;
-    TWK_contiguous_bitmap_t* bitmaps; // interpret of data
+    STORM_contiguous_bitmap_t* bitmaps; // interpret of data
     uint64_t n_data, m_data;
     uint64_t n_samples;
     uint32_t n_bitmaps_vector; // _MUST_ be divisible by largest alignment!
 };
 
 // implementation ----->
-TWK_bitmap_t* TWK_bitmap_new();
-void TWK_bitmap_init(TWK_bitmap_t* all);
-void TWK_bitmap_free(TWK_bitmap_t* bitmap);
-int TWK_bitmap_add(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_add_with_scalar(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_add_scalar_only(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-uint64_t TWK_bitmap_intersect_cardinality(TWK_bitmap_t* TWK_RESTRICT bitmap1, TWK_bitmap_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_bitmap_intersect_cardinality_func(TWK_bitmap_t* TWK_RESTRICT bitmap1, TWK_bitmap_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func);
-int TWK_bitmap_clear(TWK_bitmap_t* bitmap);
-uint32_t TWK_bitmap_serialized_size(TWK_bitmap_t* bitmap);
+STORM_bitmap_t* STORM_bitmap_new();
+void STORM_bitmap_init(STORM_bitmap_t* all);
+void STORM_bitmap_free(STORM_bitmap_t* bitmap);
+int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
+uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2, const TWK_intersect_func func);
+int STORM_bitmap_clear(STORM_bitmap_t* bitmap);
+uint32_t STORM_bitmap_serialized_size(STORM_bitmap_t* bitmap);
 
 // bit container
-TWK_bitmap_cont_t* TWK_bitmap_cont_new();
-void TWK_bitmap_cont_init(TWK_bitmap_cont_t* bitmap);
-void TWK_bitmap_cont_free(TWK_bitmap_cont_t* bitmap);
-int TWK_bitmap_cont_add(TWK_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_cont_clear(TWK_bitmap_cont_t* bitmap);
-uint64_t TWK_bitmap_cont_intersect_cardinality(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_bitmap_cont_intersect_cardinality_premade(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out);
-uint32_t TWK_bitmap_cont_serialized_size(TWK_bitmap_cont_t* bitmap);
+STORM_bitmap_cont_t* STORM_bitmap_cont_new();
+void STORM_bitmap_cont_init(STORM_bitmap_cont_t* bitmap);
+void STORM_bitmap_cont_free(STORM_bitmap_cont_t* bitmap);
+int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_bitmap_cont_clear(STORM_bitmap_cont_t* bitmap);
+uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out);
+uint32_t STORM_bitmap_cont_serialized_size(STORM_bitmap_cont_t* bitmap);
 
 // container
-TWK_cont_t* TWK_cont_new();
-void TWK_cont_free(TWK_cont_t* bitmap);
-int TWK_cont_add(TWK_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_cont_clear(TWK_cont_t* bitmap);
-uint64_t TWK_cont_pairw_intersect_cardinality(TWK_cont_t* bitmap);
-uint64_t TWK_cont_pairw_intersect_cardinality_blocked(TWK_cont_t* bitmap, uint32_t bsize);
-uint64_t TWK_cont_intersect_cardinality_square(const TWK_cont_t* TWK_RESTRICT bitmap1, const TWK_cont_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_cont_serialized_size(const TWK_cont_t* bitmap);
+STORM_cont_t* STORM_cont_new();
+void STORM_cont_free(STORM_cont_t* bitmap);
+int STORM_cont_add(STORM_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_cont_clear(STORM_cont_t* bitmap);
+uint64_t STORM_cont_pairw_intersect_cardinality(STORM_cont_t* bitmap);
+uint64_t STORM_cont_pairw_intersect_cardinality_blocked(STORM_cont_t* bitmap, uint32_t bsize);
+uint64_t STORM_cont_intersect_cardinality_square(const STORM_cont_t* STORM_RESTRICT bitmap1, const STORM_cont_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_cont_serialized_size(const STORM_cont_t* bitmap);
 
 #ifdef __cplusplus
 } /* extern "C" */

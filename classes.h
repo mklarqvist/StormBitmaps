@@ -35,7 +35,7 @@ public:
     TWK_bitmap_container(const uint32_t n, const uint32_t m) :
         n_samples(n), m_vectors(m),
         n_bitmaps_vector(ceil(n_samples / 64.0)),
-        bitmaps(new TWK_bitmap_t[m_vectors]),
+        bitmaps(new STORM_bitmap_t[m_vectors]),
         store_alts(true),
         alt_limit(0)
     {
@@ -50,13 +50,13 @@ public:
     }
 
     void Add(const uint32_t pos, const uint32_t* vals, const uint32_t n_vals) {
-        if (store_alts && n_vals < alt_limit) TWK_bitmap_add_with_scalar(&bitmaps[pos], vals, n_vals);
-        else TWK_bitmap_add(&bitmaps[pos], vals, n_vals);
+        if (store_alts && n_vals < alt_limit) STORM_bitmap_add_with_scalar(&bitmaps[pos], vals, n_vals);
+        else STORM_bitmap_add(&bitmaps[pos], vals, n_vals);
     }
 
     void clear() {
         for (int i = 0; i < m_vectors; ++i)
-            TWK_bitmap_clear(&bitmaps[i]);
+            STORM_bitmap_clear(&bitmaps[i]);
     }
 
 public:
@@ -65,7 +65,7 @@ public:
     bool store_alts;
     uint32_t alt_limit;
     uint32_t n_bitmaps, m_bitmaps;
-    TWK_bitmap_t* bitmaps;
+    STORM_bitmap_t* bitmaps;
     uint32_t* bitmap_offsets; // virtual offset into bitmaps for variant m
 };
 

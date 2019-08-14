@@ -438,7 +438,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
     uint64_t n_total_integer_cmps = 0;
     uint64_t int_comparisons = 0;
 
-    TWK_cont_t* twk2 = TWK_cont_new();
+    STORM_cont_t* twk2 = STORM_cont_new();
 
     for (int a = 0; a < n_alts.size(); ++a) {
         // break if no more data
@@ -460,7 +460,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         }
 
 
-        TWK_cont_clear(twk2);
+        STORM_cont_clear(twk2);
 
 #ifdef USE_ROARING
         roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -498,12 +498,12 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
                 roaring_bitmap_add(roaring[j], pos[p]);
             }
 #endif
-            TWK_cont_add(twk2, &pos[0], pos.size());
+            STORM_cont_add(twk2, &pos[0], pos.size());
             pos.clear();
         }
         std::cerr << "Done!" << std::endl;
 
-        uint64_t storm_size = TWK_cont_serialized_size(twk2);
+        uint64_t storm_size = STORM_cont_serialized_size(twk2);
         std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
 
         // Debug
@@ -512,7 +512,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         {
             std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = TWK_cont_pairw_intersect_cardinality(twk2);
+            uint64_t cont_count = STORM_cont_pairw_intersect_cardinality(twk2);
             const uint64_t cycles_end = get_cpu_cycles();
 
             std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -529,7 +529,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         {
             std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = TWK_cont_pairw_intersect_cardinality_blocked(twk2,0);
+            uint64_t cont_count = STORM_cont_pairw_intersect_cardinality_blocked(twk2,0);
             const uint64_t cycles_end = get_cpu_cycles();
 
             std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -572,7 +572,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
     }
     // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
     // delete[] twk;
-    TWK_cont_free(twk2);
+    STORM_cont_free(twk2);
 
 }
 
@@ -626,7 +626,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         // TWK_bitmap_cont_t** twk = new TWK_bitmap_cont_t*[n_variants];
         // for (int i = 0; i < n_variants; ++i)
             // twk[i] = TWK_bitmap_cont_new();
-        TWK_cont_t* twk2 = TWK_cont_new();
+        STORM_cont_t* twk2 = STORM_cont_new();
         
 
         for (int a = 0; a < n_alts.size(); ++a) {
@@ -654,7 +654,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // for (int i = 0; i < n_variants; ++i) {
                 // TWK_bitmap_cont_clear(twk[i]);
             // }
-            TWK_cont_clear(twk2);
+            STORM_cont_clear(twk2);
 
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -708,7 +708,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 bcont2.Add(j,pos[j]);
                 // twk.Add(j, &pos[j][0], pos[j].size());
                 // TWK_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
-                TWK_cont_add(twk2, &pos[j][0], pos[j].size());
+                STORM_cont_add(twk2, &pos[j][0], pos[j].size());
 #endif
                 vals2 += n_ints_sample;
             }
@@ -742,7 +742,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = TWK_cont_pairw_intersect_cardinality(twk2);
+                uint64_t cont_count = STORM_cont_pairw_intersect_cardinality(twk2);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -759,7 +759,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = TWK_cont_pairw_intersect_cardinality_blocked(twk2,0);
+                uint64_t cont_count = STORM_cont_pairw_intersect_cardinality_blocked(twk2,0);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -1067,7 +1067,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         }
         // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
         // delete[] twk;
-        TWK_cont_free(twk2);
+        STORM_cont_free(twk2);
         TWK_aligned_free(vals);
     // }
 }
