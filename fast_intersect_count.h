@@ -604,25 +604,28 @@ uint64_t STORM_intersect_csa_sse4(const __m128i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t cnt64 = 0;
 
+#define LOAD(a) (_mm_loadu_si128(&data1[i+a]) & _mm_loadu_si128(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+0])  & _mm_loadu_si128(&data2[i+0])), (_mm_loadu_si128(&data1[i+1]) & _mm_loadu_si128(&data2[i+1])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+2])  & _mm_loadu_si128(&data2[i+2])), (_mm_loadu_si128(&data1[i+3]) & _mm_loadu_si128(&data2[i+3])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
         STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+4])  & _mm_loadu_si128(&data2[i+4])), (_mm_loadu_si128(&data1[i+5]) & _mm_loadu_si128(&data2[i+5])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+6])  & _mm_loadu_si128(&data2[i+6])), (_mm_loadu_si128(&data1[i+7]) & _mm_loadu_si128(&data2[i+7])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
         STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA128(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+8] ) & _mm_loadu_si128(&data2[i+8])),  (_mm_loadu_si128(&data1[i+9] ) & _mm_loadu_si128(&data2[i+9])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+10]) & _mm_loadu_si128(&data2[i+10])), (_mm_loadu_si128(&data1[i+11]) & _mm_loadu_si128(&data2[i+11])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
         STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+12]) & _mm_loadu_si128(&data2[i+12])), (_mm_loadu_si128(&data1[i+13]) & _mm_loadu_si128(&data2[i+13])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+14]) & _mm_loadu_si128(&data2[i+14])), (_mm_loadu_si128(&data1[i+15]) & _mm_loadu_si128(&data2[i+15])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
         STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA128(&eightsB, &fours,  fours, foursA, foursB);
         STORM_CSA128(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt64 += STORM_POPCOUNT_SSE(sixteens);
     }
+#undef LOAD
 
     cnt64 <<= 4;
     cnt64 += STORM_POPCOUNT_SSE(eights) << 3;
@@ -655,25 +658,28 @@ uint64_t STORM_union_csa_sse4(const __m128i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t cnt64 = 0;
 
+#define LOAD(a) (_mm_loadu_si128(&data1[i+a]) | _mm_loadu_si128(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+0])  | _mm_loadu_si128(&data2[i+0])), (_mm_loadu_si128(&data1[i+1]) | _mm_loadu_si128(&data2[i+1])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+2])  | _mm_loadu_si128(&data2[i+2])), (_mm_loadu_si128(&data1[i+3]) | _mm_loadu_si128(&data2[i+3])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
         STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+4])  | _mm_loadu_si128(&data2[i+4])), (_mm_loadu_si128(&data1[i+5]) | _mm_loadu_si128(&data2[i+5])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+6])  | _mm_loadu_si128(&data2[i+6])), (_mm_loadu_si128(&data1[i+7]) | _mm_loadu_si128(&data2[i+7])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
         STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA128(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+8] ) | _mm_loadu_si128(&data2[i+8])),  (_mm_loadu_si128(&data1[i+9] ) | _mm_loadu_si128(&data2[i+9])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+10]) | _mm_loadu_si128(&data2[i+10])), (_mm_loadu_si128(&data1[i+11]) | _mm_loadu_si128(&data2[i+11])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
         STORM_CSA128(&foursA,  &twos,   twos,  twosA,  twosB);
-        STORM_CSA128(&twosA,   &ones,   ones,  (_mm_loadu_si128(&data1[i+12]) | _mm_loadu_si128(&data2[i+12])), (_mm_loadu_si128(&data1[i+13]) | _mm_loadu_si128(&data2[i+13])));
-        STORM_CSA128(&twosB,   &ones,   ones,  (_mm_loadu_si128(&data1[i+14]) | _mm_loadu_si128(&data2[i+14])), (_mm_loadu_si128(&data1[i+15]) | _mm_loadu_si128(&data2[i+15])));
+        STORM_CSA128(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA128(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
         STORM_CSA128(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA128(&eightsB, &fours,  fours, foursA, foursB);
         STORM_CSA128(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt64 += STORM_POPCOUNT_SSE(sixteens);
     }
+#undef LOAD
 
     cnt64 <<= 4;
     cnt64 += STORM_POPCOUNT_SSE(eights) << 3;
@@ -957,25 +963,28 @@ uint64_t STORM_intersect_csa_avx2(const __m256i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t* cnt64;
 
+#define LOAD(a) (_mm256_loadu_si256(&data1[i+a]) & _mm256_loadu_si256(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+0])  & _mm256_loadu_si256(&data2[i+0])), (_mm256_loadu_si256(&data1[i+1]) & _mm256_loadu_si256(&data2[i+1])));  
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+2])  & _mm256_loadu_si256(&data2[i+2])), (_mm256_loadu_si256(&data1[i+3]) & _mm256_loadu_si256(&data2[i+3])));
-        STORM_CSA256(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+4])  & _mm256_loadu_si256(&data2[i+4])), (_mm256_loadu_si256(&data1[i+5]) & _mm256_loadu_si256(&data2[i+5])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+6])  & _mm256_loadu_si256(&data2[i+6])), (_mm256_loadu_si256(&data1[i+7]) & _mm256_loadu_si256(&data2[i+7])));
-        STORM_CSA256(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA256(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+8] ) & _mm256_loadu_si256(&data2[i+8])), (_mm256_loadu_si256(&data1[i+9]  ) & _mm256_loadu_si256(&data2[i+9])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+10]) & _mm256_loadu_si256(&data2[i+10])), (_mm256_loadu_si256(&data1[i+11]) & _mm256_loadu_si256(&data2[i+11])));
-        STORM_CSA256(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+12]) & _mm256_loadu_si256(&data2[i+12])), (_mm256_loadu_si256(&data1[i+13]) & _mm256_loadu_si256(&data2[i+13])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+14]) & _mm256_loadu_si256(&data2[i+14])), (_mm256_loadu_si256(&data1[i+15]) & _mm256_loadu_si256(&data2[i+15])));
-        STORM_CSA256(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA256(&eightsB, &fours,  fours, foursA, foursB);
-        STORM_CSA256(&sixteens,&eights, eights,eightsA, eightsB);
+        STORM_CSA256(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt = _mm256_add_epi64(cnt, STORM_popcnt256(sixteens));
     }
+#undef LOAD
 
     cnt = _mm256_slli_epi64(cnt, 4);
     cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(STORM_popcnt256(eights), 3));
@@ -1015,25 +1024,28 @@ uint64_t STORM_union_csa_avx2(const __m256i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t* cnt64;
 
+#define LOAD(a) (_mm256_loadu_si256(&data1[i+a]) | _mm256_loadu_si256(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+0])  | _mm256_loadu_si256(&data2[i+0])), (_mm256_loadu_si256(&data1[i+1]) | _mm256_loadu_si256(&data2[i+1])));  
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+2])  | _mm256_loadu_si256(&data2[i+2])), (_mm256_loadu_si256(&data1[i+3]) | _mm256_loadu_si256(&data2[i+3])));
-        STORM_CSA256(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+4])  | _mm256_loadu_si256(&data2[i+4])), (_mm256_loadu_si256(&data1[i+5]) | _mm256_loadu_si256(&data2[i+5])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+6])  | _mm256_loadu_si256(&data2[i+6])), (_mm256_loadu_si256(&data1[i+7]) | _mm256_loadu_si256(&data2[i+7])));
-        STORM_CSA256(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA256(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+8] ) | _mm256_loadu_si256(&data2[i+8])), (_mm256_loadu_si256(&data1[i+9]  ) | _mm256_loadu_si256(&data2[i+9])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+10]) | _mm256_loadu_si256(&data2[i+10])), (_mm256_loadu_si256(&data1[i+11]) | _mm256_loadu_si256(&data2[i+11])));
-        STORM_CSA256(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA256(&twosA,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+12]) | _mm256_loadu_si256(&data2[i+12])), (_mm256_loadu_si256(&data1[i+13]) | _mm256_loadu_si256(&data2[i+13])));
-        STORM_CSA256(&twosB,   &ones,   ones,  (_mm256_loadu_si256(&data1[i+14]) | _mm256_loadu_si256(&data2[i+14])), (_mm256_loadu_si256(&data1[i+15]) | _mm256_loadu_si256(&data2[i+15])));
-        STORM_CSA256(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA256(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA256(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA256(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA256(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA256(&eightsB, &fours,  fours, foursA, foursB);
-        STORM_CSA256(&sixteens,&eights, eights,eightsA, eightsB);
+        STORM_CSA256(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt = _mm256_add_epi64(cnt, STORM_popcnt256(sixteens));
     }
+#undef LOAD
 
     cnt = _mm256_slli_epi64(cnt, 4);
     cnt = _mm256_add_epi64(cnt, _mm256_slli_epi64(STORM_popcnt256(eights), 3));
@@ -1178,25 +1190,28 @@ uint64_t STORM_intersect_csa_avx512(const __m512i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t* cnt64;
 
+#define LOAD(a) (_mm512_loadu_si512(&data1[i+a]) & _mm512_loadu_si512(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+0])  & _mm512_loadu_si512(&data2[i+0])), (_mm512_loadu_si512(&data1[i+1]) & _mm512_loadu_si512(&data2[i+1])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+2])  & _mm512_loadu_si512(&data2[i+2])), (_mm512_loadu_si512(&data1[i+3]) & _mm512_loadu_si512(&data2[i+3])));
-        STORM_CSA512(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+4])  & _mm512_loadu_si512(&data2[i+4])), (_mm512_loadu_si512(&data1[i+5]) & _mm512_loadu_si512(&data2[i+5])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+6])  & _mm512_loadu_si512(&data2[i+6])), (_mm512_loadu_si512(&data1[i+7]) & _mm512_loadu_si512(&data2[i+7])));
-        STORM_CSA512(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA512(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+8] ) & _mm512_loadu_si512(&data2[i+8])), (_mm512_loadu_si512(&data1[i+9]  ) & _mm512_loadu_si512(&data2[i+9])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+10]) & _mm512_loadu_si512(&data2[i+10])), (_mm512_loadu_si512(&data1[i+11]) & _mm512_loadu_si512(&data2[i+11])));
-        STORM_CSA512(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+12]) & _mm512_loadu_si512(&data2[i+12])), (_mm512_loadu_si512(&data1[i+13]) & _mm512_loadu_si512(&data2[i+13])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+14]) & _mm512_loadu_si512(&data2[i+14])), (_mm512_loadu_si512(&data1[i+15]) & _mm512_loadu_si512(&data2[i+15])));
-        STORM_CSA512(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA512(&eightsB, &fours,  fours, foursA, foursB);
-        STORM_CSA512(&sixteens,&eights, eights,eightsA, eightsB);
+        STORM_CSA512(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt = _mm512_add_epi64(cnt, STORM_popcnt512(sixteens));
     }
+#undef LOAD
 
     cnt = _mm512_slli_epi64(cnt, 4);
     cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(eights), 3));
@@ -1239,25 +1254,28 @@ uint64_t STORM_union_csa_avx512(const __m512i* STORM_RESTRICT data1,
     uint64_t limit = size - size % 16;
     uint64_t* cnt64;
 
+#define LOAD(a) (_mm512_loadu_si512(&data1[i+a]) | _mm512_loadu_si512(&data2[i+a]))
+
     for (/**/; i < limit; i += 16) {
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+0])  | _mm512_loadu_si512(&data2[i+0])), (_mm512_loadu_si512(&data1[i+1]) | _mm512_loadu_si512(&data2[i+1])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+2])  | _mm512_loadu_si512(&data2[i+2])), (_mm512_loadu_si512(&data1[i+3]) | _mm512_loadu_si512(&data2[i+3])));
-        STORM_CSA512(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+4])  | _mm512_loadu_si512(&data2[i+4])), (_mm512_loadu_si512(&data1[i+5]) | _mm512_loadu_si512(&data2[i+5])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+6])  | _mm512_loadu_si512(&data2[i+6])), (_mm512_loadu_si512(&data1[i+7]) | _mm512_loadu_si512(&data2[i+7])));
-        STORM_CSA512(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA512(&eightsA, &fours,  fours, foursA, foursB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+8] ) | _mm512_loadu_si512(&data2[i+8])), (_mm512_loadu_si512(&data1[i+9]  ) | _mm512_loadu_si512(&data2[i+9])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+10]) | _mm512_loadu_si512(&data2[i+10])), (_mm512_loadu_si512(&data1[i+11]) | _mm512_loadu_si512(&data2[i+11])));
-        STORM_CSA512(&foursA,  &twos,   twos,  twosA, twosB);
-        STORM_CSA512(&twosA,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+12]) | _mm512_loadu_si512(&data2[i+12])), (_mm512_loadu_si512(&data1[i+13]) | _mm512_loadu_si512(&data2[i+13])));
-        STORM_CSA512(&twosB,   &ones,   ones,  (_mm512_loadu_si512(&data1[i+14]) | _mm512_loadu_si512(&data2[i+14])), (_mm512_loadu_si512(&data1[i+15]) | _mm512_loadu_si512(&data2[i+15])));
-        STORM_CSA512(&foursB,  &twos,   twos,  twosA, twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
         STORM_CSA512(&eightsB, &fours,  fours, foursA, foursB);
-        STORM_CSA512(&sixteens,&eights, eights,eightsA, eightsB);
+        STORM_CSA512(&sixteens,&eights, eights,eightsA,eightsB);
 
         cnt = _mm512_add_epi64(cnt, STORM_popcnt512(sixteens));
     }
+#undef LOAD
 
     cnt = _mm512_slli_epi64(cnt, 4);
     cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(eights), 3));

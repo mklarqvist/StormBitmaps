@@ -16,7 +16,7 @@ Compile test suite with: `make` and run `./fast_intersect_count`
 
 ### Note
 
-This is a collaborative effort between Marcus D. R. Klarqvist ([@klarqvist](https://github.com/mklarqvist/)) and Daniel Lemire ([@lemire](https://github.com/lemire/)). M.D.R.K. acknowledge Chris Wallace ([@chr1swallace](https://github.com/chr1swallace)) for informal discussions that eventually resulted in this work.
+This is a collaborative effort between Marcus D. R. Klarqvist ([@klarqvist](https://github.com/mklarqvist/)) and Daniel Lemire ([@lemire](https://github.com/lemire/)).
 
 ### History
 
