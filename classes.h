@@ -18,8 +18,9 @@
 #ifndef FAST_INTERSECT_COUNT_CLASSES_H_
 #define FAST_INTERSECT_COUNT_CLASSES_H_
 
+
 #include "fast_intersect_count.h"
-// #include "experimental.h"
+#include "storm.h"
 
 #include <vector>
 #include <memory> //unique_ptr
@@ -27,74 +28,6 @@
 #include <iostream>//debug
 #include <bitset> //debug
 
-// temp C
-#ifndef TWK_DEFAULT_BLOCK_SIZE
-#define TWK_DEFAULT_BLOCK_SIZE 65536
-#endif
-
-#ifndef TWK_DEFAULT_SCALAR_THRESHOLD
-#define TWK_DEFAULT_SCALAR_THRESHOLD 4096
-#endif
-
-//
-uint64_t intersect_vector16_cardinality(const uint16_t* TWK_RESTRICT v1, const uint16_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_vector32_unsafe(const uint32_t* TWK_RESTRICT v1, const uint32_t* TWK_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* TWK_RESTRICT out);
-//
-
-// Fixed width bitmaps
-struct TWK_bitmap_t {
-    TWK_ALIGN(64) uint64_t* data; // data array
-    TWK_ALIGN(64) uint16_t* scalar; // scalar array
-    uint32_t n_bitmap: 30, own_data: 1, own_scalar: 1;
-    uint32_t n_bits_set;
-    uint32_t n_scalar: 31, n_scalar_set: 1, n_missing;
-    uint32_t m_scalar;
-    uint32_t id; // block id
-};
-
-struct TWK_bitmap_cont_t {
-    TWK_bitmap_t* bitmaps; // bitmaps array
-    uint32_t* block_ids; // block ids (redundant but better data locality)
-    uint32_t n_bitmaps, m_bitmaps;
-    uint32_t prev_inserted_value;
-};
-
-struct TWK_cont_t {
-    TWK_bitmap_cont_t* conts;
-    uint32_t n_conts, m_conts;
-};
-
-// implementation ----->
-TWK_bitmap_t* TWK_bitmap_new();
-void TWK_bitmap_init(TWK_bitmap_t* all);
-void TWK_bitmap_free(TWK_bitmap_t* bitmap);
-int TWK_bitmap_add(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_add_with_scalar(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_add_scalar_only(TWK_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
-uint64_t TWK_bitmap_intersect_cardinality(TWK_bitmap_t* TWK_RESTRICT bitmap1, TWK_bitmap_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_bitmap_intersect_cardinality_func(TWK_bitmap_t* TWK_RESTRICT bitmap1, TWK_bitmap_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func);
-int TWK_bitmap_clear(TWK_bitmap_t* bitmap);
-uint32_t TWK_bitmap_serialized_size(TWK_bitmap_t* bitmap);
-uint32_t TWK_bitmap_cont_serialized_size(TWK_bitmap_cont_t* bitmap);
-
-// bit container
-TWK_bitmap_cont_t* TWK_bitmap_cont_new();
-void TWK_bitmap_cont_free(TWK_bitmap_cont_t* bitmap);
-int TWK_bitmap_cont_add(TWK_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_bitmap_cont_clear(TWK_bitmap_cont_t* bitmap);
-uint64_t TWK_bitmap_cont_intersect_cardinality(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2);
-uint64_t TWK_bitmap_cont_intersect_cardinality_premade(const TWK_bitmap_cont_t* TWK_RESTRICT bitmap1, const TWK_bitmap_cont_t* TWK_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out);
-// use TWK_bitmap_add if value > threshold
-// otherwise use TWK_bitmap_add_with_alts
-
-// container
-TWK_cont_t* TWK_cont_new();
-void TWK_cont_free(TWK_cont_t* bitmap);
-int TWK_cont_add(TWK_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int TWK_cont_clear(TWK_cont_t* bitmap);
-uint64_t TWK_cont_pairw_intersect_cardinality(TWK_cont_t* bitmap);
-uint64_t TWK_cont_pairw_intersect_cardinality_blocked(TWK_cont_t* bitmap, uint32_t bsize);
-uint64_t TWK_cont_intersect_cardinality_square(const TWK_cont_t* TWK_RESTRICT bitmap1, const TWK_cont_t* TWK_RESTRICT bitmap2);
 
 //  c++ stuff
 class TWK_bitmap_container {
@@ -110,14 +43,9 @@ public:
             alt_limit = n / 200 < 5 ? 5 : n / 200;
             store_alts = true;
         } else store_alts = false;
-        
-        // for (int i = 0; i < m_vectors; ++i)
-        //     bitmaps[i] = TWK_bitmap_new();
     }
 
     ~TWK_bitmap_container() {
-        // for (int i = 0; i < m_vectors; ++i)
-            // TWK_bitmap_free(bitmaps[i]);
         delete[] bitmaps;
     }
 

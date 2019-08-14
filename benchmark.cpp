@@ -15,6 +15,7 @@
 #endif
 
 #include "fast_intersect_count.h"
+#include "storm.h"
 #include "classes.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
@@ -466,6 +467,8 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         for (int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
 #endif
 
+        std::cerr << "here" << std::endl;
+
         // PRNG
         std::uniform_int_distribution<uint32_t> distr(0, n_samples-1); // right inclusive
 
@@ -499,6 +502,9 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
             pos.clear();
         }
         std::cerr << "Done!" << std::endl;
+
+        uint64_t storm_size = TWK_cont_serialized_size(twk2);
+        std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
 
         // Debug
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
@@ -551,7 +557,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         for (int k = 0; k < n_variants; ++k) {
             roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
         }
-        std::cerr << "Memory used by roaring=" << roaring_bytes_used << std::endl;
+        std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
 
         uint32_t roaring_optimal_b = TWK_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
         roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
@@ -601,8 +607,10 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
         // std::vector<uint32_t> n_alts = {n_samples/1000, n_samples/500, n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
         std::vector<uint32_t> n_alts;
+        std::cerr  << "Loads=" << (loads == nullptr) << std::endl;
         if (loads == nullptr) {
             n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
+            std::cerr << "after" << std::endl;
         } else {
             n_alts = *loads;
         }
@@ -1078,13 +1086,11 @@ const char* usage(void) {
         "\n";
 }
 
-std::vector<std::string> split(const std::string& s, char delimiter)
-{
+std::vector<std::string> split(const std::string& s, char delimiter) {
    std::vector<std::string> tokens;
    std::string token;
    std::istringstream tokenStream(s);
-   while (std::getline(tokenStream, token, delimiter))
-   {
+   while (std::getline(tokenStream, token, delimiter)) {
       tokens.push_back(token);
    }
    return tokens;
@@ -1098,25 +1104,34 @@ int main(int argc, char **argv) {
 
     std::vector<uint32_t>* loads = nullptr;
 
-    if (argc > 2) {
+    if (argc > 3) {
         std::string s(argv[3]);
         std::vector<std::string> ret = split(s, ',');
         loads = new std::vector<uint32_t>();
         for (int i = 0; i < ret.size(); ++i) {
             loads->push_back(std::atoi(ret[i].c_str()));
-            // std::cerr << ret[i] << std::endl;
         }
     }
     
     if (argc == 2) {
         intersect_test(std::atoi(argv[1]), 10000, loads);
     } else {
-        uint64_t n_samples = std::atoi(argv[1]);
-        std::cerr << "n_samples is " << n_samples << std::endl;
+        int64_t n_samples = std::atoi(argv[1]);
+        if (n_samples <= 0) {
+            std::cerr << "Cannot have non-positive number of samples..." << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        int64_t n_vals = std::atoi(argv[2]);
+        if (n_vals <= 0) {
+            std::cerr << "Cannot have non-positive number of vectors..." << std::endl;
+            return EXIT_FAILURE;
+        }
+
         if (n_samples < 256000) {
-            intersect_test(n_samples, std::atoi(argv[2]), loads);
+            intersect_test(n_samples, n_vals, loads);
         } else {
-            benchmark_large(n_samples, std::atoi(argv[2]), loads);
+            benchmark_large(n_samples, n_vals, loads);
         }
     }
     delete loads;
