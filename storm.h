@@ -18,7 +18,6 @@
 #ifndef STORM_H_7263478623842093
 #define STORM_H_7263478623842093
 
-
 /* *************************************
 *  Includes
 ***************************************/
@@ -50,31 +49,27 @@
 #define STORM_DEFAULT_SCALAR_THRESHOLD 4096
 #endif
 
-// Default size of a memory block. This is by default set to 256kb which is what
-// most commodity processors have as L2/L3 cache.
-#ifndef STORM_CACHE_BLOCK_SIZE
-#define STORM_CACHE_BLOCK_SIZE 256e3
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//
+/*======   Generic intersection functions   ======*/
+// Todo: this require SSE4.2
+// Credit: Lemire et. al (Roaring bitmaps)
 uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
 uint64_t STORM_intersect_vector32_unsafe(const uint32_t* STORM_RESTRICT v1, const uint32_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* STORM_RESTRICT out);
-//
 
+/*======   Canonical representation   ======*/
 typedef struct STORM_bitmap_s STORM_bitmap_t;
 typedef struct STORM_bitmap_cont_s STORM_bitmap_cont_t;
-typedef struct STORM_cont_s STORM_cont_t;
+typedef struct STORM_s STORM_t;
 typedef struct STORM_contiguous_bitmap_s STORM_contiguous_bitmap_t;
 typedef struct STORM_contiguous_s STORM_contiguous_t;
 
 // Storm bitmaps
 struct STORM_bitmap_s {
-    TWK_ALIGN(64) uint64_t* data; // data array
-    TWK_ALIGN(64) uint16_t* scalar; // scalar array
+    STORM_ALIGN(64) uint64_t* data; // data array
+    STORM_ALIGN(64) uint16_t* scalar; // scalar array
     uint32_t n_bitmap: 30, own_data: 1, own_scalar: 1;
     uint32_t n_bits_set;
     uint32_t n_scalar: 31, n_scalar_set: 1, n_missing;
@@ -89,7 +84,7 @@ struct STORM_bitmap_cont_s {
     uint32_t prev_inserted_value;
 };
 
-struct STORM_cont_s {
+struct STORM_s {
     STORM_bitmap_cont_t* conts;
     uint32_t n_conts, m_conts;
 };
@@ -101,11 +96,13 @@ struct STORM_contiguous_bitmap_s {
 };
 
 struct STORM_contiguous_s {
-    TWK_ALIGN(64) uint64_t* data;
+    STORM_ALIGN(64) uint64_t* data;
     STORM_contiguous_bitmap_t* bitmaps; // interpret of data
     uint64_t n_data, m_data;
     uint64_t n_samples;
     uint32_t n_bitmaps_vector; // _MUST_ be divisible by largest alignment!
+    STORM_intersect_func intsec_func; // determined during ctor
+    uint32_t alignment; // determined during ctor
 };
 
 // implementation ----->
@@ -116,7 +113,7 @@ int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint3
 int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values);
 uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2);
-uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2, const TWK_intersect_func func);
+uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, STORM_bitmap_t* STORM_RESTRICT bitmap2, const STORM_intersect_func func);
 int STORM_bitmap_clear(STORM_bitmap_t* bitmap);
 uint32_t STORM_bitmap_serialized_size(STORM_bitmap_t* bitmap);
 
@@ -127,18 +124,18 @@ void STORM_bitmap_cont_free(STORM_bitmap_cont_t* bitmap);
 int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_bitmap_cont_clear(STORM_bitmap_cont_t* bitmap);
 uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2);
-uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, const TWK_intersect_func func, uint32_t* out);
+uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, const STORM_intersect_func func, uint32_t* out);
 uint32_t STORM_bitmap_cont_serialized_size(STORM_bitmap_cont_t* bitmap);
 
 // container
-STORM_cont_t* STORM_cont_new();
-void STORM_cont_free(STORM_cont_t* bitmap);
-int STORM_cont_add(STORM_cont_t* bitmap, const uint32_t* values, const uint32_t n_values);
-int STORM_cont_clear(STORM_cont_t* bitmap);
-uint64_t STORM_cont_pairw_intersect_cardinality(STORM_cont_t* bitmap);
-uint64_t STORM_cont_pairw_intersect_cardinality_blocked(STORM_cont_t* bitmap, uint32_t bsize);
-uint64_t STORM_cont_intersect_cardinality_square(const STORM_cont_t* STORM_RESTRICT bitmap1, const STORM_cont_t* STORM_RESTRICT bitmap2);
-uint64_t STORM_cont_serialized_size(const STORM_cont_t* bitmap);
+STORM_t* STORM_new();
+void STORM_free(STORM_t* bitmap);
+int STORM_add(STORM_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_clear(STORM_t* bitmap);
+uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap);
+uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsize);
+uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_serialized_size(const STORM_t* bitmap);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -17,6 +17,7 @@
 #include "fast_intersect_count.h"
 #include "storm.h"
 #include "classes.h"
+#include "experimental.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -438,7 +439,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
     uint64_t n_total_integer_cmps = 0;
     uint64_t int_comparisons = 0;
 
-    STORM_cont_t* twk2 = STORM_cont_new();
+    STORM_t* twk2 = STORM_new();
 
     for (int a = 0; a < n_alts.size(); ++a) {
         // break if no more data
@@ -460,7 +461,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         }
 
 
-        STORM_cont_clear(twk2);
+        STORM_clear(twk2);
 
 #ifdef USE_ROARING
         roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -498,12 +499,12 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
                 roaring_bitmap_add(roaring[j], pos[p]);
             }
 #endif
-            STORM_cont_add(twk2, &pos[0], pos.size());
+            STORM_add(twk2, &pos[0], pos.size());
             pos.clear();
         }
         std::cerr << "Done!" << std::endl;
 
-        uint64_t storm_size = STORM_cont_serialized_size(twk2);
+        uint64_t storm_size = STORM_serialized_size(twk2);
         std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
 
         // Debug
@@ -512,7 +513,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         {
             std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = STORM_cont_pairw_intersect_cardinality(twk2);
+            uint64_t cont_count = STORM_pairw_intersect_cardinality(twk2);
             const uint64_t cycles_end = get_cpu_cycles();
 
             std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -529,7 +530,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         {
             std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = STORM_cont_pairw_intersect_cardinality_blocked(twk2,0);
+            uint64_t cont_count = STORM_pairw_intersect_cardinality_blocked(twk2,0);
             const uint64_t cycles_end = get_cpu_cycles();
 
             std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -559,7 +560,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         }
         std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
 
-        uint32_t roaring_optimal_b = TWK_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+        uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
         roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
 
         bench_t m8_2_block = froarwrapper_blocked(n_variants, 1, roaring, roaring_optimal_b);
@@ -570,9 +571,9 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         delete[] roaring;
 #endif
     }
-    // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
+    // for (int i = 0; i < n_variants; ++i) STORM_bitmap_cont_free(twk[i]);
     // delete[] twk;
-    STORM_cont_free(twk2);
+    STORM_free(twk2);
 
 }
 
@@ -599,7 +600,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         const uint64_t memory_used = n_ints_sample*n_variants*sizeof(uint64_t);
         std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
 
-        uint64_t* vals = (uint64_t*)TWK_aligned_malloc(SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t));
+        uint64_t* vals = (uint64_t*)STORM_aligned_malloc(SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t));
         
         // 1:500, 1:167, 1:22
         // std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 
@@ -622,12 +623,11 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
         bitmap_container_t bcont(n_variants,n_samples);
         bitmap_container_t bcont2(n_variants,n_samples,true,true);
-        // TWK_bitmap_container twk(n_samples, n_variants);
-        // TWK_bitmap_cont_t** twk = new TWK_bitmap_cont_t*[n_variants];
+        // STORM_bitmap_container twk(n_samples, n_variants);
+        // STORM_bitmap_cont_t** twk = new STORM_bitmap_cont_t*[n_variants];
         // for (int i = 0; i < n_variants; ++i)
-            // twk[i] = TWK_bitmap_cont_new();
-        STORM_cont_t* twk2 = STORM_cont_new();
-        
+            // twk[i] = STORM_bitmap_cont_new();
+        STORM_t* twk2 = STORM_new();
 
         for (int a = 0; a < n_alts.size(); ++a) {
             // break if no more data
@@ -652,9 +652,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             bcont2.clear();
             // twk.clear();
             // for (int i = 0; i < n_variants; ++i) {
-                // TWK_bitmap_cont_clear(twk[i]);
+                // STORM_bitmap_cont_clear(twk[i]);
             // }
-            STORM_cont_clear(twk2);
+            STORM_clear(twk2);
 
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -669,7 +669,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
             // Positional information
             std::vector< std::vector<uint32_t> > pos(n_variants, std::vector<uint32_t>());
-            // std::vector< std::vector<uint16_t> > pos16(n_variants, std::vector<uint16_t>());
+            std::vector< std::vector<uint16_t> > pos16(n_variants, std::vector<uint16_t>());
 
             std::random_device rd;  // obtain a random number from hardware
             std::mt19937 eng(rd()); // seed the generator
@@ -689,8 +689,8 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // Sort to simplify
                 std::sort(pos[j].begin(), pos[j].end());
 
-                // for (int p = 0; p < pos[j].size(); ++p)
-                //     pos16[j].push_back(pos[j][p]);
+                for (int p = 0; p < pos[j].size(); ++p)
+                    pos16[j].push_back(pos[j][p]);
 
                 // Assertion of sortedness.
                 for (int p = 1; p < pos[j].size(); ++p) {
@@ -707,8 +707,8 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 }
                 bcont2.Add(j,pos[j]);
                 // twk.Add(j, &pos[j][0], pos[j].size());
-                // TWK_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
-                STORM_cont_add(twk2, &pos[j][0], pos[j].size());
+                // STORM_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
+                STORM_add(twk2, &pos[j][0], pos[j].size());
 #endif
                 vals2 += n_ints_sample;
             }
@@ -716,7 +716,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
             // uint32_t total_screech = 0;
             // for (uint32_t i = 0; i < n_variants; ++i) {
-            //     total_screech += TWK_bitmap_cont_serialized_size(twk[i]);
+            //     total_screech += STORM_bitmap_cont_serialized_size(twk[i]);
             // }
             // std::cerr << "Memory used by screech=" << total_screech << "/" << memory_used << " (" << (double)memory_used/total_screech << "-fold)" << std::endl;
 
@@ -733,7 +733,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
             //
 
-            uint32_t optimal_b = TWK_CACHE_BLOCK_SIZE/(n_ints_sample*8);
+            uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample*8);
             optimal_b = optimal_b < 5 ? 5 : optimal_b;
 
             // Debug
@@ -742,7 +742,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = STORM_cont_pairw_intersect_cardinality(twk2);
+                uint64_t cont_count = STORM_pairw_intersect_cardinality(twk2);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -759,7 +759,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             {
                 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
                 const uint64_t cycles_start = get_cpu_cycles();
-                uint64_t cont_count = STORM_cont_pairw_intersect_cardinality_blocked(twk2,0);
+                uint64_t cont_count = STORM_pairw_intersect_cardinality_blocked(twk2,0);
                 const uint64_t cycles_end = get_cpu_cycles();
 
                 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -927,7 +927,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx512-csa",m8_2);
 
-            bench_t m8_avx512_block = fwrapper_blocked<&TWK_intersect_avx512>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m8_avx512_block = fwrapper_blocked<&STORM_intersect_avx512>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
 #endif
 
@@ -946,7 +946,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
             std::cerr << "Memory used by roaring=" << roaring_bytes_used << "(" << (float)memory_used/roaring_bytes_used << ")" << std::endl;
 
-            uint32_t roaring_optimal_b = TWK_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+            uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
             roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
 
             bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
@@ -968,7 +968,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-avx256",m3_0);
 
-            bench_t m3_block3 = fwrapper_blocked<&TWK_intersect_avx2>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m3_block3 = fwrapper_blocked<&STORM_intersect_avx2>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-avx256-blocked-" + std::to_string(optimal_b), m3_block3);
 #endif
             // SIMD SSE4
@@ -980,53 +980,55 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
             // PRINT("bitmap-sse4-csa",m2);
 
-            bench_t m2_block3 = fwrapper_blocked<&TWK_intersect_sse4>(n_variants, vals, n_ints_sample, optimal_b);
+            bench_t m2_block3 = fwrapper_blocked<&STORM_intersect_sse4>(n_variants, vals, n_ints_sample, optimal_b);
             PRINT("bitmap-sse4-csa-blocked-" + std::to_string(optimal_b), m2_block3);
 #endif
 
             if (n_alts[a] <= 300) {
-                bench_t m4 = flwrapper<&TWK_intersect_scalar_list>(n_variants, vals, n_ints_sample, pos);
+                bench_t m4 = flwrapper<&STORM_intersect_scalar_list>(n_variants, vals, n_ints_sample, pos);
                 PRINT("bitmap-scalar-skip-list",m4);
+            }
 
-                /*
-                bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
-                PRINT("bitmap-scalar-popcnt",m1);
+            if (n_alts[a] <= 4096) {
+                
+                // bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
+                // PRINT("bitmap-scalar-popcnt",m1);
 
-                bench_t raw1 = frawwrapper<&intersect_raw_naive>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-naive",raw1);
+                // bench_t raw1 = frawwrapper<&EXP_intersect_raw_naive>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-naive",raw1);
 
-                bench_t raw2 = frawwrapper<&intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-broadcast-sse4",raw2);
+                // bench_t raw2 = frawwrapper<&EXP_intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-broadcast-sse4",raw2);
 
-                bench_t raw3 = frawwrapper<&intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-broadcast-avx2",raw3);
+                // bench_t raw3 = frawwrapper<&EXP_intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-broadcast-avx2",raw3);
 
-                bench_t raw2_skip = frawwrapper<&intersect_raw_sse4_broadcast_skip>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-broadcast-sse4-skip",raw2_skip);
+                // bench_t raw2_skip = frawwrapper<&EXP_intersect_raw_sse4_broadcast_skip>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-broadcast-sse4-skip",raw2_skip);
 
-                bench_t raw_gallop = frawwrapper<&intersect_raw_gallop>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-gallop",raw_gallop);
+                // bench_t raw_gallop = frawwrapper<&EXP_intersect_raw_gallop>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-gallop",raw_gallop);
 
-                bench_t raw_gallop_sse = frawwrapper<&intersect_raw_gallop_sse4>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-gallop-sse4",raw_gallop_sse);
+                // bench_t raw_gallop_sse = frawwrapper<&EXP_intersect_raw_gallop_sse4>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-gallop-sse4",raw_gallop_sse);
 
-                bench_t raw_binary = frawwrapper<&intersect_raw_binary>(n_variants, n_ints_sample, pos16);
-                PRINT("raw-binary",raw_binary);
+                // bench_t raw_binary = frawwrapper<&EXP_intersect_raw_binary>(n_variants, n_ints_sample, pos16);
+                // PRINT("raw-binary",raw_binary);
 
-                bench_t raw_roaring = frawwrapper<&intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
+                bench_t raw_roaring = frawwrapper<&EXP_intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-roaring",raw_roaring);
 
-                bench_t raw_roaring2 = frawwrapper<&intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
+                bench_t raw_roaring2 = frawwrapper<&EXP_intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-roaring2",raw_roaring2);
 
                 
 
-                bench_t raw1_roaring_sse4 = frawwrapper<&intersect_raw_rotl_gallop_sse4>(n_variants, n_ints_sample, pos16);
+                bench_t raw1_roaring_sse4 = frawwrapper<&EXP_intersect_raw_rotl_gallop_sse4>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-rotl-gallop-sse4",raw1_roaring_sse4);
 
-                bench_t raw1_roaring_avx2= frawwrapper<&intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
+                bench_t raw1_roaring_avx2= frawwrapper<&EXP_intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
                 PRINT("raw-rotl-gallop-avx2",raw1_roaring_avx2);
-                */
+                
 
                 /*
                 std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
@@ -1057,18 +1059,18 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
                 rle_32.clear(); rle_64.clear();
                 */
-
-            } 
+            }
+             
         
 #ifdef USE_ROARING
             for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
             delete[] roaring;
 #endif
         }
-        // for (int i = 0; i < n_variants; ++i) TWK_bitmap_cont_free(twk[i]);
+        // for (int i = 0; i < n_variants; ++i) STORM_bitmap_cont_free(twk[i]);
         // delete[] twk;
-        STORM_cont_free(twk2);
-        TWK_aligned_free(vals);
+        STORM_free(twk2);
+        STORM_aligned_free(vals);
     // }
 }
 

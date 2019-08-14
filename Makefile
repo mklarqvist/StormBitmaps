@@ -20,7 +20,7 @@ OPTFLAGS  := -O3 -march=native
 CFLAGS     = -std=c99 $(OPTFLAGS) $(DEBUG_FLAGS)
 CPPFLAGS   = -std=c++0x $(OPTFLAGS) $(DEBUG_FLAGS)
 CPP_SOURCE = benchmark.cpp classes.cpp
-C_SOURCE   = storm.c
+C_SOURCE   = storm.c experimental.c
 OBJECTS    = $(CPP_SOURCE:.cpp=.o) $(C_SOURCE:.c=.o)
 
 # Default target
@@ -33,11 +33,11 @@ all: benchmark
 %.o: %.cpp
 	$(CXX) $(CPPFLAGS) -c -o $@ $<
 
-benchmark.o: benchmark.cpp classes.h fast_intersect_count.h classes.o storm.h storm.o
+benchmark.o: benchmark.cpp classes.h fast_intersect_count.h classes.o storm.h storm.o experimental.o experimental.h
 	$(CXX) $(CPPFLAGS) -I/home/marcus/CRoaring/include -c -o $@ $<
 
-benchmark: fast_intersect_count.o benchmark.o classes.h fast_intersect_count.h classes.o storm.h storm.o
-	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ fast_intersect_count.o storm.o classes.o benchmark.o -o benchmark -lroaring
+benchmark: fast_intersect_count.o benchmark.o classes.h fast_intersect_count.h classes.o storm.h storm.o experimental.h experimental.o
+	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ fast_intersect_count.o storm.o experimental.o classes.o benchmark.o -o benchmark -lroaring
 
 clean:
 	rm -f $(OBJECTS)

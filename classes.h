@@ -30,9 +30,9 @@
 
 
 //  c++ stuff
-class TWK_bitmap_container {
+class STORM_bitmap_container {
 public:
-    TWK_bitmap_container(const uint32_t n, const uint32_t m) :
+    STORM_bitmap_container(const uint32_t n, const uint32_t m) :
         n_samples(n), m_vectors(m),
         n_bitmaps_vector(ceil(n_samples / 64.0)),
         bitmaps(new STORM_bitmap_t[m_vectors]),
@@ -45,7 +45,7 @@ public:
         } else store_alts = false;
     }
 
-    ~TWK_bitmap_container() {
+    ~STORM_bitmap_container() {
         delete[] bitmaps;
     }
 
@@ -72,22 +72,22 @@ public:
 //////////
 
 struct bitmap_t {
-    bitmap_t() : alignment(TWK_get_alignment()), n_set(0), n_bitmap(0), own(false), data(nullptr) {}
-    bitmap_t(uint64_t* in, uint32_t n, uint32_t m) : alignment(TWK_get_alignment()), n_set(n), n_bitmap(m), own(false), data(in) {}
+    bitmap_t() : alignment(STORM_get_alignment()), n_set(0), n_bitmap(0), own(false), data(nullptr) {}
+    bitmap_t(uint64_t* in, uint32_t n, uint32_t m) : alignment(STORM_get_alignment()), n_set(n), n_bitmap(m), own(false), data(in) {}
     ~bitmap_t() {
-        if (own) TWK_aligned_free(data);
+        if (own) STORM_aligned_free(data);
     }
 
     int Allocate(uint32_t n) {
         if (data == nullptr) {
             n_bitmap = n;
-            data  = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+            data  = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
             own = true;
             n_set = 0;
         } else {
-            if (own) TWK_aligned_free(data);
+            if (own) STORM_aligned_free(data);
             n_bitmap = n;
-            data  = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+            data  = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
             own = true;
             n_set = 0;
         }
@@ -99,13 +99,13 @@ struct bitmap_t {
         const uint64_t n_vals = ceil(n / 64.0);
         if (data == nullptr) {
             n_bitmap = n_vals;
-            data  = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+            data  = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
             own = true;
             n_set = 0;
         } else {
-            if (own) TWK_aligned_free(data);
+            if (own) STORM_aligned_free(data);
             n_bitmap = n_vals;
-            data  = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+            data  = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
             own = true;
             n_set = 0;
         }
@@ -132,7 +132,7 @@ struct bitmap_t {
 
 struct bitmap_container_t {
     bitmap_container_t(uint32_t n, uint32_t m) : 
-        alignment(TWK_get_alignment()),
+        alignment(STORM_get_alignment()),
         n_alt_cutoff(0),
         n_bitmaps(n), 
         n_samples(m), 
@@ -152,37 +152,37 @@ struct bitmap_container_t {
     }
 
     bitmap_container_t(uint32_t n, uint32_t m, bool yes) : 
-        alignment(TWK_get_alignment()),
+        alignment(STORM_get_alignment()),
         n_alt_cutoff(0),
         n_bitmaps(n), 
         n_samples(m), 
         own(true), 
         type(1),
         n_bitmaps_sample(ceil(n_samples / 64.0)),
-        bmaps((uint64_t*)TWK_aligned_malloc(alignment, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
+        bmaps((uint64_t*)STORM_aligned_malloc(alignment, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
         bitmaps(nullptr),
         n_alts_tot(0), m_alts(0),
         alt_positions(nullptr),
         alt_offsets(nullptr),
-        n_alts((uint32_t*)TWK_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t)))
+        n_alts((uint32_t*)STORM_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t)))
     {
         memset(bmaps,0,n_bitmaps*n_bitmaps_sample*sizeof(uint64_t));
         memset(n_alts,0,n_bitmaps*sizeof(uint32_t));
     }
 
     bitmap_container_t(uint32_t n, uint32_t m, bool yes, bool yes2) : 
-        alignment(TWK_get_alignment()),
+        alignment(STORM_get_alignment()),
         n_alt_cutoff(0),
         n_bitmaps(n), 
         n_samples(m), 
         own(true), 
         type(1),
         n_bitmaps_sample(ceil(n_samples / 64.0)),
-        bmaps((uint64_t*)TWK_aligned_malloc(alignment, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
+        bmaps((uint64_t*)STORM_aligned_malloc(alignment, n_bitmaps*n_bitmaps_sample*sizeof(uint64_t))), 
         bitmaps(nullptr),
         alt_positions(nullptr),
-        alt_offsets((uint32_t*)TWK_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t))),
-        n_alts((uint32_t*)TWK_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t)))
+        alt_offsets((uint32_t*)STORM_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t))),
+        n_alts((uint32_t*)STORM_aligned_malloc(alignment, n_bitmaps*sizeof(uint32_t)))
     {
         n_alt_cutoff = ceil(n_samples / 200.0);
         // Cap cutoff to values over 1024.
@@ -194,11 +194,11 @@ struct bitmap_container_t {
     ~bitmap_container_t() {
         if (own) {
             delete[] bitmaps;
-            TWK_aligned_free(bmaps);
+            STORM_aligned_free(bmaps);
         }
-        TWK_aligned_free(alt_offsets);
-        TWK_aligned_free(n_alts);
-        TWK_aligned_free(alt_positions);
+        STORM_aligned_free(alt_offsets);
+        STORM_aligned_free(n_alts);
+        STORM_aligned_free(alt_positions);
     }
 
     void Add(const uint32_t target, uint32_t value) { 
@@ -239,10 +239,10 @@ struct bitmap_container_t {
                     const uint32_t add = values.size() < 65535 ? 65535 : values.size() * 5;
                     uint32_t new_pos = (n_alts_tot == 0 ? add : n_alts_tot + add);
                     // std::cerr << "resizing: " << n_alts_tot << "->" << new_pos << std::endl;
-                    alt_positions = (uint32_t*)TWK_aligned_malloc(alignment, new_pos*sizeof(uint32_t));
+                    alt_positions = (uint32_t*)STORM_aligned_malloc(alignment, new_pos*sizeof(uint32_t));
                     memcpy(alt_positions, old, n_alts_tot*sizeof(uint32_t));
                     m_alts = new_pos;
-                    TWK_aligned_free(old);
+                    STORM_aligned_free(old);
                 }
 
                 // std::cerr << "adding: " << values.size() << " at " << alt_offsets[target] << std::endl;
@@ -291,35 +291,35 @@ struct bitmap_container_t {
 };
 
 struct roaring2_t {
-    roaring2_t(uint32_t n_s, uint32_t n_ss) : alignment(TWK_get_alignment()), n_samples(n_s), 
+    roaring2_t(uint32_t n_s, uint32_t n_ss) : alignment(STORM_get_alignment()), n_samples(n_s), 
         n_sites(n_ss), block_size(128), n_total_blocks(0),
         n_total_bitmaps(0), m_blocks(0), m_bitmaps(0), n_blocks(nullptr), 
         blocks(nullptr), data_bitmaps(nullptr)
     {}
 
     ~roaring2_t() {
-        TWK_aligned_free(n_blocks);
-        TWK_aligned_free(blocks);
-        TWK_aligned_free(data_bitmaps);
+        STORM_aligned_free(n_blocks);
+        STORM_aligned_free(blocks);
+        STORM_aligned_free(data_bitmaps);
     }
 
     int Add(const uint32_t target, const std::vector<uint32_t>& pos) {
         if (pos.size() == 0) return 0;
 
         if (n_blocks == nullptr) {
-            n_blocks = (uint32_t*)TWK_aligned_malloc(alignment, 2*n_sites*sizeof(uint32_t));
+            n_blocks = (uint32_t*)STORM_aligned_malloc(alignment, 2*n_sites*sizeof(uint32_t));
         }
 
         if (blocks == nullptr) {
             assert(n_blocks_site != 0);
             m_blocks = n_blocks_site * 25;
-            blocks = (uint16_t*)TWK_aligned_malloc(alignment, m_blocks*sizeof(uint16_t));
+            blocks = (uint16_t*)STORM_aligned_malloc(alignment, m_blocks*sizeof(uint16_t));
             n_total_blocks = 0;
         }
 
         if (data_bitmaps == nullptr) {
             m_bitmaps = 65535;
-            data_bitmaps = (uint64_t*)TWK_aligned_malloc(alignment, m_bitmaps*sizeof(uint64_t));
+            data_bitmaps = (uint64_t*)STORM_aligned_malloc(alignment, m_bitmaps*sizeof(uint64_t));
             memset(data_bitmaps, 0, m_bitmaps*sizeof(uint64_t));
             n_total_bitmaps = 0;
         }
@@ -351,8 +351,8 @@ struct roaring2_t {
     uint32_t block_size; // 8192 values per block by default
     uint32_t n_blocks_site; // Maximum number of blocks for a site
     uint32_t n_total_blocks; // cumsum of blocks
-    uint32_t n_total_bitmaps; // cumsum for data_bitmapsblock_sizeTWK_aligned_malloc
-    uint32_t m_blocks, m_bitmaps; // allocation for blocblock_sizeTWK_aligned_malloc
+    uint32_t n_total_bitmaps; // cumsum for data_bitmapsblock_sizeSTORM_aligned_malloc
+    uint32_t m_blocks, m_bitmaps; // allocation for blocblock_sizeSTORM_aligned_malloc
     uint32_t* n_blocks; // number of set blocks per site (fixed size of n_sites) and its offset
     uint16_t* blocks; // block id (count order) in [0,n_blocks_site)
     uint64_t* data_bitmaps; // shared array for bitmap data each block has block_size of bitmaps

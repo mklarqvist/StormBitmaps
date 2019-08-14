@@ -134,7 +134,7 @@ uint32_t STORM_bitmap_cont_serialized_size(STORM_bitmap_cont_t* bitmap) {
 STORM_bitmap_t* STORM_bitmap_new() {
     STORM_bitmap_t* all = (STORM_bitmap_t*)malloc(sizeof(STORM_bitmap_t));
     if (all == NULL) return NULL;
-    uint32_t alignment = TWK_get_alignment();
+    uint32_t alignment = STORM_get_alignment();
     all->data = NULL;
     all->scalar = NULL;
     all->n_bitmap = 0;
@@ -151,7 +151,7 @@ STORM_bitmap_t* STORM_bitmap_new() {
 
 
 void STORM_bitmap_init(STORM_bitmap_t* all) {
-    uint32_t alignment = TWK_get_alignment();
+    uint32_t alignment = STORM_get_alignment();
     uint32_t n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
     all->data = NULL;
     all->scalar = NULL;
@@ -169,8 +169,8 @@ void STORM_bitmap_init(STORM_bitmap_t* all) {
 
 void STORM_bitmap_free(STORM_bitmap_t* bitmap) {
     if (bitmap == NULL) return;
-    if (bitmap->own_data) TWK_aligned_free(bitmap->data);
-    if (bitmap->own_scalar) TWK_aligned_free(bitmap->scalar);
+    if (bitmap->own_data) STORM_aligned_free(bitmap->data);
+    if (bitmap->own_scalar) STORM_aligned_free(bitmap->scalar);
     free(bitmap);
 }
 
@@ -184,8 +184,8 @@ int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint3
 
     if (bitmap->data == NULL) {
         uint32_t n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->data = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->data = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
         memset(bitmap->data, 0, n_bitmap*sizeof(uint64_t));
     }
     bitmap->n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
@@ -208,15 +208,15 @@ int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values,
 
     if (bitmap->data == NULL) {
         uint32_t n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->data = (uint64_t*)TWK_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->data = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
         memset(bitmap->data, 0, n_bitmap*sizeof(uint64_t));
     }
     
     if (bitmap->scalar == NULL) {
         uint32_t new_m = 256 < n_values ? n_values + 256 : 256;
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->scalar = (uint16_t*)TWK_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
         bitmap->m_scalar = new_m;
         bitmap->own_scalar = 1;
     }
@@ -225,10 +225,10 @@ int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values,
         uint32_t new_m = bitmap->n_scalar + n_values + 1024;
         bitmap->m_scalar = new_m;
         uint16_t* old = bitmap->scalar;
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->scalar = (uint16_t*)TWK_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
         memcpy(bitmap->scalar, old, bitmap->n_scalar*sizeof(uint16_t));
-        TWK_aligned_free(old);
+        STORM_aligned_free(old);
         bitmap->own_scalar = 1;
     }
     bitmap->n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
@@ -261,8 +261,8 @@ int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values,
 
     if (bitmap->scalar == NULL) {
         uint32_t new_m = 256 < n_values ? n_values + 256 : 256;
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->scalar = (uint16_t*)TWK_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
         bitmap->m_scalar = new_m;
         bitmap->own_scalar = 1;
     }
@@ -271,10 +271,10 @@ int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values,
         uint32_t new_m = bitmap->n_scalar + n_values + 1024;
         bitmap->m_scalar = new_m;
         uint16_t* old = bitmap->scalar;
-        uint32_t alignment = TWK_get_alignment();
-        bitmap->scalar = (uint16_t*)TWK_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        uint32_t alignment = STORM_get_alignment();
+        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
         memcpy(bitmap->scalar, old, bitmap->n_scalar*sizeof(uint16_t));
-        TWK_aligned_free(old);
+        STORM_aligned_free(old);
         bitmap->own_scalar = 1;
     }
 
@@ -342,7 +342,7 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
     } else if (bitmap1->n_bitmap && bitmap2->n_bitmap) {
         // bitmap-bitmap comparison
         const uint32_t n_bitmaps = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
-        const TWK_intersect_func f = TWK_get_intersect_func(n_bitmaps);
+        const STORM_intersect_func f = STORM_get_intersect_func(n_bitmaps);
         return (*f)(bitmap1->data, bitmap2->data, n_bitmaps);
     } else {
         exit(EXIT_FAILURE);
@@ -353,7 +353,7 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
 
 uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, 
                                                STORM_bitmap_t* STORM_RESTRICT bitmap2, 
-                                               const TWK_intersect_func func)
+                                               const STORM_intersect_func func)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
@@ -510,7 +510,7 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
                                                  bitmap2->n_bitmaps, 
                                                  out);
     // Retrieve optimal intersect function.
-    const TWK_intersect_func f = TWK_get_intersect_func(bitmap1->n_bitmaps);
+    const STORM_intersect_func f = STORM_get_intersect_func(bitmap1->n_bitmaps);
 
     uint64_t count = 0;
     for (uint32_t i = 0; i < ret; i += 2) {
@@ -525,7 +525,7 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
 
 uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, 
                                                        const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, 
-                                                       const TWK_intersect_func func, 
+                                                       const STORM_intersect_func func, 
                                                        uint32_t* out)
 {
     if (bitmap1 == NULL) return 0;
@@ -560,8 +560,8 @@ int STORM_bitmap_cont_clear(STORM_bitmap_cont_t* bitmap) {
 }
 
 // cont
-STORM_cont_t* STORM_cont_new() {
-    STORM_cont_t* all = (STORM_cont_t*)malloc(sizeof(STORM_cont_t));
+STORM_t* STORM_new() {
+    STORM_t* all = (STORM_t*)malloc(sizeof(STORM_t));
     if (all == NULL) return NULL;
     all->conts = NULL;
     all->n_conts = 0;
@@ -569,7 +569,7 @@ STORM_cont_t* STORM_cont_new() {
     return all;
 }
 
-void STORM_cont_free(STORM_cont_t* bitmap) {
+void STORM_free(STORM_t* bitmap) {
     if (bitmap == NULL) return;
     // for (uint32_t i = 0; i < bitmap->m_conts; ++i) {
     //     STORM_bitmap_cont_free(&bitmap->conts[i]);
@@ -577,7 +577,7 @@ void STORM_cont_free(STORM_cont_t* bitmap) {
     free(bitmap->conts);
 }
 
-int STORM_cont_add(STORM_cont_t* bitmap, const uint32_t* values, const uint32_t n_values) {
+int STORM_add(STORM_t* bitmap, const uint32_t* values, const uint32_t n_values) {
     if (bitmap == NULL) return -1;
     
     if (bitmap->m_conts == 0) {
@@ -601,7 +601,7 @@ int STORM_cont_add(STORM_cont_t* bitmap, const uint32_t* values, const uint32_t 
     return 1;
 }
 
-int STORM_cont_clear(STORM_cont_t* bitmap) {
+int STORM_clear(STORM_t* bitmap) {
     if (bitmap == NULL) return -1;
     
     for (int i = 0; i < bitmap->n_conts; ++i)
@@ -610,11 +610,11 @@ int STORM_cont_clear(STORM_cont_t* bitmap) {
     return 1;
 }
 
-uint64_t STORM_cont_pairw_intersect_cardinality(STORM_cont_t* bitmap) {
+uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap) {
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const TWK_intersect_func f = TWK_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_intersect_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
 
     // printf("running for: %u vectors\n", bitmap->n_conts);
 
@@ -630,11 +630,11 @@ uint64_t STORM_cont_pairw_intersect_cardinality(STORM_cont_t* bitmap) {
     return total;
 }
 
-uint64_t STORM_cont_pairw_intersect_cardinality_blocked(STORM_cont_t* bitmap, uint32_t bsize) {
+uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsize) {
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const TWK_intersect_func f = TWK_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_intersect_func f = STORM_get_intersect_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
     
     if (bsize == 0) {
         uint64_t tot = 0;
@@ -696,7 +696,7 @@ uint64_t STORM_cont_pairw_intersect_cardinality_blocked(STORM_cont_t* bitmap, ui
     return count;
 }
 
-uint64_t STORM_cont_serialized_size(const STORM_cont_t* bitmap) {
+uint64_t STORM_serialized_size(const STORM_t* bitmap) {
     if (bitmap == NULL) return 0;
 
     uint64_t tot = 0;
@@ -708,4 +708,4 @@ uint64_t STORM_cont_serialized_size(const STORM_cont_t* bitmap) {
     return tot;
 }
 
-uint64_t STORM_cont_intersect_cardinality_square(const STORM_cont_t* STORM_RESTRICT bitmap1, const STORM_cont_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
