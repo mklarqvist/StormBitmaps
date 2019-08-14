@@ -714,6 +714,10 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
             std::cerr << "Done!" << std::endl;
 
+            uint64_t storm_size = STORM_serialized_size(twk2);
+            std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
+
+
             // uint32_t total_screech = 0;
             // for (uint32_t i = 0; i < n_variants; ++i) {
             //     total_screech += STORM_bitmap_cont_serialized_size(twk[i]);
@@ -944,7 +948,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             for (int k = 0; k < n_variants; ++k) {
                 roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
             }
-            std::cerr << "Memory used by roaring=" << roaring_bytes_used << "(" << (float)memory_used/roaring_bytes_used << ")" << std::endl;
+            std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
 
             uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
             roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;

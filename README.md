@@ -1,4 +1,4 @@
-# FastIntersectCount
+# Storm bitmaps
 
 These functions compute the set intersection count (|A \in B|) of pairs of integer sets with equal upper bounds [0,N). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors. There are no union and difference routines in this repository. Using large registers (AVX-512BW) and cache-blocking, we can achieve ~75 GB/s (~0.3 CPU cycles / 64-bit word) throughput (80 billion 64-bit bitmaps / second).
 
