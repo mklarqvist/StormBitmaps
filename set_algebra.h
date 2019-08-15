@@ -104,7 +104,7 @@
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* >= C99 */
 #  define STORM_RESTRICT   restrict
 #else
-/* note : it might be useful to define __restrict or __restrict__ for some C++ compilers */
+/* note : it might be useful to define __restrict or STORM_RESTRICT for some C++ compilers */
 #  define STORM_RESTRICT   /* disable */
 #endif
 
@@ -490,8 +490,8 @@ uint64_t STORM_POPCOUNT(uint64_t x) {
 
 static 
 uint64_t STORM_intersect_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
-                                const uint64_t* STORM_RESTRICT data2, 
-                                uint64_t size)
+                                        const uint64_t* STORM_RESTRICT data2, 
+                                        uint64_t size)
 {
     const uint64_t limit = size - size % 4;
     uint64_t cnt = 0;
@@ -512,8 +512,8 @@ uint64_t STORM_intersect_count_unrolled(const uint64_t* STORM_RESTRICT data1,
 
 static 
 uint64_t STORM_union_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
-                              const uint64_t* STORM_RESTRICT data2, 
-                              uint64_t size)
+                                    const uint64_t* STORM_RESTRICT data2, 
+                                    uint64_t size)
 {
     const uint64_t limit = size - size % 4;
     uint64_t cnt = 0;
@@ -534,8 +534,8 @@ uint64_t STORM_union_count_unrolled(const uint64_t* STORM_RESTRICT data1,
 
 static 
 uint64_t STORM_diff_count_unrolled(const uint64_t* STORM_RESTRICT data1, 
-                              const uint64_t* STORM_RESTRICT data2, 
-                              uint64_t size)
+                                   const uint64_t* STORM_RESTRICT data2, 
+                                   uint64_t size)
 {
     const uint64_t limit = size - size % 4;
     uint64_t cnt = 0;
@@ -553,6 +553,129 @@ uint64_t STORM_diff_count_unrolled(const uint64_t* STORM_RESTRICT data1,
 
     return cnt;
 }
+
+static
+int STORM_pospopcnt_u16_scalar_naive(const uint16_t* data, uint32_t len, uint32_t* flags) {
+    for (int i = 0; i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((data[i] & (1 << j)) >> j);
+        }
+    }
+
+    return 0;
+}
+
+#ifndef _MSC_VER
+
+STORM_FORCE_INLINE
+uint64_t STORM_pospopcnt_umul128(uint64_t a, uint64_t b, uint64_t* hi) {
+    unsigned __int128 x = (unsigned __int128)a * (unsigned __int128)b;
+    *hi = (uint64_t)(x >> 64);
+    return (uint64_t)x;
+}
+
+STORM_FORCE_INLINE
+uint64_t STORM_pospopcnt_loadu_u64(const void* ptr) {
+    uint64_t data;
+    memcpy(&data, ptr, sizeof(data));
+    return data;
+}
+
+// By @aqrit (https://github.com/aqrit)
+// @see: https://gist.github.com/aqrit/c729815b0165c139d0bac642ab7ee104
+static
+int STORM_pospopcnt_u16_scalar_umul128_unroll2(const uint16_t* in, uint32_t n, uint32_t* out) {
+    while (n >= 8) {
+        uint64_t counter_a = 0; // 4 packed 12-bit counters
+        uint64_t counter_b = 0;
+        uint64_t counter_c = 0;
+        uint64_t counter_d = 0;
+
+        // end before overflowing the counters
+        uint32_t len = ((n < 0x0FFF) ? n : 0x0FFF) & ~7;
+        n -= len;
+        for (const uint16_t* end = &in[len]; in != end; in += 8) {
+            const uint64_t mask_a = UINT64_C(0x1111111111111111);
+            const uint64_t mask_b = mask_a + mask_a;
+            const uint64_t mask_c = mask_b + mask_b;
+            const uint64_t mask_0001 = UINT64_C(0x0001000100010001);
+            const uint64_t mask_cnts = UINT64_C(0x000000F00F00F00F);
+
+            uint64_t v0 = STORM_pospopcnt_loadu_u64(&in[0]);
+            uint64_t v1 = STORM_pospopcnt_loadu_u64(&in[4]);
+
+            uint64_t a = (v0 & mask_a) + (v1 & mask_a);
+            uint64_t b = ((v0 & mask_b) + (v1 & mask_b)) >> 1;
+            uint64_t c = ((v0 & mask_c) + (v1 & mask_c)) >> 2;
+            uint64_t d = ((v0 >> 3) & mask_a) + ((v1 >> 3) & mask_a);
+
+            uint64_t hi;
+            a = STORM_pospopcnt_umul128(a, mask_0001, &hi);
+            a += hi; // broadcast 4-bit counts
+            b = STORM_pospopcnt_umul128(b, mask_0001, &hi);
+            b += hi;
+            c = STORM_pospopcnt_umul128(c, mask_0001, &hi);
+            c += hi;
+            d = STORM_pospopcnt_umul128(d, mask_0001, &hi);
+            d += hi;
+
+            counter_a += a & mask_cnts;
+            counter_b += b & mask_cnts;
+            counter_c += c & mask_cnts;
+            counter_d += d & mask_cnts;
+        }
+
+        out[0] += counter_a & 0x0FFF;
+        out[1] += counter_b & 0x0FFF;
+        out[2] += counter_c & 0x0FFF;
+        out[3] += counter_d & 0x0FFF;
+        out[4] += (counter_a >> 36);
+        out[5] += (counter_b >> 36);
+        out[6] += (counter_c >> 36);
+        out[7] += (counter_d >> 36);
+        out[8] += (counter_a >> 24) & 0x0FFF;
+        out[9] += (counter_b >> 24) & 0x0FFF;
+        out[10] += (counter_c >> 24) & 0x0FFF;
+        out[11] += (counter_d >> 24) & 0x0FFF;
+        out[12] += (counter_a >> 12) & 0x0FFF;
+        out[13] += (counter_b >> 12) & 0x0FFF;
+        out[14] += (counter_c >> 12) & 0x0FFF;
+        out[15] += (counter_d >> 12) & 0x0FFF;
+    }
+
+    // assert(n < 8)
+    if (n != 0) {
+        uint64_t tail_counter_a = 0;
+        uint64_t tail_counter_b = 0;
+        do { // zero-extend a bit to 8-bits (emulate pdep) then accumulate
+            const uint64_t mask_01 = UINT64_C(0x0101010101010101);
+            const uint64_t magic   = UINT64_C(0x0000040010004001); // 1+(1<<14)+(1<<28)+(1<<42)
+            uint64_t x = *in++;
+            tail_counter_a += ((x & 0x5555) * magic) & mask_01; // 0101010101010101
+            tail_counter_b += (((x >> 1) & 0x5555) * magic) & mask_01;
+        } while (--n);
+
+        out[0]  += tail_counter_a & 0xFF;
+        out[8]  += (tail_counter_a >>  8) & 0xFF;
+        out[2]  += (tail_counter_a >> 16) & 0xFF;
+        out[10] += (tail_counter_a >> 24) & 0xFF;
+        out[4]  += (tail_counter_a >> 32) & 0xFF;
+        out[12] += (tail_counter_a >> 40) & 0xFF;
+        out[6]  += (tail_counter_a >> 48) & 0xFF;
+        out[14] += (tail_counter_a >> 56) & 0xFF;
+        out[1]  += tail_counter_b & 0xFF;
+        out[9]  += (tail_counter_b >>  8) & 0xFF;
+        out[3]  += (tail_counter_b >> 16) & 0xFF;
+        out[11] += (tail_counter_b >> 24) & 0xFF;
+        out[5]  += (tail_counter_b >> 32) & 0xFF;
+        out[13] += (tail_counter_b >> 40) & 0xFF;
+        out[7]  += (tail_counter_b >> 48) & 0xFF;
+        out[15] += (tail_counter_b >> 56) & 0xFF;
+    }
+
+    return 0;
+}
+#endif
 
 /*
  * This uses fewer arithmetic operations than any other known
@@ -676,6 +799,412 @@ void STORM_CSA128(__m128i* h, __m128i* l, __m128i a, __m128i b, __m128i c) {
     __m128i u = _mm_xor_si128(a, b);
     *h = _mm_or_si128(_mm_and_si128(a, b), _mm_and_si128(u, c));
     *l = _mm_xor_si128(u, c);
+}
+
+/**
+ * Carry-save adder update step.
+ * @see https://en.wikipedia.org/wiki/Carry-save_adder#Technical_details
+ * 
+ * Steps:
+ * 1)  U = *L ⊕ B
+ * 2) *H = (*L ^ B) | (U ^ C)
+ * 3) *L = *L ⊕ B ⊕ C = U ⊕ C
+ * 
+ * B and C are 16-bit staggered registers such that &C - &B = 1.
+ * 
+ * Example usage:
+ * pospopcnt_csa_sse(&twosA, &v1, _mm_loadu_si128(data + i + 0), _mm_loadu_si128(data + i + 1));
+ * 
+ * @param h 
+ * @param l 
+ * @param b 
+ * @param c  
+ */
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+STORM_FORCE_INLINE
+void STORM_pospopcnt_csa_sse(__m128i* STORM_RESTRICT h, 
+                             __m128i* STORM_RESTRICT l, 
+                             const __m128i b, 
+                             const __m128i c) 
+{
+    const __m128i u = _mm_xor_si128(*l, b);
+    *h = _mm_or_si128(*l & b, u & c); // shift carry (sc_i).
+    *l = _mm_xor_si128(u, c); // partial sum (ps).
+}
+
+// By @aqrit (https://github.com/aqrit)
+// @see: https://gist.github.com/aqrit/cb52b2ac5b7d0dfe9319c09d27237bf3
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+static
+int STORM_pospopcnt_u16_sse_sad(const uint16_t* data, uint32_t len, uint32_t* flag_counts) {
+    const __m128i zero = _mm_setzero_si128();
+    const __m128i mask_lo_byte = _mm_srli_epi16(_mm_cmpeq_epi8(zero, zero), 8);
+    const __m128i mask_lo_cnt  = _mm_srli_epi16(mask_lo_byte, 2);
+    const __m128i mask_bits_a  = _mm_set1_epi8(0x41); // 01000001
+    const __m128i mask_bits_b  = _mm_add_epi8(mask_bits_a, mask_bits_a);
+    uint32_t buffer[16];
+
+    __m128i counterA = zero;
+    __m128i counterB = zero;
+    __m128i counterC = zero;
+    __m128i counterD = zero;
+
+    for (const uint16_t* end = &data[(len & ~31)]; data != end; data += 32) {
+        __m128i r0 = _mm_loadu_si128((__m128i*)&data[0]);
+        __m128i r1 = _mm_loadu_si128((__m128i*)&data[8]);
+        __m128i r2 = _mm_loadu_si128((__m128i*)&data[16]);
+        __m128i r3 = _mm_loadu_si128((__m128i*)&data[24]);
+        __m128i r4, r5, r6, r7;
+
+        // seperate LOBYTE and HIBYTE of each WORD
+        // (emulate PSHUFB F,D,B,9,7,5,3,1, E,C,A,8,6,4,2,0)
+        r4 = _mm_and_si128(mask_lo_byte, r0);
+        r5 = _mm_and_si128(mask_lo_byte, r1);
+        r6 = _mm_and_si128(mask_lo_byte, r2);
+        r7 = _mm_and_si128(mask_lo_byte, r3);
+        r0 = _mm_srli_epi16(r0, 8);
+        r1 = _mm_srli_epi16(r1, 8);
+        r2 = _mm_srli_epi16(r2, 8);
+        r3 = _mm_srli_epi16(r3, 8);
+        r0 = _mm_packus_epi16(r0, r4);
+        r1 = _mm_packus_epi16(r1, r5);
+        r2 = _mm_packus_epi16(r2, r6);
+        r3 = _mm_packus_epi16(r3, r7);
+
+        // isolate bits to count
+        r4 = _mm_and_si128(mask_bits_a, r0);
+        r5 = _mm_and_si128(mask_bits_a, r1);
+        r6 = _mm_and_si128(mask_bits_a, r2);
+        r7 = _mm_and_si128(mask_bits_a, r3);
+
+        // horizontal sum of qwords
+        r4 = _mm_sad_epu8(r4, zero);
+        r5 = _mm_sad_epu8(r5, zero);
+        r6 = _mm_sad_epu8(r6, zero);
+        r7 = _mm_sad_epu8(r7, zero);
+
+        // sum 6-bit counts
+        r4 = _mm_add_epi16(r4,r5);
+        r4 = _mm_add_epi16(r4,r6);
+        r4 = _mm_add_epi16(r4,r7);
+
+        // unpack 6-bit counts to 32-bits
+        r5 = _mm_and_si128(mask_lo_cnt, r4);
+        r4 = _mm_srli_epi16(r4, 6);
+        r4 = _mm_packs_epi32(r4, r5);
+
+        // accumulate
+        counterA = _mm_add_epi32(counterA, r4);
+
+        // do it again...
+        r4 = _mm_and_si128(mask_bits_b, r0);
+        r5 = _mm_and_si128(mask_bits_b, r1);
+        r6 = _mm_and_si128(mask_bits_b, r2);
+        r7 = _mm_and_si128(mask_bits_b, r3);
+
+        r4 = _mm_sad_epu8(r4, zero);
+        r5 = _mm_sad_epu8(r5, zero);
+        r6 = _mm_sad_epu8(r6, zero);
+        r7 = _mm_sad_epu8(r7, zero);
+
+        r4 = _mm_add_epi16(r4,r5);
+        r4 = _mm_add_epi16(r4,r6);
+        r4 = _mm_add_epi16(r4,r7);
+
+        r5 = _mm_avg_epu8(zero, r4); // shift right 1
+        r5 = _mm_and_si128(r5, mask_lo_cnt);
+        r4 = _mm_srli_epi16(r4, 7);
+        r4 = _mm_packs_epi32(r4, r5);
+
+        counterB = _mm_add_epi32(counterB, r4); // accumulate
+
+        // rotate right 4
+        r4 = _mm_slli_epi16(r0, 12);
+        r5 = _mm_slli_epi16(r1, 12);
+        r6 = _mm_slli_epi16(r2, 12);
+        r7 = _mm_slli_epi16(r3, 12);
+        r0 = _mm_srli_epi16(r0, 4);
+        r1 = _mm_srli_epi16(r1, 4);
+        r2 = _mm_srli_epi16(r2, 4);
+        r3 = _mm_srli_epi16(r3, 4);
+        r0 = _mm_or_si128(r0, r4);
+        r1 = _mm_or_si128(r1, r5);
+        r2 = _mm_or_si128(r2, r6);
+        r3 = _mm_or_si128(r3, r7);
+
+        // do it again...
+        r4 = _mm_and_si128(mask_bits_a, r0);
+        r5 = _mm_and_si128(mask_bits_a, r1);
+        r6 = _mm_and_si128(mask_bits_a, r2);
+        r7 = _mm_and_si128(mask_bits_a, r3);
+
+        r4 = _mm_sad_epu8(r4, zero);
+        r5 = _mm_sad_epu8(r5, zero);
+        r6 = _mm_sad_epu8(r6, zero);
+        r7 = _mm_sad_epu8(r7, zero);
+
+        r4 = _mm_add_epi16(r4,r5);
+        r4 = _mm_add_epi16(r4,r6);
+        r4 = _mm_add_epi16(r4,r7);
+
+        r5 = _mm_and_si128(mask_lo_cnt, r4);
+        r4 = _mm_srli_epi16(r4, 6);
+        r4 = _mm_packs_epi32(r4, r5);
+
+        counterC = _mm_add_epi32(counterC, r4); // accumulate
+
+        // do it again...
+        r0 = _mm_and_si128(r0, mask_bits_b);
+        r1 = _mm_and_si128(r1, mask_bits_b);
+        r2 = _mm_and_si128(r2, mask_bits_b);
+        r3 = _mm_and_si128(r3, mask_bits_b);
+
+        r0 = _mm_sad_epu8(r0, zero);
+        r1 = _mm_sad_epu8(r1, zero);
+        r2 = _mm_sad_epu8(r2, zero);
+        r3 = _mm_sad_epu8(r3, zero);
+
+        r0 = _mm_add_epi16(r0,r1);
+        r0 = _mm_add_epi16(r0,r2);
+        r0 = _mm_add_epi16(r0,r3);
+
+        r1 = _mm_avg_epu8(zero, r0);
+        r1 = _mm_and_si128(r1, mask_lo_cnt);
+        r0 = _mm_srli_epi16(r0, 7);
+        r0 = _mm_packs_epi32(r0, r1);
+
+        counterD = _mm_add_epi32(counterD, r0); // accumulate
+    }
+
+    // transpose then store counters
+    __m128i counter_1098 = _mm_unpackhi_epi32(counterA, counterB);
+    __m128i counter_76FE = _mm_unpacklo_epi32(counterA, counterB);
+    __m128i counter_32BA = _mm_unpacklo_epi32(counterC, counterD);
+    __m128i counter_54DC = _mm_unpackhi_epi32(counterC, counterD);
+    __m128i counter_7654 = _mm_unpackhi_epi64(counter_54DC, counter_76FE);
+    __m128i counter_FEDC = _mm_unpacklo_epi64(counter_54DC, counter_76FE);
+    __m128i counter_3210 = _mm_unpackhi_epi64(counter_1098, counter_32BA);
+    __m128i counter_BA98 = _mm_unpacklo_epi64(counter_1098, counter_32BA);
+
+    
+    _mm_storeu_si128((__m128i*)&buffer[0], counter_3210);
+    _mm_storeu_si128((__m128i*)&buffer[4], counter_7654);
+    _mm_storeu_si128((__m128i*)&buffer[8], counter_BA98);
+    _mm_storeu_si128((__m128i*)&buffer[12], counter_FEDC);
+    for (int i = 0; i < 16; ++i) flag_counts[i] += buffer[i];
+
+    // scalar tail loop
+    int tail = len & 31;
+    if (tail != 0) {
+        uint64_t countsA = 0;
+        uint64_t countsB = 0;
+        do {
+            // zero-extend a bit to 8-bits then accumulate
+            // (emulate pdep)
+            const uint64_t mask_01 = UINT64_C(0x0101010101010101);// 100000001000000010000000100000001000000010000000100000001
+            const uint64_t magic   = UINT64_C(0x0000040010004001);// 000000000000001000000000000010000000000000100000000000001
+                                                                  // 1+(1<<14)+(1<<28)+(1<<42)
+            uint64_t x = *data++;
+            countsA += ((x & 0x5555) * magic) & mask_01; // 0101010101010101
+            countsB += (((x >> 1) & 0x5555) * magic) & mask_01;
+        } while (--tail);
+
+        // transpose then store counters
+        flag_counts[0]  += countsA & 0xFF;
+        flag_counts[8]  += (countsA >>  8) & 0xFF;
+        flag_counts[2]  += (countsA >> 16) & 0xFF;
+        flag_counts[10] += (countsA >> 24) & 0xFF;
+        flag_counts[4]  += (countsA >> 32) & 0xFF;
+        flag_counts[12] += (countsA >> 40) & 0xFF;
+        flag_counts[6]  += (countsA >> 48) & 0xFF;
+        flag_counts[14] += (countsA >> 56) & 0xFF;
+        flag_counts[1]  += countsB & 0xFF;
+        flag_counts[9]  += (countsB >>  8) & 0xFF;
+        flag_counts[3]  += (countsB >> 16) & 0xFF;
+        flag_counts[11] += (countsB >> 24) & 0xFF;
+        flag_counts[5]  += (countsB >> 32) & 0xFF;
+        flag_counts[13] += (countsB >> 40) & 0xFF;
+        flag_counts[7]  += (countsB >> 48) & 0xFF;
+        flag_counts[15] += (countsB >> 56) & 0xFF;
+    }
+
+    return 0;
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+static
+int STORM_pospopcnt_u16_sse_blend_popcnt_unroll8(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    const __m128i* data_vectors = (const __m128i*)(array);
+    const uint32_t n_cycles = len / 8;
+
+    size_t i = 0;
+    for (/**/; i + 8 <= n_cycles; i += 8) {
+#define L(p) __m128i v##p = _mm_loadu_si128(data_vectors+i+p);
+        L(0) L(1) L(2) L(3)
+        L(4) L(5) L(6) L(7)
+
+#define U0(p,k) __m128i input##p = _mm_or_si128(_mm_and_si128(v##p, _mm_set1_epi16(0x00FF)), _mm_slli_epi16(v##k, 8));
+#define U1(p,k) __m128i input##k = _mm_or_si128(_mm_and_si128(v##p, _mm_set1_epi16(0xFF00)), _mm_srli_epi16(v##k, 8));
+#define U(p, k)  U0(p,k) U1(p,k)
+
+        U(0,1) U(2,3) U(4,5) U(6,7)
+        
+        for (int i = 0; i < 8; ++i) {
+#define A0(p) flags[ 7 - i] += _mm_popcnt_u32(_mm_movemask_epi8(input##p));
+#define A1(k) flags[15 - i] += _mm_popcnt_u32(_mm_movemask_epi8(input##k));
+#define A(p, k) A0(p) A1(k)
+            A(0,1) A(2, 3) A(4,5) A(6, 7)
+
+#define P0(p) input##p = _mm_add_epi8(input##p, input##p);
+#define P(p, k) input##p = P0(p) P0(k)
+
+            P(0,1) P(2, 3) P(4,5) P(6, 7)
+        }
+    }
+
+    for (/**/; i + 4 <= n_cycles; i += 4) {
+        L(0) L(1) L(2) L(3)
+        U(0,1) U(2,3)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1) A(2, 3)
+            P(0,1) P(2, 3)
+        }
+    }
+
+    for (/**/; i + 2 <= n_cycles; i += 2) {
+        L(0) L(1)
+        U(0,1)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1)
+            P(0,1)
+        }
+    }
+
+    i *= 8;
+    for (/**/; i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+#undef L
+#undef U0
+#undef U1
+#undef U
+#undef A0
+#undef A1
+#undef A
+#undef P0
+#undef P
+    return 0;
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("sse4.2")))
+#endif
+static
+int STORM_pospopcnt_u16_sse_harvey_seal(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    for (uint32_t i = len - (len % (16 * 8)); i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+    const __m128i* data = (const __m128i*)array;
+    size_t size = len / 8;
+    __m128i v1  = _mm_setzero_si128();
+    __m128i v2  = _mm_setzero_si128();
+    __m128i v4  = _mm_setzero_si128();
+    __m128i v8  = _mm_setzero_si128();
+    __m128i v16 = _mm_setzero_si128();
+    __m128i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    const uint64_t limit = size - size % 16;
+    uint64_t i = 0;
+    uint16_t buffer[8];
+    __m128i counter[16];
+
+    while (i < limit) {        
+        for (size_t i = 0; i < 16; ++i) {
+            counter[i] = _mm_setzero_si128();
+        }
+
+        size_t thislimit = limit;
+        if (thislimit - i >= (1 << 16))
+            thislimit = i + (1 << 16) - 1;
+
+        for (/**/; i < thislimit; i += 16) {
+#define U(pos) {                     \
+    counter[pos] = _mm_add_epi16(counter[pos], _mm_and_si128(v16, _mm_set1_epi16(1))); \
+    v16 = _mm_srli_epi16(v16, 1); \
+}
+            STORM_pospopcnt_csa_sse(&twosA,  &v1, _mm_loadu_si128(data + i +  0), _mm_loadu_si128(data + i +  1));
+            STORM_pospopcnt_csa_sse(&twosB,  &v1, _mm_loadu_si128(data + i +  2), _mm_loadu_si128(data + i +  3));
+            STORM_pospopcnt_csa_sse(&foursA, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_sse(&twosA,  &v1, _mm_loadu_si128(data + i +  4), _mm_loadu_si128(data + i +  5));
+            STORM_pospopcnt_csa_sse(&twosB,  &v1, _mm_loadu_si128(data + i +  6), _mm_loadu_si128(data + i +  7));
+            STORM_pospopcnt_csa_sse(&foursB, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_sse(&eightsA,&v4, foursA, foursB);
+            STORM_pospopcnt_csa_sse(&twosA,  &v1, _mm_loadu_si128(data + i +  8),  _mm_loadu_si128(data + i +  9));
+            STORM_pospopcnt_csa_sse(&twosB,  &v1, _mm_loadu_si128(data + i + 10),  _mm_loadu_si128(data + i + 11));
+            STORM_pospopcnt_csa_sse(&foursA, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_sse(&twosA,  &v1, _mm_loadu_si128(data + i + 12),  _mm_loadu_si128(data + i + 13));
+            STORM_pospopcnt_csa_sse(&twosB,  &v1, _mm_loadu_si128(data + i + 14),  _mm_loadu_si128(data + i + 15));
+            STORM_pospopcnt_csa_sse(&foursB, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_sse(&eightsB,&v4, foursA, foursB);
+            U(0) U(1) U(2) U(3) U(4) U(5) U(6) U(7) U(8) U(9) U(10) U(11) U(12) U(13) U(14) U(15) // Updates
+            STORM_pospopcnt_csa_sse(&v16,    &v8, eightsA, eightsB);
+#undef U
+        }
+
+        // update the counters after the last iteration
+        for (size_t i = 0; i < 16; ++i) {
+            counter[i] = _mm_add_epi16(counter[i], _mm_and_si128(v16, _mm_set1_epi16(1)));
+            v16 = _mm_srli_epi16(v16, 1);
+        }
+        
+        for (size_t i = 0; i < 16; ++i) {
+            _mm_storeu_si128((__m128i*)buffer, counter[i]);
+            for (size_t z = 0; z < 8; z++) {
+                flags[i] += 16 * (uint32_t)buffer[z];
+            }
+        }
+    }
+
+    _mm_storeu_si128((__m128i*)buffer, v1);
+    for (size_t i = 0; i < 8; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+
+    _mm_storeu_si128((__m128i*)buffer, v2);
+    for (size_t i = 0; i < 8; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 2 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    _mm_storeu_si128((__m128i*)buffer, v4);
+    for (size_t i = 0; i < 8; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 4 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    _mm_storeu_si128((__m128i*)buffer, v8);
+    for (size_t i = 0; i < 8; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 8 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    return 0;
 }
 
 #if !defined(_MSC_VER)
@@ -933,6 +1462,193 @@ void STORM_CSA256(__m256i* h, __m256i* l, __m256i a, __m256i b, __m256i c) {
     *h = _mm256_or_si256(_mm256_and_si256(a, b), _mm256_and_si256(u, c));
     *l = _mm256_xor_si256(u, c);
 }
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+STORM_FORCE_INLINE
+void STORM_pospopcnt_csa_avx2(__m256i* STORM_RESTRICT h, 
+                              __m256i* STORM_RESTRICT l, 
+                              const __m256i b, 
+                              const __m256i c) 
+{
+    const __m256i u = _mm256_xor_si256(*l, b);
+    *h = _mm256_or_si256(*l & b, u & c);
+    *l = _mm256_xor_si256(u, c);
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+static
+int STORM_pospopcnt_u16_avx2_blend_popcnt_unroll8(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    const __m256i* data_vectors = (const __m256i*)(array);
+    const uint32_t n_cycles = len / 16;
+
+    size_t i = 0;
+    for (/**/; i + 8 <= n_cycles; i += 8) {
+#define L(p) __m256i v##p = _mm256_loadu_si256(data_vectors+i+p);
+        L(0) L(1) L(2) L(3)
+        L(4) L(5) L(6) L(7) 
+        
+#define U0(p,k) __m256i input##p = _mm256_or_si256(_mm256_and_si256(v##p, _mm256_set1_epi16(0x00FF)), _mm256_slli_epi16(v##k, 8));
+#define U1(p,k) __m256i input##k = _mm256_or_si256(_mm256_and_si256(v##p, _mm256_set1_epi16(0xFF00)), _mm256_srli_epi16(v##k, 8));
+#define U(p, k)  U0(p,k) U1(p,k)
+       U(0,1) U(2, 3) U(4, 5) U(6, 7)
+        
+        for (int i = 0; i < 8; ++i) {
+#define A0(p) flags[ 7 - i] += _mm_popcnt_u32(_mm256_movemask_epi8(input##p));
+#define A1(k) flags[15 - i] += _mm_popcnt_u32(_mm256_movemask_epi8(input##k));
+#define A(p, k) A0(p) A1(k)
+            A(0,1) A(2, 3) A(4, 5) A(6, 7)
+
+#define P0(p) input##p = _mm256_add_epi8(input##p, input##p);
+#define P(p, k) input##p = P0(p) P0(k)
+            P(0,1) P(2, 3) P(4, 5) P(6, 7)
+        }
+    }
+
+    for (/**/; i + 4 <= n_cycles; i += 4) {
+        L(0) L(1) L(2) L(3)
+        U(0,1) U(2, 3)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1) A( 2, 3)
+            P(0,1) P( 2, 3)
+        }
+    }
+
+    for (/**/; i + 2 <= n_cycles; i += 2) {
+        L(0) L(1)
+        U(0,1)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1)
+            P(0,1)
+        }
+    }
+
+    i *= 16;
+    for (/**/; i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+#undef L
+#undef U0
+#undef U1
+#undef U
+#undef A0
+#undef A1
+#undef A
+#undef P0
+#undef P
+
+    return 0;
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx2")))
+#endif
+static 
+int STORM_pospopcnt_u16_avx2_harvey_seal(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    for (uint32_t i = len - (len % (16 * 16)); i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+    const __m256i* data = (const __m256i*)array;
+    size_t size = len / 16;
+    __m256i v1  = _mm256_setzero_si256();
+    __m256i v2  = _mm256_setzero_si256();
+    __m256i v4  = _mm256_setzero_si256();
+    __m256i v8  = _mm256_setzero_si256();
+    __m256i v16 = _mm256_setzero_si256();
+    __m256i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    const uint64_t limit = size - size % 16;
+    uint64_t i = 0;
+    uint16_t buffer[16];
+    __m256i counter[16];
+    const __m256i one = _mm256_set1_epi16(1);
+
+    while (i < limit) {        
+        for (size_t i = 0; i < 16; ++i) {
+            counter[i] = _mm256_setzero_si256();
+        }
+
+        size_t thislimit = limit;
+        if (thislimit - i >= (1 << 16))
+            thislimit = i + (1 << 16) - 1;
+
+        for (/**/; i < thislimit; i += 16) {
+#define U(pos) {                     \
+    counter[pos] = _mm256_add_epi16(counter[pos], _mm256_and_si256(v16, one)); \
+    v16 = _mm256_srli_epi16(v16, 1); \
+}
+            STORM_pospopcnt_csa_avx2(&twosA,  &v1, _mm256_loadu_si256(data + i +  0), _mm256_loadu_si256(data + i +  1));
+            STORM_pospopcnt_csa_avx2(&twosB,  &v1, _mm256_loadu_si256(data + i +  2), _mm256_loadu_si256(data + i +  3));
+            STORM_pospopcnt_csa_avx2(&foursA, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx2(&twosA,  &v1, _mm256_loadu_si256(data + i +  4), _mm256_loadu_si256(data + i +  5));
+            STORM_pospopcnt_csa_avx2(&twosB,  &v1, _mm256_loadu_si256(data + i +  6), _mm256_loadu_si256(data + i +  7));
+            STORM_pospopcnt_csa_avx2(&foursB, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx2(&eightsA,&v4, foursA, foursB);
+            STORM_pospopcnt_csa_avx2(&twosA,  &v1, _mm256_loadu_si256(data + i +  8),  _mm256_loadu_si256(data + i +  9));
+            STORM_pospopcnt_csa_avx2(&twosB,  &v1, _mm256_loadu_si256(data + i + 10),  _mm256_loadu_si256(data + i + 11));
+            STORM_pospopcnt_csa_avx2(&foursA, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx2(&twosA,  &v1, _mm256_loadu_si256(data + i + 12),  _mm256_loadu_si256(data + i + 13));
+            STORM_pospopcnt_csa_avx2(&twosB,  &v1, _mm256_loadu_si256(data + i + 14),  _mm256_loadu_si256(data + i + 15));
+            STORM_pospopcnt_csa_avx2(&foursB, &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx2(&eightsB,&v4, foursA, foursB);
+            U(0) U(1) U(2) U(3) U(4) U(5) U(6) U(7) U(8) U(9) U(10) U(11) U(12) U(13) U(14) U(15) // Updates
+            STORM_pospopcnt_csa_avx2(&v16,    &v8, eightsA, eightsB);
+#undef U
+        }
+
+        // update the counters after the last iteration
+        for (size_t i = 0; i < 16; ++i) {
+            counter[i] = _mm256_add_epi16(counter[i], _mm256_and_si256(v16, one));
+            v16 = _mm256_srli_epi16(v16, 1);
+        }
+        
+        for (size_t i = 0; i < 16; ++i) {
+            _mm256_storeu_si256((__m256i*)buffer, counter[i]);
+            for (size_t z = 0; z < 16; z++) {
+                flags[i] += 16 * (uint32_t)buffer[z];
+            }
+        }
+    }
+
+    _mm256_storeu_si256((__m256i*)buffer, v1);
+    for (size_t i = 0; i < 16; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+
+    _mm256_storeu_si256((__m256i*)buffer, v2);
+    for (size_t i = 0; i < 16; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 2 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    _mm256_storeu_si256((__m256i*)buffer, v4);
+    for (size_t i = 0; i < 16; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 4 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    _mm256_storeu_si256((__m256i*)buffer, v8);
+    for (size_t i = 0; i < 16; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += 8 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    return 0;
+}
+
 
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx2")))
@@ -1556,6 +2272,37 @@ void STORM_CSA512(__m512i* h, __m512i* l, __m512i a, __m512i b, __m512i c) {
     *h = _mm512_ternarylogic_epi32(c, b, a, 0xe8);
 }
 
+// By Wojciech Muła
+// @see https://github.com/WojciechMula/sse-popcount/blob/master/popcnt-avx512-harley-seal.cpp#L3
+// @see https://arxiv.org/abs/1611.07612
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+STORM_FORCE_INLINE
+__m512i STORM_avx512_popcount(const __m512i v) {
+    const __m512i m1 = _mm512_set1_epi8(0x55); // 01010101
+    const __m512i m2 = _mm512_set1_epi8(0x33); // 00110011
+    const __m512i m4 = _mm512_set1_epi8(0x0F); // 00001111
+
+    const __m512i t1 = _mm512_sub_epi8(v,       (_mm512_srli_epi16(v,  1)  & m1));
+    const __m512i t2 = _mm512_add_epi8(t1 & m2, (_mm512_srli_epi16(t1, 2)  & m2));
+    const __m512i t3 = _mm512_add_epi8(t2,       _mm512_srli_epi16(t2, 4)) & m4;
+    return _mm512_sad_epu8(t3, _mm512_setzero_si512());
+}
+
+// 512i-version of carry-save adder subroutine.
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+STORM_FORCE_INLINE
+void STORM_pospopcnt_csa_avx512(__m512i* STORM_RESTRICT h, 
+                                __m512i* STORM_RESTRICT l, 
+                                __m512i b, __m512i c) 
+{
+     *h = _mm512_ternarylogic_epi32(c, b, *l, 0xE8); // 11101000
+     *l = _mm512_ternarylogic_epi32(c, b, *l, 0x96); // 10010110
+}
+
 #if !defined(_MSC_VER)
   __attribute__ ((target ("avx512bw")))
 #endif
@@ -1616,6 +2363,306 @@ uint64_t STORM_popcnt_avx512(const __m512i* STORM_RESTRICT data, uint64_t size)
             cnt64[5] +
             cnt64[6] +
             cnt64[7];
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static
+int STORM_pospopcnt_u16_avx512bw_harvey_seal(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    for (uint32_t i = len - (len % (32 * 16)); i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+    const __m512i* data = (const __m512i*)array;
+    __m512i v1  = _mm512_setzero_si512();
+    __m512i v2  = _mm512_setzero_si512();
+    __m512i v4  = _mm512_setzero_si512();
+    __m512i v8  = _mm512_setzero_si512();
+    __m512i v16 = _mm512_setzero_si512();
+    __m512i twosA, twosB, foursA, foursB, eightsA, eightsB;
+    __m512i one = _mm512_set1_epi16(1);
+    __m512i counter[16];
+
+    const size_t size = len / 32;
+    const uint64_t limit = size - size % 16;
+
+    uint16_t buffer[32];
+
+    uint64_t i = 0;
+    while (i < limit) {
+        for (size_t i = 0; i < 16; ++i)
+            counter[i] = _mm512_setzero_si512();
+
+        size_t thislimit = limit;
+        if (thislimit - i >= (1 << 16))
+            thislimit = i + (1 << 16) - 1;
+
+        for (/**/; i < thislimit; i += 16) {
+#define U(pos) {                     \
+    counter[pos] = _mm512_add_epi16(counter[pos], _mm512_and_si512(v16, _mm512_set1_epi16(1))); \
+    v16 = _mm512_srli_epi16(v16, 1); \
+}
+            STORM_pospopcnt_csa_avx512(&twosA,   &v1, _mm512_loadu_si512(data + i + 0), _mm512_loadu_si512(data + i + 1));
+            STORM_pospopcnt_csa_avx512(&twosB,   &v1, _mm512_loadu_si512(data + i + 2), _mm512_loadu_si512(data + i + 3));
+            STORM_pospopcnt_csa_avx512(&foursA,  &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx512(&twosA,   &v1, _mm512_loadu_si512(data + i + 4), _mm512_loadu_si512(data + i + 5));
+            STORM_pospopcnt_csa_avx512(&twosB,   &v1, _mm512_loadu_si512(data + i + 6), _mm512_loadu_si512(data + i + 7));
+            STORM_pospopcnt_csa_avx512(&foursB,  &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx512(&eightsA, &v4, foursA, foursB);
+            STORM_pospopcnt_csa_avx512(&twosA,   &v1, _mm512_loadu_si512(data + i + 8),  _mm512_loadu_si512(data + i + 9));
+            STORM_pospopcnt_csa_avx512(&twosB,   &v1, _mm512_loadu_si512(data + i + 10), _mm512_loadu_si512(data + i + 11));
+            STORM_pospopcnt_csa_avx512(&foursA,  &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx512(&twosA,   &v1, _mm512_loadu_si512(data + i + 12), _mm512_loadu_si512(data + i + 13));
+            STORM_pospopcnt_csa_avx512(&twosB,   &v1, _mm512_loadu_si512(data + i + 14), _mm512_loadu_si512(data + i + 15));
+            STORM_pospopcnt_csa_avx512(&foursB,  &v2, twosA, twosB);
+            STORM_pospopcnt_csa_avx512(&eightsB, &v4, foursA, foursB);
+            U(0) U(1) U(2) U(3) U(4) U(5) U(6) U(7) U(8) U(9) U(10) U(11) U(12) U(13) U(14) U(15) // Updates
+            STORM_pospopcnt_csa_avx512(&v16,     &v8, eightsA, eightsB);
+        }
+        // Update the counters after the last iteration.
+        for (size_t i = 0; i < 16; ++i) U(i)
+#undef U
+        
+        for (size_t i = 0; i < 16; ++i) {
+            _mm512_storeu_si512((__m512i*)buffer, counter[i]);
+            for (size_t z = 0; z < 32; z++) {
+                flags[i] += 16 * (uint32_t)buffer[z];
+            }
+        }
+    }
+
+    _mm512_storeu_si512((__m512i*)buffer, v1);
+    for (size_t i = 0; i < 32; i++) {
+        for (int j = 0; j < 16; j++) {
+            flags[j] += 1 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+
+    _mm512_storeu_si512((__m512i*)buffer, v2);
+    for (size_t i = 0; i < 32; i++) {
+        for (int j = 0; j < 16; j++) {
+            flags[j] += 2 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+    
+    _mm512_storeu_si512((__m512i*)buffer, v4);
+    for (size_t i = 0; i < 32; i++) {
+        for (int j = 0; j < 16; j++) {
+            flags[j] += 4 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+
+    _mm512_storeu_si512((__m512i*)buffer, v8);
+    for (size_t i = 0; i < 32; i++) {
+        for (int j = 0; j < 16; j++) {
+            flags[j] += 8 * ((buffer[i] & (1 << j)) >> j);
+        }
+    }
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static 
+int STORM_pospopcnt_u16_avx512bw_blend_popcnt_unroll8(const uint16_t* data, uint32_t len, uint32_t* flags) { 
+#define AND_OR 0xea // ternary function: (a & b) | c
+    const __m512i* data_vectors = (const __m512i*)(data);
+    const uint32_t n_cycles = len / 32;
+
+    size_t i = 0;
+    for (/**/; i + 8 <= n_cycles; i += 8) {
+#define L(p) __m512i v##p = _mm512_loadu_si512(data_vectors+i+p);
+        L(0)  L(1)  L(2)  L(3)  
+        L(4)  L(5)  L(6)  L(7) 
+
+#define U0(p,k) __m512i input##p = _mm512_ternarylogic_epi32(v##p, _mm512_set1_epi16(0x00FF), _mm512_slli_epi16(v##k, 8), AND_OR);
+#define U1(p,k) __m512i input##k = _mm512_ternarylogic_epi32(v##p, _mm512_set1_epi16(0xFF00), _mm512_srli_epi16(v##k, 8), AND_OR);
+#define U(p, k)  U0(p,k) U1(p,k)
+
+        U(0,1) U( 2, 3) U( 4, 5) U( 6, 7)
+        
+        for (int i = 0; i < 8; ++i) {
+#define A0(p) flags[ 7 - i] += _mm_popcnt_u64(_mm512_movepi8_mask(input##p));
+#define A1(k) flags[15 - i] += _mm_popcnt_u64(_mm512_movepi8_mask(input##k));
+#define A(p, k) A0(p) A1(k)
+            A(0,1) A(2, 3) A(4,5) A(6, 7)
+
+#define P0(p) input##p = _mm512_add_epi8(input##p, input##p);
+#define P(p, k) input##p = P0(p) P0(k)
+
+            P(0,1) P(2, 3) P(4,5) P(6, 7)
+        }
+    }
+
+    for (/**/; i + 4 <= n_cycles; i += 4) {
+        L(0) L(1) L(2) L(3)
+        U(0,1) U(2,3)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1) A(2, 3)
+            P(0,1) P(2, 3)
+        }
+    }
+
+    for (/**/; i + 2 <= n_cycles; i += 2) {
+        L(0) L(1)
+        U(0,1)
+        
+        for (int i = 0; i < 8; ++i) {
+            A(0,1)
+            P(0,1)
+        }
+    }
+
+    i *= 32;
+    for (/**/; i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((data[i] & (1 << j)) >> j);
+        }
+    }
+
+#undef L
+#undef U0
+#undef U1
+#undef U
+#undef A0
+#undef A1
+#undef A
+#undef P0
+#undef P
+#undef AND_OR
+    
+    return 0;
+}
+
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static
+int STORM_pospopcnt_u16_avx512bw_adder_forest(const uint16_t* array, uint32_t len, uint32_t* flags) {
+    __m512i counters[16];
+
+    for (size_t i = 0; i < 16; ++i) {
+        counters[i] = _mm512_setzero_si512();
+    }
+
+    const __m512i mask1bit = _mm512_set1_epi16(0x5555); // 0101010101010101 Pattern: 01
+    const __m512i mask2bit = _mm512_set1_epi16(0x3333); // 0011001100110011 Pattern: 0011
+    const __m512i mask4bit = _mm512_set1_epi16(0x0F0F); // 0000111100001111 Pattern: 00001111
+    const __m512i mask8bit = _mm512_set1_epi16(0x00FF); // 0000000011111111 Pattern: 0000000011111111
+    
+    const uint32_t n_cycles = len / (2048 * (16*32));
+    const uint32_t n_total  = len / (16*32);
+    uint16_t tmp[32];
+
+/*------ Macros --------*/
+#define LE(i,p,k)  const __m512i sum##p##k##_##i##bit_even = _mm512_add_epi8(input##p & mask##i##bit, input##k & mask##i##bit);
+#define LO(i,p,k)  const __m512i sum##p##k##_##i##bit_odd  = _mm512_add_epi8(_mm512_srli_epi16(input##p, i) & mask##i##bit, _mm512_srli_epi16(input##k, i) & mask##i##bit);
+
+#define LBLOCK(i)           \
+    LE(i,0,1)   LO(i,0,1)   \
+    LE(i,2,3)   LO(i,2,3)   \
+    LE(i,4,5)   LO(i,4,5)   \
+    LE(i,6,7)   LO(i,6,7)   \
+    LE(i,8,9)   LO(i,8,9)   \
+    LE(i,10,11) LO(i,10,11) \
+    LE(i,12,13) LO(i,12,13) \
+    LE(i,14,15) LO(i,14,15) \
+
+#define EVEN(b,i,k,p) input##i = sum##k##p##_##b##bit_even;
+#define ODD(b,i,k,p)  input##i = sum##k##p##_##b##bit_odd;
+
+#define UPDATE(i)                                                  \
+    EVEN(i,0,0,1) EVEN(i,1,2,3)   EVEN(i,2,4,5)   EVEN(i,3,6,7)    \
+    EVEN(i,4,8,9) EVEN(i,5,10,11) EVEN(i,6,12,13) EVEN(i,7,14,15)  \
+     ODD(i,8,0,1)  ODD(i,9,2,3)    ODD(i,10,4,5)   ODD(i,11,6,7)   \
+     ODD(i,12,8,9) ODD(i,13,10,11) ODD(i,14,12,13) ODD(i,15,14,15) \
+
+#define UE(i,p,k) counters[i] = _mm512_add_epi16(counters[i], sum##p##k##_8bit_even);
+#define UO(i,p,k) counters[i] = _mm512_add_epi16(counters[i], sum##p##k##_8bit_odd);
+
+/*------ Start --------*/
+#define L(p) __m512i input##p = _mm512_loadu_si512((__m512i*)(array + i*2048*512 + j*512 + p*32));
+    size_t i = 0;
+    for (/**/; i < n_cycles; ++i) {
+        for (int j = 0; j < 2048; ++j) {
+            // Load 16 registers.
+            L(0)  L(1)  L(2)  L(3)  
+            L(4)  L(5)  L(6)  L(7) 
+            L(8)  L(9)  L(10) L(11) 
+            L(12) L(13) L(14) L(15)
+
+            // Perform updates for bits {1,2,4,8}.
+            LBLOCK(1) UPDATE(1)
+            LBLOCK(2) UPDATE(2)
+            LBLOCK(4) UPDATE(4)
+            LBLOCK(8) UPDATE(8)
+
+            // Update accumulators.
+            UE( 0,0,1) UE( 1, 2, 3) UE( 2, 4, 5) UE( 3, 6, 7)  
+            UE( 4,8,9) UE( 5,10,11) UE( 6,12,13) UE( 7,14,15) 
+            UO( 8,0,1) UO( 9, 2, 3) UO(10, 4, 5) UO(11, 6, 7) 
+            UO(12,8,9) UO(13,10,11) UO(14,12,13) UO(15,14,15)
+        }
+
+        // Update.
+        for (size_t i = 0; i < 16; ++i) {
+            _mm512_storeu_si512((__m512i*)tmp, counters[i]);
+            for (int j = 0; j < 32; ++j) flags[i] += tmp[j];
+        }
+        // Reset.
+        for (size_t i = 0; i < 16; ++i) {
+            counters[i] = _mm512_setzero_si512();
+        }
+    }
+#undef L
+#define L(p) __m512i input##p = _mm512_loadu_si512((__m512i*)(array + i*512 + p*32));
+    i *= 2048;
+    for (/**/; i < n_total; ++i) {
+        // Load 16 registers.
+        L(0)  L(1)  L(2)  L(3)  
+        L(4)  L(5)  L(6)  L(7) 
+        L(8)  L(9)  L(10) L(11) 
+        L(12) L(13) L(14) L(15)
+
+        // Perform updates for bits {1,2,4,8}.
+        LBLOCK(1) UPDATE(1)
+        LBLOCK(2) UPDATE(2)
+        LBLOCK(4) UPDATE(4)
+        LBLOCK(8) UPDATE(8)
+
+        // Update accumulators.
+        UE( 0,0,1) UE( 1, 2, 3) UE( 2, 4, 5) UE( 3, 6, 7)  
+        UE( 4,8,9) UE( 5,10,11) UE( 6,12,13) UE( 7,14,15) 
+        UO( 8,0,1) UO( 9, 2, 3) UO(10, 4, 5) UO(11, 6, 7) 
+        UO(12,8,9) UO(13,10,11) UO(14,12,13) UO(15,14,15)
+    }
+
+    i *= 512;
+    for (/**/; i < len; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            flags[j] += ((array[i] & (1 << j)) >> j);
+        }
+    }
+
+#undef L
+#undef UPDATE
+#undef ODD
+#undef EVEN
+#undef LBLOCK
+#undef LE
+#undef LO
+#undef UO
+#undef UE
+
+    for (size_t i = 0; i < 16; ++i) {
+        _mm512_storeu_si512((__m512i*)tmp, counters[i]);
+        for (int j = 0; j < 32; ++j) flags[i] += tmp[j];
+    }
+    return 0;
 }
 
 /*
@@ -2431,7 +3478,7 @@ uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors,
     return total;
 }
 
-STORM_FORCE_INLINE
+static
 uint64_t STORM_popcnt(const uint64_t* data, uint64_t size) {
     uint64_t cnt = 0;
     uint64_t i;
@@ -2507,6 +3554,62 @@ uint64_t STORM_popcnt(const uint64_t* data, uint64_t size) {
         cnt += STORM_popcount64(data[i]);
 
     return cnt;
+}
+
+static
+int STORM_pospopcnt_u16(const uint16_t* data, uint32_t len, uint32_t* flags) {
+
+#if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+        /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+    #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+    #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+    #endif
+    }
+    #endif
+#endif
+
+#if defined(HAVE_AVX512)
+    if ((cpuid & STORM_bit_AVX512BW))
+    {
+        if (len < 32) return(STORM_pospopcnt_u16_sse_sad(data, len, flags)); // small
+        else if (len < 256)  return(STORM_pospopcnt_u16_sse_blend_popcnt_unroll8(data, len, flags)); // small
+        else if (len < 512)  return(STORM_pospopcnt_u16_avx512bw_blend_popcnt_unroll8(data, len, flags)); // medium
+        else if (len < 4096) return(STORM_pospopcnt_u16_avx512bw_adder_forest(data, len, flags)); // medium3
+        else return(STORM_pospopcnt_u16_avx512bw_harvey_seal(data, len, flags)); // fix
+    }
+#endif
+
+#if defined(HAVE_AVX2)
+    if ((cpuid & STORM_bit_AVX2))
+    {
+        if (len < 128) return(STORM_pospopcnt_u16_sse_sad(data, len, flags)); // small
+        else if (len < 1024) return(STORM_pospopcnt_u16_avx2_blend_popcnt_unroll8(data, len, flags)); // medium
+        else return(STORM_pospopcnt_u16_avx2_harvey_seal(data, len, flags)); // large
+    }
+#endif
+
+#if defined(HAVE_SSE4)
+    if ((cpuid & STORM_bit_SSE42))
+    {
+         return(STORM_pospopcnt_u16_sse_harvey_seal(data, len, flags));
+    }
+#endif
+
+#ifndef _MSC_VER
+    return(STORM_pospopcnt_u16_scalar_umul128_unroll2(data, len, flags)); // fallback scalar
+#else
+    return(STORM_pospopcnt_u16_scalar_naive(data, len, flags));
+#endif
 }
 
 #ifdef __cplusplus
