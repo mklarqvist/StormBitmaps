@@ -700,7 +700,7 @@ uint64_t STORM_popcount64(uint64_t x)
 
 
 static
-const uint8_t STORM_lookup8bit[256] = {
+const uint8_t STORM_popcnt_lookup8bit[256] = {
 	/* 0 */ 0, /* 1 */ 1, /* 2 */ 1, /* 3 */ 2,
 	/* 4 */ 1, /* 5 */ 2, /* 6 */ 2, /* 7 */ 3,
 	/* 8 */ 1, /* 9 */ 2, /* a */ 2, /* b */ 3,
@@ -1743,7 +1743,7 @@ uint64_t STORM_intersect_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT da
     result += (uint64_t)(_mm256_extract_epi64(acc, 3));
 
     for (/**/; i < n; ++i) {
-        result += STORM_lookup8bit[data1[i] & data2[i]];
+        result += STORM_popcnt_lookup8bit[data1[i] & data2[i]];
     }
 
     return result;
@@ -1814,7 +1814,7 @@ uint64_t STORM_union_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1,
     result += (uint64_t)(_mm256_extract_epi64(acc, 3));
 
     for (/**/; i < n; ++i) {
-        result += STORM_lookup8bit[data1[i] | data2[i]];
+        result += STORM_popcnt_lookup8bit[data1[i] | data2[i]];
     }
 
     return result;
@@ -1885,7 +1885,7 @@ uint64_t STORM_diff_count_lookup_avx2_func(const uint8_t* STORM_RESTRICT data1,
     result += (uint64_t)(_mm256_extract_epi64(acc, 3));
 
     for (/**/; i < n; ++i) {
-        result += STORM_lookup8bit[data1[i] ^ data2[i]];
+        result += STORM_popcnt_lookup8bit[data1[i] ^ data2[i]];
     }
 
     return result;
