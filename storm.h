@@ -30,7 +30,7 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include "set_algebra.h"
+#include "libalgebra.h"
 
 /* ===   Compiler specifics   === */
 

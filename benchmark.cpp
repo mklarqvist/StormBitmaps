@@ -14,7 +14,7 @@
 #include <roaring/roaring.h>
 #endif
 
-#include "set_algebra.h"
+#include "libalgebra.h"
 #include "storm.h"
 #include "classes.h"
 #include "experimental.h"

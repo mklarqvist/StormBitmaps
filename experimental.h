@@ -23,7 +23,7 @@
 // #include <iostream>//debug
 // #include <bitset> //
 
-#include "set_algebra.h"
+#include "libalgebra.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1

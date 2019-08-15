@@ -33,10 +33,10 @@ all: benchmark
 %.o: %.cpp
 	$(CXX) $(CPPFLAGS) -c -o $@ $<
 
-benchmark.o: benchmark.cpp classes.h set_algebra.h classes.o storm.h storm.o experimental.o experimental.h
+benchmark.o: benchmark.cpp classes.h libalgebra.h classes.o storm.h storm.o experimental.o experimental.h
 	$(CXX) $(CPPFLAGS) -I/home/marcus/CRoaring/include -c -o $@ $<
 
-benchmark: benchmark.o classes.h set_algebra.h classes.o storm.h storm.o experimental.h experimental.o
+benchmark: benchmark.o classes.h libalgebra.h classes.o storm.h storm.o experimental.h experimental.o
 	$(CXX) $(CPPFLAGS) -L/home/marcus/CRoaring/ storm.o experimental.o classes.o benchmark.o -o benchmark -lroaring
 
 clean:
