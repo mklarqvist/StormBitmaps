@@ -1556,6 +1556,68 @@ void STORM_CSA512(__m512i* h, __m512i* l, __m512i a, __m512i b, __m512i c) {
     *h = _mm512_ternarylogic_epi32(c, b, a, 0xe8);
 }
 
+#if !defined(_MSC_VER)
+  __attribute__ ((target ("avx512bw")))
+#endif
+static 
+uint64_t STORM_popcnt_avx512(const __m512i* STORM_RESTRICT data, uint64_t size)
+{
+    __m512i cnt      = _mm512_setzero_si512();
+    __m512i ones     = _mm512_setzero_si512();
+    __m512i twos     = _mm512_setzero_si512();
+    __m512i fours    = _mm512_setzero_si512();
+    __m512i eights   = _mm512_setzero_si512();
+    __m512i sixteens = _mm512_setzero_si512();
+    __m512i twosA, twosB, foursA, foursB, eightsA, eightsB;
+
+    uint64_t i = 0;
+    uint64_t limit = size - size % 16;
+    uint64_t* cnt64;
+
+#define LOAD(a) (_mm512_loadu_si512(&data[i+a]))
+
+    for (/**/; i < limit; i += 16) {
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(0), LOAD(1));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(2), LOAD(3));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(4), LOAD(5));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(6), LOAD(7));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&eightsA, &fours,  fours, foursA, foursB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(8), LOAD(9));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(10), LOAD(11));
+        STORM_CSA512(&foursA,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&twosA,   &ones,   ones,  LOAD(12), LOAD(13));
+        STORM_CSA512(&twosB,   &ones,   ones,  LOAD(14), LOAD(15));
+        STORM_CSA512(&foursB,  &twos,   twos,  twosA,  twosB);
+        STORM_CSA512(&eightsB, &fours,  fours, foursA, foursB);
+        STORM_CSA512(&sixteens,&eights, eights,eightsA,eightsB);
+
+        cnt = _mm512_add_epi64(cnt, STORM_popcnt512(sixteens));
+    }
+#undef LOAD
+
+    cnt = _mm512_slli_epi64(cnt, 4);
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(eights), 3));
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(fours), 2));
+    cnt = _mm512_add_epi64(cnt, _mm512_slli_epi64(STORM_popcnt512(twos), 1));
+    cnt = _mm512_add_epi64(cnt,  STORM_popcnt512(ones));
+
+    for (/**/; i < size; ++i)
+        cnt = _mm512_add_epi64(cnt, STORM_popcnt512(_mm512_loadu_si512(&data[i])));
+
+    cnt64 = (uint64_t*)&cnt;
+
+    return cnt64[0] +
+            cnt64[1] +
+            cnt64[2] +
+            cnt64[3] +
+            cnt64[4] +
+            cnt64[5] +
+            cnt64[6] +
+            cnt64[7];
+}
+
 /*
  * AVX512 Harley-Seal popcount (4th iteration).
  * The algorithm is based on the paper "Faster Population Counts
@@ -2367,6 +2429,84 @@ uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors,
     }
 
     return total;
+}
+
+STORM_FORCE_INLINE
+uint64_t STORM_popcnt(const uint64_t* data, uint64_t size) {
+    uint64_t cnt = 0;
+    uint64_t i;
+
+#if defined(HAVE_CPUID)
+    #if defined(__cplusplus)
+        /* C++11 thread-safe singleton */
+    static const int cpuid = get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = get_cpuid();
+
+    #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+    #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+    #endif
+    }
+    #endif
+#endif
+
+#if defined(HAVE_AVX512)
+
+    /* AVX512 requires arrays >= 1024 bytes */
+    if ((cpuid & STORM_bit_AVX512BW) &&
+        size >= 1024)
+    {
+        cnt += STORM_popcnt_avx512((const __m512i*) data, size / 64);
+        data += size - size % 64;
+        size = size % 64;
+    }
+
+#endif
+
+#if defined(HAVE_AVX2)
+
+    /* AVX2 requires arrays >= 512 bytes */
+    if ((cpuid & STORM_bit_AVX2) &&
+        size >= 512)
+    {
+        cnt += STORM_popcnt_avx2((const __m256i*) data, size / 32);
+        data += size - size % 32;
+        size = size % 32;
+    }
+
+#endif
+
+#if defined(HAVE_POPCNT)
+
+    if (cpuid & STORM_bit_POPCNT) {
+        cnt += STORM_popcount64_unrolled((const uint64_t*) data, size / 8);
+        data += size - size % 8;
+        size = size % 8;
+        for (i = 0; i < size; i++)
+            cnt += STORM_popcount64(data[i]);
+
+        return cnt;
+    }
+
+#endif
+
+    /* pure integer popcount algorithm */
+    if (size >= 8) {
+        cnt += STORM_popcount64_unrolled((const uint64_t*) data, size / 8);
+        data += size - size % 8;
+        size = size % 8;
+    }
+
+    /* pure integer popcount algorithm */
+    for (i = 0; i < size; i++)
+        cnt += STORM_popcount64(data[i]);
+
+    return cnt;
 }
 
 #ifdef __cplusplus
