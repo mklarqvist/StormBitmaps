@@ -8,6 +8,7 @@
 #include <bitset>
 #include <sstream>
 #include <vector>
+#include <string>
 
 #define USE_ROARING
 #define ALLOW_LINUX
@@ -51,12 +52,22 @@
 #define SIMD_ALIGNMENT  16
 #endif
 
+#if defined(_MSC_VER)
+inline
+uint64_t get_cpu_cycles() {
+    // _mm_lfence();  // optionally wait for earlier insns to retire before reading the clock
+    uint64_t tsc = __rdtsc();
+    // _mm_lfence();  // optionally block later instructions until rdtsc retires
+    return tsc;
+}
+#else
 uint64_t get_cpu_cycles() {
     uint64_t result;
     __asm__ volatile(".byte 15;.byte 49;shlq $32,%%rdx;orq %%rdx,%%rax":"=a"
                      (result)::"%rdx");
     return result;
 };
+#endif
 
 // Convenience wrapper
 struct bench_t {
