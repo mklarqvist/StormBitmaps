@@ -191,7 +191,7 @@ before_script:
   - eval "${COMPILERS}"
 
 script:
-  - cmake -DCMAKE_CXX_FLAGS="-O3 -march=native" -DCMAKE_C_FLAGS="-O3 -march=native" .
+  - cmake -DCMAKE_CXX_FLAGS="-march=native" -DCMAKE_C_FLAGS="-march=native" .
   - make
   - |
     if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then

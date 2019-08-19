@@ -31,8 +31,8 @@ The core algorithms are described in the papers:
 ### Compilation
 
 Compile test suite with: `cmake .; make` and run `./benchmark`. For better
-performance, pass optimization flags to CMAKE: `cmake -DCMAKE_CXX_FLAGS="-O3
--march=native" -DCMAKE_C_FLAGS="-O3 -march=native" .`
+performance, pass optimization flags to CMAKE: 
+`cmake -DCMAKE_CXX_FLAGS="-march=native" -DCMAKE_C_FLAGS="-march=native" .`
 
 ### Note
 
