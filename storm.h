@@ -56,6 +56,92 @@ extern "C" {
 uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
 uint64_t STORM_intersect_vector32_unsafe(const uint32_t* STORM_RESTRICT v1, const uint32_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* STORM_RESTRICT out);
 
+/*======   Wrappers   ======*/
+// Function pointer definitions.
+typedef uint64_t (*STORM_compute_lfunc)(const uint64_t*, const uint64_t*, 
+    const uint32_t*, const uint32_t*, const size_t, const size_t);
+
+/* *************************************
+*  Example wrappers
+*
+*  These wrappers compute sum(popcnt(A & B)) for all N input bitmaps
+*  pairwise. All input bitmaps must be of the same length M. The
+*  functions starting with STORM_wrapper_diag* assumes that all data
+*  comes from the same contiguous memory buffer. Use STORM_wrapper_square*
+*  if you have data from two distinct, but contiguous, memory buffers
+*  B1 and B2.
+*
+*  The STORM_wrapper_*_list* functions make use of auxilliary information
+*  to accelerate computation when the vectors are very sparse.
+*
+***************************************/
+
+/**
+ * This within-block wrapper computes the n_vectors choose 2
+ * pairwise comparisons in a non-blocking fashion. This
+ * function is used mostly as reference.
+ * 
+ * @param n_vectors Number of input vectors
+ * @param vals      Pointers to 64-bit bitmaps
+ * @param n_ints    Number of bitmaps per vector
+ * @param f         Function pointer
+ * @return uint64_t Returns the sum total POPCNT(A & B).
+ */
+uint64_t STORM_wrapper_diag(const uint32_t n_vectors, 
+                            const uint64_t* vals, 
+                            const uint32_t n_ints, 
+                            const STORM_compute_func f);
+
+uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
+                              const uint64_t* STORM_RESTRICT vals1, 
+                              const uint32_t n_vectors2,
+                              const uint64_t* STORM_RESTRICT vals2, 
+                              const uint32_t n_ints, 
+                              const STORM_compute_func f);
+
+/**
+ * This within-block function is identical to c_fwrapper but additionally
+ * make use of an auxilliary positional vector to accelerate compute in
+ * the sparse case. This function is mostly used as reference.
+ * 
+ * @param n_vectors 
+ * @param vals 
+ * @param n_ints 
+ * @param n_alts 
+ * @param alt_positions 
+ * @param alt_offsets 
+ * @param f 
+ * @param fl 
+ * @param cutoff 
+ * @return uint64_t 
+ */
+uint64_t STORM_wrapper_diag_list(const uint32_t n_vectors, 
+                                 const uint64_t* STORM_RESTRICT vals,
+                                 const uint32_t n_ints,
+                                 const uint32_t* STORM_RESTRICT n_alts,
+                                 const uint32_t* STORM_RESTRICT alt_positions,
+                                 const uint32_t* STORM_RESTRICT alt_offsets, 
+                                 const STORM_compute_func f, 
+                                 const STORM_compute_lfunc fl, 
+                                 const uint32_t cutoff);
+
+uint64_t STORM_wrapper_diag_blocked(const uint32_t n_vectors, 
+                                    const uint64_t* vals, 
+                                    const uint32_t n_ints, 
+                                    const STORM_compute_func f,
+                                    uint32_t block_size);
+
+uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors, 
+                             const uint64_t* STORM_RESTRICT vals,
+                             const uint32_t n_ints,
+                             const uint32_t* STORM_RESTRICT n_alts,
+                             const uint32_t* STORM_RESTRICT alt_positions,
+                             const uint32_t* STORM_RESTRICT alt_offsets, 
+                             const STORM_compute_func f, 
+                             const STORM_compute_lfunc fl, 
+                             const uint32_t cutoff,
+                             uint32_t block_size);
+
 /*======   Canonical representation   ======*/
 typedef struct STORM_bitmap_s STORM_bitmap_t;
 typedef struct STORM_bitmap_cont_s STORM_bitmap_cont_t;

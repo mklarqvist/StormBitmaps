@@ -15,7 +15,6 @@
 #endif
 
 #include "libalgebra/libalgebra.h"
-#include "support.h"
 #include "storm.h"
 #include "classes.h"
 #include "experimental.h"
@@ -575,8 +574,6 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         for (int i = 0; i < n_variants; ++i) roaring[i] = roaring_bitmap_create();
 #endif
 
-        std::cerr << "here" << std::endl;
-
         // PRNG
         std::uniform_int_distribution<uint32_t> distr(0, n_samples-1); // right inclusive
 
@@ -611,68 +608,55 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         }
         std::cerr << "Done!" << std::endl;
 
+        uint32_t n_ints_sample = std::ceil(n_samples / 64.0);
+        const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
+        const uint64_t n_total_integer_cmps = n_intersects * n_ints_sample;
+        std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
+
         uint64_t storm_size = STORM_serialized_size(twk2);
-        std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
+        // std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
 
         // Debug
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
         // uint64_t d = 0, diag = 0;
         {
-            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-            const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = STORM_pairw_intersect_cardinality(twk2);
-            const uint64_t cycles_end = get_cpu_cycles();
-
-            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-
-            bench_t b; b.total = cont_count; b.time_ms = time_span.count();
-            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
-            b.throughput = 1;
-            b.cycles = cycles_end - cycles_start;
-            // std::cerr << "[cnt] count=" << cont_count << std::endl;
-            PRINT("storm",b);
+            LINUX_PRE
+            uint64_t total = STORM_pairw_intersect_cardinality(twk2);
+            LINUX_POST
+            std::cout << "storm\t" << n_alts[a] << "\t" << storm_size << "\t" ;
+            b.PrintPretty();
+            // LINUX_PRINT("storm")
+            // PRINT("storm",b);
         }
 
         {
-            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-            const uint64_t cycles_start = get_cpu_cycles();
-            uint64_t cont_count = STORM_pairw_intersect_cardinality_blocked(twk2,0);
-            const uint64_t cycles_end = get_cpu_cycles();
-
-            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-            auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-
-            bench_t b; b.total = cont_count; b.time_ms = time_span.count();
-            uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
-            b.throughput = 1;
-            b.cycles = cycles_end - cycles_start;
-            // std::cerr << "[cnt] count=" << cont_count << std::endl;
-            PRINT("storm-blocked",b);
+            LINUX_PRE
+            uint64_t total = STORM_pairw_intersect_cardinality_blocked(twk2,0);
+            LINUX_POST
+            // LINUX_PRINT("storm-blocked")
+            std::cout << "storm-blocked\t" << n_alts[a] << "\t" << storm_size << "\t" ;
+            b.PrintPretty();
+            // PRINT("storm-blocked",b);
         }
 
 
 #ifdef USE_ROARING
-        // for (int k = 0; k < block_range.size(); ++k) {
-        //     bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, block_range[k]);
-        //     PRINT("roaring-blocked-" + std::to_string(block_range[k]),m8_2_block);
-        // }
+            uint64_t roaring_bytes_used = 0;
+            for (int k = 0; k < n_variants; ++k) {
+                roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
+            }
+            // std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
 
-        // bench_t broaring = froarwrapper(n_variants, n_ints_sample, roaring);
-        // PRINT("roaring",broaring);
+            uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+            roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
 
-        uint64_t roaring_bytes_used = 0;
-        for (int k = 0; k < n_variants; ++k) {
-            roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
-        }
-        std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
-
-        uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
-        roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
-
-        bench_t m8_2_block = froarwrapper_blocked(n_variants, 1, roaring, roaring_optimal_b);
-        PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
+            bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
+            // PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
+            std::string m8_2_block_name = "roaring-blocked-" + std::to_string(roaring_optimal_b);
+            std::cout << m8_2_block_name << "\t" << n_alts[a] << "\t" << roaring_bytes_used << "\t" ;
+            m8_2_block.PrintPretty();
 #endif
+
 #ifdef USE_ROARING
         for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
         delete[] roaring;
