@@ -33,7 +33,7 @@ build_script:
   - cd %APPVEYOR_BUILD_FOLDER%
   - if "%platform%" == "x86" cmake -G "Visual Studio 15 2017" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake
   - if "%platform%" == "x64" cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake
-  - cmake -DCMAKE_C_FLAGS="/arch:AVX2" -DCMAKE_CXX_FLAGS="/arch:AVX2" --build . --config Release
+  - cmake --build . --config Release -DGLM_TEST_ENABLE_SIMD_AVX2="ON"
 
 test_script:
   - ps: C:\projects\FastIntersectCount\Release\benchmark.exe
