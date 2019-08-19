@@ -14,7 +14,8 @@
 #include <roaring/roaring.h>
 #endif
 
-#include "libalgebra.h"
+#include "libalgebra/libalgebra.h"
+#include "support.h"
 #include "storm.h"
 #include "classes.h"
 #include "experimental.h"
@@ -75,8 +76,8 @@ struct bench_t {
  * @param n_ints     Number of ints/sample.
  * @return           Returns a populated bench_t struct.
  */
-template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints)>
-bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints) {    
+template <uint64_t (f)(const uint64_t*  b1, const uint64_t*  b2, const size_t n_ints)>
+bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t n_ints) {    
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
     uint32_t offset = 0;
@@ -104,8 +105,8 @@ bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t
     return(b);
 }
 
-template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t n_ints)>
-bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints, uint32_t bsize = 200) {    
+template <uint64_t (f)(const uint64_t*  b1, const uint64_t*  b2, const size_t n_ints)>
+bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const size_t n_ints, uint32_t bsize = 200) {    
     uint64_t total = 0;
 
     bsize = (bsize == 0 ? 10 : bsize);
@@ -179,8 +180,8 @@ bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const 
     return(b);
 }
 
-template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const uint32_t* l1, const uint32_t* l2, const uint32_t len1, const uint32_t len2)>
-bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints, const std::vector< std::vector<uint32_t> >& pos) {
+template <uint64_t (f)(const uint64_t*  b1, const uint64_t*  b2, const uint32_t* l1, const uint32_t* l2, const size_t len1, const size_t len2)>
+bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t n_ints, const std::vector< std::vector<uint32_t> >& pos) {
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
     uint32_t offset = 0;
@@ -208,8 +209,8 @@ bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const uint32_
     return(b);
 }
 
-template <uint64_t (f)(const uint64_t* __restrict__ b1, const uint64_t* __restrict__ b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2)>
-bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const uint32_t n_ints, const std::vector< std::vector<uint32_t> >& pos, uint32_t bsize = 200) { 
+template <uint64_t (f)(const uint64_t*  b1, const uint64_t*  b2, const std::vector<uint32_t>& l1, const std::vector<uint32_t>& l2)>
+bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const size_t n_ints, const std::vector< std::vector<uint32_t> >& pos, uint32_t bsize = 200) { 
     uint64_t total = 0;
 
     bsize = (bsize == 0 ? 10 : bsize);
@@ -285,7 +286,7 @@ bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const
 }
 
 template <class int_t, uint64_t (f)(const std::vector<int_t>& rle1, const std::vector<int_t>& rle2)>
-bench_t frlewrapper(const std::vector< std::vector<int_t> >& rle, const uint32_t n_ints) {
+bench_t frlewrapper(const std::vector< std::vector<int_t> >& rle, const size_t n_ints) {
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
     uint64_t total = 0;
@@ -628,6 +629,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         // for (int i = 0; i < n_variants; ++i)
             // twk[i] = STORM_bitmap_cont_new();
         STORM_t* twk2 = STORM_new();
+        STORM_contiguous_t* twk_cont = STORM_contig_new(n_samples);
 
         for (int a = 0; a < n_alts.size(); ++a) {
             // break if no more data
@@ -655,6 +657,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // STORM_bitmap_cont_clear(twk[i]);
             // }
             STORM_clear(twk2);
+            STORM_contig_clear(twk_cont);
 
 #ifdef USE_ROARING
             roaring_bitmap_t** roaring = new roaring_bitmap_t*[n_variants];
@@ -709,6 +712,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // twk.Add(j, &pos[j][0], pos[j].size());
                 // STORM_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
                 STORM_add(twk2, &pos[j][0], pos[j].size());
+                STORM_contig_add(twk_cont, &pos[j][0], pos[j].size());
 #endif
                 vals2 += n_ints_sample;
             }
@@ -843,6 +847,40 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 b.cpu_cycles = cycles_end - cycles_start;
                 // std::cerr << "[cnt] count=" << cont_count << std::endl;
                 PRINT("test-opt-cont-blocked-" + std::to_string(optimal_b),b);
+            }
+
+            {
+                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+                const uint64_t cycles_start = get_cpu_cycles();
+                uint64_t cont_count = STORM_contig_pairw_intersect_cardinality(twk_cont);
+                const uint64_t cycles_end = get_cpu_cycles();
+
+                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+                b.cpu_cycles = cycles_end - cycles_start;
+                // std::cerr << "[cnt] count=" << cont_count << std::endl;
+                PRINT("STORM-contig",b);
+            }
+
+            {
+                std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+                const uint64_t cycles_start = get_cpu_cycles();
+                uint64_t cont_count = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
+                const uint64_t cycles_end = get_cpu_cycles();
+
+                std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+                auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
+                bench_t b; b.count = cont_count; b.milliseconds = time_span.count();
+                uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+                b.throughput = ((n_comps*n_ints_sample*sizeof(uint64_t)) / (1024*1024.0)) / (b.milliseconds / 1000.0);
+                b.cpu_cycles = cycles_end - cycles_start;
+                // std::cerr << "[cnt] count=" << cont_count << std::endl;
+                PRINT("STORM-contig-" + std::to_string(optimal_b),b);
             }
 
             // {
@@ -1074,6 +1112,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         // for (int i = 0; i < n_variants; ++i) STORM_bitmap_cont_free(twk[i]);
         // delete[] twk;
         STORM_free(twk2);
+        STORM_contig_free(twk_cont);
         STORM_aligned_free(vals);
     // }
 }

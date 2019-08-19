@@ -30,15 +30,12 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include "libalgebra.h"
+#include "libalgebra/libalgebra.h"
 
-/* ===   Compiler specifics   === */
-
-#if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* >= C99 */
-#  define STORM_RESTRICT   restrict
-#else
-/* note : it might be useful to define __restrict or __restrict__ for some C++ compilers */
-#  define STORM_RESTRICT   /* disable */
+// Default size of a memory block. This is by default set to 256kb which is what
+// most commodity processors have as L2/L3 cache.
+#ifndef STORM_CACHE_BLOCK_SIZE
+#define STORM_CACHE_BLOCK_SIZE 256e3
 #endif
 
 #ifndef STORM_DEFAULT_BLOCK_SIZE
@@ -99,7 +96,7 @@ struct STORM_contiguous_s {
     STORM_ALIGN(64) uint64_t* data;
     STORM_contiguous_bitmap_t* bitmaps; // interpret of data
     uint64_t n_data, m_data;
-    uint64_t n_samples;
+    uint64_t vector_length;
     uint32_t n_bitmaps_vector; // _MUST_ be divisible by largest alignment!
     STORM_compute_func intsec_func; // determined during ctor
     uint32_t alignment; // determined during ctor
@@ -136,6 +133,15 @@ uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap);
 uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsize);
 uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
 uint64_t STORM_serialized_size(const STORM_t* bitmap);
+
+// contig
+STORM_contiguous_t* STORM_contig_new(size_t vector_length);
+void STORM_contig_free(STORM_contiguous_t* bitmap);
+int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const uint32_t n_values);
+int STORM_contig_clear(STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality(STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked(STORM_contiguous_t* bitmap, uint32_t bsize);
+
 
 #ifdef __cplusplus
 } /* extern "C" */

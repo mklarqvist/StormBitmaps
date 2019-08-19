@@ -23,7 +23,7 @@
 // #include <iostream>//debug
 // #include <bitset> //
 
-#include "libalgebra.h"
+#include "libalgebra/libalgebra.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
 #define SIMD_AVAILABLE  1
@@ -57,6 +57,17 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if SIMD_VERSION >= 5
+#ifndef STORM_POPCOUNT_AVX2
+#define STORM_POPCOUNT_AVX2(A, B) {                  \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+}
+#endif
 #endif
 
 /****************************

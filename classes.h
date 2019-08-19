@@ -18,8 +18,7 @@
 #ifndef FAST_INTERSECT_COUNT_CLASSES_H_
 #define FAST_INTERSECT_COUNT_CLASSES_H_
 
-
-#include "libalgebra.h"
+#include "libalgebra/libalgebra.h"
 #include "storm.h"
 
 #include <vector>
