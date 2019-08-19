@@ -431,10 +431,11 @@ static int BinarySearch(const uint16_t* array, int n_a, uint16_t key) {
         mid = (low + high)/2;
 
         // low path
+#if defined (__builtin_prefetch)
         __builtin_prefetch(&array[(mid + 1 + high)/2], 0, 1);
         // high path
         __builtin_prefetch(&array[(low + mid - 1)/2], 0, 1);
-
+#endif
         if(array[mid] < key) low = mid + 1;
         else if(array[mid] == key) return mid;
         else if(array[mid] > key) high = mid - 1;
