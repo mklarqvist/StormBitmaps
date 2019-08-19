@@ -1,9 +1,20 @@
 # Storm bitmaps
 
-Superior performance when the universe is small (M < 65536).
-Parity in perormance to Roaring bitmaps when the unvierse is large.
+These functions compute the set intersection count (|A \in B|) of pairs of
+integer sets with equal upper bounds [0,N). Several of the functions presented
+here exploit set sparsity by using auxiliary information such as positional
+indices, bitmaps, or reduction preprocessors. There are no union and difference
+routines in this repository. Using large registers (AVX-512BW) and
+cache-blocking, we can achieve ~114 GB/s (~0.2 CPU cycles / 64-bit word)
+throughput (~14 billion 64-bit bitmaps / second or up to ~912 billion implicit
+integers / second).
 
-These functions compute the set intersection count (|A \in B|) of pairs of integer sets with equal upper bounds [0,N). Several of the functions presented here exploit set sparsity by using auxiliary information such as positional indices, bitmaps, or reduction preprocessors. There are no union and difference routines in this repository. Using large registers (AVX-512BW) and cache-blocking, we can achieve ~75 GB/s (~0.3 CPU cycles / 64-bit word) throughput (80 billion 64-bit bitmaps / second).
+Storm bitmaps have several interesting properties:
+* Superior performance when the universe is small (M < 256000).
+* Parity in perormance to Roaring bitmaps when the unvierse is large.
+* Selects the optimal memory alignment and subroutines given the available SIMD
+  instruction at run-time by using
+  [libalgebra](https://github.com/mklarqvist/libalgebra).
 
 The core algorithms are described in the papers:
 
@@ -19,8 +30,12 @@ Compile test suite with: `make` and run `./fast_intersect_count`
 
 ### Note
 
-This is a collaborative effort between Marcus D. R. Klarqvist ([@klarqvist](https://github.com/mklarqvist/)) and Daniel Lemire ([@lemire](https://github.com/lemire/)).
+This is a collaborative effort between Marcus D. R. Klarqvist
+([@klarqvist](https://github.com/mklarqvist/)) and Daniel Lemire
+([@lemire](https://github.com/lemire/)).
 
 ### History
 
-These functions were originally developed for [Tomahawk](https://github.com/mklarqvist/Tomahawk) for computing genome-wide linkage-disequilibrium but can be applied to any intersect-count problem.
+These functions were originally developed for
+[Tomahawk](https://github.com/mklarqvist/Tomahawk) for computing genome-wide
+linkage-disequilibrium but can be applied to any intersect-count problem.

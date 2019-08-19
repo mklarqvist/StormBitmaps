@@ -16,7 +16,7 @@
 
 #include "libalgebra/libalgebra.h"
 #include "storm.h"
-#include "classes.h"
+// #include "classes.h"
 #include "experimental.h"
 
 #if defined(__AVX512F__) && __AVX512F__ == 1
@@ -713,8 +713,8 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
         //std::vector<uint32_t> n_alts = {512,1024,2048,4096};
 
-        bitmap_container_t bcont(n_variants,n_samples);
-        bitmap_container_t bcont2(n_variants,n_samples,true,true);
+        // bitmap_container_t bcont(n_variants,n_samples);
+        // bitmap_container_t bcont2(n_variants,n_samples,true,true);
         // STORM_bitmap_container twk(n_samples, n_variants);
         // STORM_bitmap_cont_t** twk = new STORM_bitmap_cont_t*[n_variants];
         // for (int i = 0; i < n_variants; ++i)
@@ -741,8 +741,8 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                     break;
             }
 
-            bcont.clear();
-            bcont2.clear();
+            // bcont.clear();
+            // bcont2.clear();
             // twk.clear();
             // for (int i = 0; i < n_variants; ++i) {
                 // STORM_bitmap_cont_clear(twk[i]);
@@ -797,9 +797,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 #ifdef USE_ROARING
                 for (int p = 0; p < pos[j].size(); ++p) {
                     roaring_bitmap_add(roaring[j], pos[j][p]);
-                    bcont.Add(j,pos[j][p]);
+                    // bcont.Add(j,pos[j][p]);
                 }
-                bcont2.Add(j,pos[j]);
+                // bcont2.Add(j,pos[j]);
                 // twk.Add(j, &pos[j][0], pos[j].size());
                 // STORM_bitmap_cont_add(twk[j], &pos[j][0], pos[j].size());
                 STORM_add(twk2, &pos[j][0], pos[j].size());
@@ -861,47 +861,47 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // PRINT("storm-blocked",b);
             }
 
-            {
-                LINUX_PRE
-                uint64_t total = bcont.intersect();
-                LINUX_POST
-                // LINUX_PRINT("test-opt")
-                std::cout << "test-opt\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("test-opt",b);
-            }
+            // {
+            //     LINUX_PRE
+            //     uint64_t total = bcont.intersect();
+            //     LINUX_POST
+            //     // LINUX_PRINT("test-opt")
+            //     std::cout << "test-opt\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            //     // PRINT("test-opt",b);
+            // }
 
-            {
-                LINUX_PRE
-                uint64_t total = bcont.intersect_blocked(optimal_b);
-                LINUX_POST
-                std::string name = "test-opt-blocked-" + std::to_string(optimal_b);
-                // LINUX_PRINT(name.c_str())
-                std::cout << name << "\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("test-opt-blocked-" + std::to_string(optimal_b),b);
-            }
+            // {
+            //     LINUX_PRE
+            //     uint64_t total = bcont.intersect_blocked(optimal_b);
+            //     LINUX_POST
+            //     std::string name = "test-opt-blocked-" + std::to_string(optimal_b);
+            //     // LINUX_PRINT(name.c_str())
+            //     std::cout << name << "\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            //     // PRINT("test-opt-blocked-" + std::to_string(optimal_b),b);
+            // }
 
-            {
-                LINUX_PRE
-                uint64_t total = bcont2.intersect_cont();
-                LINUX_POST
-                // LINUX_PRINT("test-opt-cont-only")
-                std::cout << "test-opt-cont-only\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("test-opt-cont-only",b);
-            }
+            // {
+            //     LINUX_PRE
+            //     uint64_t total = bcont2.intersect_cont();
+            //     LINUX_POST
+            //     // LINUX_PRINT("test-opt-cont-only")
+            //     std::cout << "test-opt-cont-only\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            //     // PRINT("test-opt-cont-only",b);
+            // }
 
-            {
-                LINUX_PRE
-                uint64_t total = bcont2.intersect_blocked_cont(optimal_b);
-                LINUX_POST
-                std::string name = "test-opt-cont-blocked-" + std::to_string(optimal_b);
-                // LINUX_PRINT(name.c_str())
-                std::cout << name << "\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("test-opt-cont-blocked-" + std::to_string(optimal_b),b);
-            }
+            // {
+            //     LINUX_PRE
+            //     uint64_t total = bcont2.intersect_blocked_cont(optimal_b);
+            //     LINUX_POST
+            //     std::string name = "test-opt-cont-blocked-" + std::to_string(optimal_b);
+            //     // LINUX_PRINT(name.c_str())
+            //     std::cout << name << "\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            //     // PRINT("test-opt-cont-blocked-" + std::to_string(optimal_b),b);
+            // }
 
             {
                 LINUX_PRE
@@ -927,31 +927,31 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 }
             }
 
-            {
-                LINUX_PRE
-                uint64_t total = bcont2.intersect_cont_auto();
-                LINUX_POST
-                // PRINT("automatic",b);
-                // LINUX_PRINT("automatic")
-                std::cout << "automatic\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-            }
+            // {
+            //     LINUX_PRE
+            //     uint64_t total = bcont2.intersect_cont_auto();
+            //     LINUX_POST
+            //     // PRINT("automatic",b);
+            //     // LINUX_PRINT("automatic")
+            //     std::cout << "automatic\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            // }
 
             // std::vector<uint32_t> o = {10, 50, 100, 250, 500};
 
             // for (int z = 0; z < 5; ++z) {
-            {
-                uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
-                LINUX_PRE
-                uint64_t total = bcont2.intersect_cont_blocked_auto(optimal_b);
-                LINUX_POST
-                // std::cerr << "[cnt] count=" << cont_count << std::endl;
-                std::string name = "automatic-list-" + std::to_string(cutoff);
-                // LINUX_PRINT(name.c_str())
-                std::cout << name << "\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("automatic-list-" + std::to_string(cutoff),b);
-            }
+            // {
+            //     uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
+            //     LINUX_PRE
+            //     uint64_t total = bcont2.intersect_cont_blocked_auto(optimal_b);
+            //     LINUX_POST
+            //     // std::cerr << "[cnt] count=" << cont_count << std::endl;
+            //     std::string name = "automatic-list-" + std::to_string(cutoff);
+            //     // LINUX_PRINT(name.c_str())
+            //     std::cout << name << "\t" << n_alts[a] << "\t" ;
+            //     b.PrintPretty();
+            //     // PRINT("automatic-list-" + std::to_string(cutoff),b);
+            // }
             // }
 
 
