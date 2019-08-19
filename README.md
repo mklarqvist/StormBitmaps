@@ -1,3 +1,8 @@
+[![Build Status](https://travis-ci.com/mklarqvist/FastIntersectCount.svg)](https://travis-ci.com/mklarqvist/FastIntersectCount)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/mklarqvist/FastIntersectCount?branch=master&svg=true)](https://ci.appveyor.com/project/mklarqvist/FastIntersectCount)
+[![Github Releases](https://img.shields.io/github/release/mklarqvist/FastIntersectCount.svg)](https://github.com/mklarqvist/FastIntersectCount/releases)
+[![License](https://img.shields.io/badge/Apache-2.0-blue.svg)](LICENSE)
+
 # Storm bitmaps
 
 These functions compute the set intersection count (|A \in B|) of pairs of
