@@ -192,7 +192,7 @@ before_script:
 
 script:
   - cmake -DCMAKE_CXX_FLAGS="-march=native" -DCMAKE_C_FLAGS="-march=native" .
-  - make
+  - make VERBOSE=1
   - |
     if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
       sudo ./benchmark 4092 1000
