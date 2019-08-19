@@ -129,9 +129,10 @@ unified.start();
 const uint64_t cycles_end = get_cpu_cycles(); \
 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); \
 auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); \
-bench_t b(results, (n_variants*n_variants - n_variants) * n_ints_sample); b.total = total; b.time_ms = time_span.count(); \
 uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; \
-b.throughput = ((((n_variants*n_variants - n_variants) * n_ints_sample)*sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
+bench_t b(results, n_comps * 2*n_ints_sample); \
+b.total = total; b.time_ms = time_span.count(); \
+b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
 
 // printf("Algorithm\tWords\tInstructions/cycle\tCycles/word\tInstructions/word\tMinCycles\tMinInstructions\tMinBranchMiss\tMinCacheRef\tminCacheMiss\tAvgCycles\tAvgInstructions\tAvgBranchMiss\tAvgCacheRef\tAvgCacheMiss\n");
 
@@ -834,6 +835,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample*8);
             optimal_b = optimal_b < 5 ? 5 : optimal_b;
 
+            const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, optimal_b }; // last one is auto
+
+
             // Debug
             std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
             // uint64_t d = 0, diag = 0;
@@ -910,15 +914,17 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
 
             {
-                LINUX_PRE
-                // Call argument subroutine pointer.
-                uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
-                LINUX_POST
-                std::string name = "STORM-contig-" + std::to_string(optimal_b);
-                // LINUX_PRINT(name.c_str())
-                std::cout << name << "\t" << n_alts[a] << "\t" ;
-                b.PrintPretty();
-                // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
+                for (int i = 0; i < block_range.size(); ++i) {
+                    LINUX_PRE
+                    // Call argument subroutine pointer.
+                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, block_range[i]);
+                    LINUX_POST
+                    std::string name = "STORM-contig-" + std::to_string(block_range[i]);
+                    // LINUX_PRINT(name.c_str())
+                    std::cout << name << "\t" << n_alts[a] << "\t" ;
+                    b.PrintPretty();
+                    // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
+                }
             }
 
             {
@@ -948,7 +954,6 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
             // }
 
-            const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, 32e3/(n_ints_sample*8) }; // last one is auto
 
 
 #if SIMD_VERSION >= 6
