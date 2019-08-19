@@ -31,9 +31,9 @@ build_script:
   - if "%platform%" == "x86" vcpkg install roaring:x86-windows
   - if "%platform%" == "x64" vcpkg install roaring:x64-windows
   - cd %APPVEYOR_BUILD_FOLDER%
-  - if "%platform%" == "x86" cmake -G "Visual Studio 15 2017" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake
-  - if "%platform%" == "x64" cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake
-  - cmake --build . --config Release -DGLM_TEST_ENABLE_SIMD_AVX2="ON"
+  - if "%platform%" == "x86" cmake -G "Visual Studio 15 2017" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake -DGLM_TEST_ENABLE_SIMD_AVX2="ON"
+  - if "%platform%" == "x64" cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_TOOLCHAIN_FILE=c:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake -DGLM_TEST_ENABLE_SIMD_AVX2="ON"
+  - cmake --build . --config Release
 
 test_script:
   - ps: C:\projects\FastIntersectCount\Release\benchmark.exe
