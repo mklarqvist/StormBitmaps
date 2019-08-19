@@ -57,7 +57,7 @@ endif()
 include_directories(.)
 
 find_path(LM_ROARING_INCLUDE_DIR NAMES REQUIRED roaring/roaring.h)
-find_library(LM_ROARING_LIBRARY REQUIRED libroaring roaring HINTS CMAKE_PREFIX_PATH)
+find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
 
 message("LM_ROARING include dir = ${LM_ROARING_INCLUDE_DIR}")
 message("LM_ROARING lib = ${LM_ROARING_LIBRARY}")
