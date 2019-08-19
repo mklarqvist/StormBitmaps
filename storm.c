@@ -1,4 +1,5 @@
 #include "storm.h"
+#include <stdlib.h> // EXIT_SUCCESS, EXIT_FAILURE
 
 uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, 
                                         const uint16_t* STORM_RESTRICT v2, 

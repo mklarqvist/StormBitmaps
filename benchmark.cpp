@@ -11,13 +11,6 @@
 #include <string>
 #include <cstdlib> // EXIT_SUCCESS, EXIT_FAILURE
 
-#ifndef EXIT_SUCCESS
-#define	EXIT_SUCCESS	0	/* Successful exit status.  */
-#endif
-#ifndef EXIT_FAILURE
-#define	EXIT_FAILURE	1	/* Failing exit status.  */
-#endif
-
 #define USE_ROARING
 #define ALLOW_LINUX
 
