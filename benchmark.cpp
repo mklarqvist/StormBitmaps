@@ -7,8 +7,10 @@
 #include <memory>
 #include <bitset>
 #include <sstream>
+#include <vector>
 
 #define USE_ROARING
+#define ALLOW_LINUX
 
 #ifdef USE_ROARING
 #include <roaring/roaring.h>
@@ -102,7 +104,7 @@ struct bench_t {
     uint32_t time_ms;
 };
 
-#ifdef __linux__
+#if defined __linux__ && defined ALLOW_LINUX
 #include <asm/unistd.h>       // for __NR_perf_event_open
 #include <linux/perf_event.h> // for perf event constants
 #include <sys/ioctl.h>        // for ioctl
@@ -111,7 +113,6 @@ struct bench_t {
 #include <cerrno>  // for errno
 #include <cstring> // for memset
 #include <stdexcept>
-#include <vector>
 
 #define PERF_PRE std::vector<int> evts;       \
 evts.push_back(PERF_COUNT_HW_CPU_CYCLES);      \
@@ -139,14 +140,14 @@ std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution
 #define PERF_POST uint64_t cycles_after = get_cpu_cycles(); \
 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); \
 auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); \
-uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; \
 bench_t b; b.cycles = cycles_after - cycles_before; b.cycles_word = b.cycles / (2*n_comps); \
 b.total = total; b.time_ms = time_span.count(); \
 b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
 #endif
 
 
-#ifdef __linux__
+#if defined __linux__ && defined ALLOW_LINUX
 
 template <int TYPE = PERF_TYPE_HARDWARE> 
 class LinuxEvents {
@@ -668,7 +669,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         const uint64_t memory_used = n_ints_sample*n_variants*sizeof(uint64_t);
         std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
 
-        uint64_t* vals = (uint64_t*)STORM_aligned_malloc(SIMD_ALIGNMENT, n_ints_sample*n_variants*sizeof(uint64_t));
+        uint64_t* vals = (uint64_t*)STORM_aligned_malloc(STORM_get_alignment(), n_ints_sample*n_variants*sizeof(uint64_t));
         
         // 1:500, 1:167, 1:22
         // std::vector<uint32_t> n_alts = {2,32,65,222,512,1024}; // 1kgp3 dist 

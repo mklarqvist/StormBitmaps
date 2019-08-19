@@ -179,7 +179,7 @@ struct STORM_contiguous_bitmap_s {
 };
 
 struct STORM_contiguous_s {
-    STORM_ALIGN(64) uint64_t* data;
+    uint64_t* data;
     STORM_contiguous_bitmap_t* bitmaps; // interpret of data
     uint64_t n_data, m_data;
     uint64_t vector_length;
