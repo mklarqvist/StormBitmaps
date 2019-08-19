@@ -122,11 +122,9 @@ LinuxEvents<PERF_TYPE_HARDWARE> unified(evts); \
 std::vector<unsigned long long> results;       \
 results.resize(evts.size());                   \
 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now(); \
-const uint64_t cycles_start = get_cpu_cycles();\
 unified.start();
 
 #define LINUX_POST unified.end(results); \
-const uint64_t cycles_end = get_cpu_cycles(); \
 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); \
 auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); \
 uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; \
@@ -914,17 +912,17 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
 
             {
-                for (int i = 0; i < block_range.size(); ++i) {
+                // for (int i = 0; i < block_range.size(); ++i) {
                     LINUX_PRE
                     // Call argument subroutine pointer.
-                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, block_range[i]);
+                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
                     LINUX_POST
-                    std::string name = "STORM-contig-" + std::to_string(block_range[i]);
+                    std::string name = "STORM-contig-" + std::to_string(optimal_b);
                     // LINUX_PRINT(name.c_str())
                     std::cout << name << "\t" << n_alts[a] << "\t" ;
                     b.PrintPretty();
                     // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
-                }
+                // }
             }
 
             // {
@@ -937,9 +935,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             //     b.PrintPretty();
             // }
 
-            // std::vector<uint32_t> o = {10, 50, 100, 250, 500};
+            // // std::vector<uint32_t> o = {10, 50, 100, 250, 500};
 
-            // for (int z = 0; z < 5; ++z) {
+            // // for (int z = 0; z < 5; ++z) {
             // {
             //     uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
             //     LINUX_PRE

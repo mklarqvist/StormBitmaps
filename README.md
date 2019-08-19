@@ -3,11 +3,14 @@
 These functions compute the set intersection count (|A \in B|) of pairs of
 integer sets with equal upper bounds [0,N). Several of the functions presented
 here exploit set sparsity by using auxiliary information such as positional
-indices, bitmaps, or reduction preprocessors. There are no union and difference
-routines in this repository. Using large registers (AVX-512BW) and
-cache-blocking, we can achieve ~114 GB/s (~0.2 CPU cycles / 64-bit word)
-throughput (~14 billion 64-bit bitmaps / second or up to ~912 billion implicit
-integers / second).
+indices, bitmaps, or reduction preprocessors. Using large registers (AVX-512BW),
+contiguous and aligned memory, and cache-aware blocking, we can achieve ~114
+GB/s (~0.2 CPU cycles / 64-bit word) of sustained throughput (~14 billion 64-bit
+bitmaps / second or up to ~912 billion implicit integers / second) using
+`STORM_contiguous_t` when the input data is small (N < 256000). When input data
+is large, we can achieve around 0.4-0.6 CPU cycles / 64-bit word using `STORM_t`
+while using considerably less memory. Both of these models make use of
+scalar-bitmap or scalar-scalar comparisons when the data density is small.
 
 Storm bitmaps have several interesting properties:
 * Superior performance when the universe is small (M < 256000).
@@ -25,7 +28,7 @@ The core algorithms are described in the papers:
 * [Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/abs/1603.06549) by D. Lemire, G. Ssi-Yan-Kai,
   and O. Kaser (21 Mar 2016).
 
-Compile test suite with: `make` and run `./fast_intersect_count`
+Compile test suite with: `make` and run `./benchmark`
 
 
 ### Note
