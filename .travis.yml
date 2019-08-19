@@ -1,0 +1,201 @@
+# Test configuration for Travis CI. See <https://travis-ci.org/>.
+language: cpp
+
+matrix:
+  fast_finish: true
+  
+  include:
+    - name: Xenial (g++-4.9)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          packages:
+            - g++-4.9
+          sources: &sources
+            - ubuntu-toolchain-r-test
+      env:
+        - COMPILERS="CC=gcc-4.9 && CXX=g++-4.9"
+
+    - name: Xenial (g++-5)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          packages:
+            - g++-5
+          sources: &sources
+            - ubuntu-toolchain-r-test
+      env:
+        - COMPILERS="CC=gcc-5 && CXX=g++-5"
+
+    - name: Xenial (g++-6)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          packages:
+            - g++-6
+          sources: &sources
+            - ubuntu-toolchain-r-test
+      env:
+        - COMPILERS="CC=gcc-6 && CXX=g++-6"
+
+    - name: Xenial (g++-7)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          packages:
+            - g++-7
+            - cmake
+          sources: &sources
+            - ubuntu-toolchain-r-test
+      env:
+        - COMPILERS="CC=gcc-7 && CXX=g++-7"
+
+    - name: Xenial (g++-8)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          packages:
+            - g++-8
+          sources: &sources
+            - ubuntu-toolchain-r-test
+      env:
+        - COMPILERS="CC=gcc-8 && CXX=g++-8"
+
+    - name: Xenial (clang++-3.7)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-xenial-3.7
+          packages:
+            - clang-3.7
+      env:
+        - MATRIX_EVAL="CC=clang-3.7 && CXX=clang++-3.7"
+      compiler: clang
+
+    - name: Xenial (clang++-3.8)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-xenial-3.8
+          packages:
+            - clang-3.8
+      env:
+        - MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
+      compiler: clang
+
+    - name: Xenial (clang++-3.9)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-xenial-3.9
+          packages:
+            - clang-3.9
+      env:
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+      compiler: clang
+
+    - name: Xenial (clang++-4.0)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-xenial-4.0
+          packages:
+            - clang-4.0
+      env:
+        - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
+      compiler: clang
+
+    - name: Xenial (clang++-5.0)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-xenial-5.0
+            - ubuntu-toolchain-r-test
+          packages:
+            - clang-5.0
+      env:
+        - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
+      compiler: clang
+
+    - name: Xenial (clang++-6.0)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-xenial-6.0
+          packages:
+            - clang-6.0
+            - libstdc++-6-dev
+      env:
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
+      compiler: clang
+
+    - name: Xenial (clang++-7.0)
+      os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - llvm-toolchain-xenial-7
+          packages:
+            - clang-7
+            - libstdc++-7-dev
+      env:
+        - MATRIX_EVAL="CC=clang-7 && CXX=clang++-7"
+      compiler: clang
+
+    # OSX begin
+    - os: osx
+      compiler: clang
+
+install:
+  ############################################################################
+  # Install a recent CMake (unless already installed on OS X)
+  ############################################################################
+  - CMAKE_VERSION=3.7.2
+  - |
+    if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
+      CMAKE_URL="https://cmake.org/files/v${CMAKE_VERSION%.[0-9]}/cmake-${CMAKE_VERSION}-Linux-x86_64.tar.gz"
+      mkdir cmake && travis_retry wget --no-check-certificate -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C cmake
+      export PATH=${DEPS_DIR}/cmake/bin:${PATH}
+    else
+      brew install cmake || brew upgrade cmake
+    fi
+  - cmake --version
+  - cd "${TRAVIS_BUILD_DIR}"
+  - git clone https://github.com/RoaringBitmap/CRoaring; cd CRoaring; cmake .; make; sudo make install
+
+before_script:
+  - cd "${TRAVIS_BUILD_DIR}"
+  # Overwrite default CC and CXX
+  - eval "${COMPILERS}"
+
+script:
+  - cmake .
+  - make
+  - |
+    if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
+      sudo ./benchmark 4092 1000
+    else
+      ./benchmark 4092 1000
+    fi

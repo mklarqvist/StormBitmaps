@@ -60,9 +60,15 @@ uint64_t get_cpu_cycles() {
 struct bench_t {
     bench_t() {}
     bench_t(std::vector<unsigned long long>& results, const uint64_t n_total_integer_cmps) :
-        total(0), instructions_cycle(double(results[1]) / results[0]), cycles_word(double(results[0]) / (n_total_integer_cmps)), instructions_word(double(results[1]) / (n_total_integer_cmps)),
-        cycles(results[0]), instructions(results[1]), MinBranchMiss(results[2]),
-        MinCacheRef(results[3]), MinCacheMiss(results[4]),
+        total(0), 
+        instructions_cycle(double(results[1]) / results[0]), 
+        cycles_word(double(results[0]) / (n_total_integer_cmps)), 
+        instructions_word(double(results[1]) / (n_total_integer_cmps)),
+        cycles(results[0]), 
+        instructions(results[1]), 
+        MinBranchMiss(results[2]),
+        MinCacheRef(results[3]), 
+        MinCacheMiss(results[4]),
         throughput(0),
         time_ms(0)
     {
@@ -96,9 +102,7 @@ struct bench_t {
     uint32_t time_ms;
 };
 
-
 #ifdef __linux__
-
 #include <asm/unistd.h>       // for __NR_perf_event_open
 #include <linux/perf_event.h> // for perf event constants
 #include <sys/ioctl.h>        // for ioctl
@@ -107,11 +111,9 @@ struct bench_t {
 #include <cerrno>  // for errno
 #include <cstring> // for memset
 #include <stdexcept>
-
 #include <vector>
 
-
-#define LINUX_PRE std::vector<int> evts;       \
+#define PERF_PRE std::vector<int> evts;       \
 evts.push_back(PERF_COUNT_HW_CPU_CYCLES);      \
 evts.push_back(PERF_COUNT_HW_INSTRUCTIONS);    \
 evts.push_back(PERF_COUNT_HW_BRANCH_MISSES);   \
@@ -124,18 +126,31 @@ results.resize(evts.size());                   \
 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now(); \
 unified.start();
 
-#define LINUX_POST unified.end(results); \
+#define PERF_POST unified.end(results); \
 std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); \
 auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); \
 uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; \
 bench_t b(results, n_comps * 2*n_ints_sample); \
 b.total = total; b.time_ms = time_span.count(); \
 b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
+#else
+#define PERF_PRE uint64_t cycles_before = get_cpu_cycles(); \
+std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+#define PERF_POST uint64_t cycles_after = get_cpu_cycles(); \
+std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); \
+auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); \
+uint64_t n_comps = (n_variants*n_variants - n_variants) / 2;
+bench_t b; b.cycles = cycles_after - cycles_before; b.cycles_word = b.cycles / (2*n_comps); \
+b.total = total; b.time_ms = time_span.count(); \
+b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
+#endif
 
-// printf("Algorithm\tWords\tInstructions/cycle\tCycles/word\tInstructions/word\tMinCycles\tMinInstructions\tMinBranchMiss\tMinCacheRef\tminCacheMiss\tAvgCycles\tAvgInstructions\tAvgBranchMiss\tAvgCacheRef\tAvgCacheMiss\n");
+
+#ifdef __linux__
 
 template <int TYPE = PERF_TYPE_HARDWARE> 
 class LinuxEvents {
+private:
     int fd;
     bool working;
     perf_event_attr attribs;
@@ -210,43 +225,6 @@ private:
         working = false;
     }
 };
-
-std::vector<unsigned long long>
-compute_mins(std::vector< std::vector<unsigned long long> > allresults) {
-    if (allresults.size() == 0)
-        return std::vector<unsigned long long>();
-    
-    std::vector<unsigned long long> answer = allresults[0];
-    
-    for (size_t k = 1; k < allresults.size(); k++) {
-        assert(allresults[k].size() == answer.size());
-        for (size_t z = 0; z < answer.size(); z++) {
-            if (allresults[k][z] < answer[z])
-                answer[z] = allresults[k][z];
-        }
-    }
-    return answer;
-}
-
-std::vector<double>
-compute_averages(std::vector< std::vector<unsigned long long> > allresults) {
-    if (allresults.size() == 0)
-        return std::vector<double>();
-    
-    std::vector<double> answer(allresults[0].size());
-    
-    for (size_t k = 0; k < allresults.size(); k++) {
-        assert(allresults[k].size() == answer.size());
-        for (size_t z = 0; z < answer.size(); z++) {
-            answer[z] += allresults[k][z];
-        }
-    }
-
-    for (size_t z = 0; z < answer.size(); z++) {
-        answer[z] /= allresults.size();
-    }
-    return answer;
-}
 #endif // end is linux
 
 /**<
@@ -266,7 +244,7 @@ bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t n
     uint32_t inner_offset = 0;
     uint64_t total = 0;
     
-    LINUX_PRE
+    PERF_PRE
     for (int i = 0; i < n_variants; ++i) {
         inner_offset = offset + n_ints_sample;
         for (int j = i + 1; j < n_variants; ++j, inner_offset += n_ints_sample) {
@@ -274,7 +252,7 @@ bench_t fwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t n
         }
         offset += n_ints_sample;
     }
-    LINUX_POST
+    PERF_POST
     
     return(b);
 }
@@ -290,7 +268,7 @@ bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const 
     uint32_t i  = 0;
     uint32_t tt = 0;
 
-    LINUX_PRE
+    PERF_PRE
     for (/**/; i + bsize <= n_variants; i += bsize) {
         // diagonal component
         uint32_t left = i*n_ints_sample;
@@ -336,7 +314,7 @@ bench_t fwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const 
             // ++d;
         }
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -347,7 +325,7 @@ bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t 
     uint32_t inner_offset = 0;
     uint64_t total = 0;
 
-    LINUX_PRE
+    PERF_PRE
     for (int i = 0; i < n_variants; ++i) {
     inner_offset = offset + n_ints_sample;
        for (int j = i + 1; j < n_variants; ++j, inner_offset += n_ints_sample) {
@@ -355,7 +333,7 @@ bench_t flwrapper(const uint32_t n_variants, const uint64_t* vals, const size_t 
        }
        offset += n_ints_sample;
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -371,7 +349,7 @@ bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const
     uint32_t i  = 0;
     uint32_t tt = 0;
 
-    LINUX_PRE
+    PERF_PRE
     for (/**/; i + bsize <= n_variants; i += bsize) {
         // diagonal component
         uint32_t left = i*n_ints_sample;
@@ -421,7 +399,7 @@ bench_t flwrapper_blocked(const uint32_t n_variants, const uint64_t* vals, const
             // ++d;
         }
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -431,13 +409,13 @@ bench_t frlewrapper(const std::vector< std::vector<int_t> >& rle, const size_t n
     uint64_t total = 0;
     uint32_t n_variants =  n_ints_sample;
     
-    LINUX_PRE
+    PERF_PRE
     for (int i = 0; i < n_variants; ++i) {
         for (int j = i + 1; j < n_variants; ++j) {
             total += (*f)(rle[i], rle[j]);
         }
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -446,13 +424,13 @@ template <uint64_t (f)(const uint16_t* v1, const uint16_t* v2, const uint32_t le
 bench_t frawwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, const std::vector< std::vector<uint16_t> >& pos) {
     uint64_t total = 0;
     
-    LINUX_PRE
+    PERF_PRE
     for (int k = 0; k < n_variants; ++k) {
         for (int p = k + 1; p < n_variants; ++p) {
             total += (*f)(&pos[k][0], &pos[p][0], pos[k].size(), pos[p].size());
         }
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -461,13 +439,13 @@ bench_t frawwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, con
 bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, roaring_bitmap_t** bitmaps) {
     uint64_t total = 0;
 
-    LINUX_PRE
+    PERF_PRE
     for (int k = 0; k < n_variants; ++k) {
         for (int p = k + 1; p < n_variants; ++p) {
             total += roaring_bitmap_and_cardinality(bitmaps[k], bitmaps[p]);
         }
     }
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -475,7 +453,7 @@ bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, ro
 bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_ints_sample, roaring_bitmap_t** bitmaps, const uint32_t bsize) {
     // std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
-    LINUX_PRE
+    PERF_PRE
     uint64_t total = 0;
     uint64_t blocked_con_tot = 0;
     uint32_t i  = 0;
@@ -514,7 +492,7 @@ bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_ints_sa
         }
     }
     total = blocked_con_tot;
-    LINUX_POST
+    PERF_POST
 
     return(b);
 }
@@ -619,9 +597,9 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
         // uint64_t d = 0, diag = 0;
         {
-            LINUX_PRE
+            PERF_PRE
             uint64_t total = STORM_pairw_intersect_cardinality(twk2);
-            LINUX_POST
+            PERF_POST
             std::cout << "storm\t" << n_alts[a] << "\t" << storm_size << "\t" ;
             b.PrintPretty();
             // LINUX_PRINT("storm")
@@ -629,9 +607,9 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         }
 
         {
-            LINUX_PRE
+            PERF_PRE
             uint64_t total = STORM_pairw_intersect_cardinality_blocked(twk2,0);
-            LINUX_POST
+            PERF_POST
             // LINUX_PRINT("storm-blocked")
             std::cout << "storm-blocked\t" << n_alts[a] << "\t" << storm_size << "\t" ;
             b.PrintPretty();
@@ -698,14 +676,11 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
         // std::vector<uint32_t> n_alts = {n_samples/1000, n_samples/500, n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
         std::vector<uint32_t> n_alts;
-        std::cerr  << "Loads=" << (loads == nullptr) << std::endl;
         if (loads == nullptr) {
             n_alts = {n_samples/2, n_samples/4, n_samples/10, n_samples/25, n_samples/50, n_samples/100, n_samples/250, n_samples/1000, n_samples/5000, 5, 1};
-            std::cerr << "after" << std::endl;
         } else {
             n_alts = *loads;
         }
-        
 
         // std::vector<uint32_t> n_alts = {n_samples/100, n_samples/20, n_samples/10, n_samples/4, n_samples/2};
         // std::vector<uint32_t> n_alts = {1,2,4,8,16,32,64,128,256,512,1024,2048,4096};
@@ -840,9 +815,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
             // uint64_t d = 0, diag = 0;
             {
-                LINUX_PRE
+                PERF_PRE
                 uint64_t total = STORM_pairw_intersect_cardinality(twk2);
-                LINUX_POST
+                PERF_POST
                 std::cout << "storm\t" << n_alts[a] << "\t" ;
                 b.PrintPretty();
                 // LINUX_PRINT("storm")
@@ -850,9 +825,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
 
             {
-                LINUX_PRE
+                PERF_PRE
                 uint64_t total = STORM_pairw_intersect_cardinality_blocked(twk2,0);
-                LINUX_POST
+                PERF_POST
                 // LINUX_PRINT("storm-blocked")
                 std::cout << "storm-blocked\t" << n_alts[a] << "\t" ;
                 b.PrintPretty();
@@ -860,9 +835,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
 
             // {
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont.intersect();
-            //     LINUX_POST
+            //     PERF_POST
             //     // LINUX_PRINT("test-opt")
             //     std::cout << "test-opt\t" << n_alts[a] << "\t" ;
             //     b.PrintPretty();
@@ -870,9 +845,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // }
 
             // {
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont.intersect_blocked(optimal_b);
-            //     LINUX_POST
+            //     PERF_POST
             //     std::string name = "test-opt-blocked-" + std::to_string(optimal_b);
             //     // LINUX_PRINT(name.c_str())
             //     std::cout << name << "\t" << n_alts[a] << "\t" ;
@@ -881,9 +856,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // }
 
             // {
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont2.intersect_cont();
-            //     LINUX_POST
+            //     PERF_POST
             //     // LINUX_PRINT("test-opt-cont-only")
             //     std::cout << "test-opt-cont-only\t" << n_alts[a] << "\t" ;
             //     b.PrintPretty();
@@ -891,9 +866,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // }
 
             // {
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont2.intersect_blocked_cont(optimal_b);
-            //     LINUX_POST
+            //     PERF_POST
             //     std::string name = "test-opt-cont-blocked-" + std::to_string(optimal_b);
             //     // LINUX_PRINT(name.c_str())
             //     std::cout << name << "\t" << n_alts[a] << "\t" ;
@@ -902,9 +877,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // }
 
             {
-                LINUX_PRE
+                PERF_PRE
                 uint64_t total = STORM_contig_pairw_intersect_cardinality(twk_cont);
-                LINUX_POST
+                PERF_POST
                 // LINUX_PRINT("STORM-contig")
                 std::cout << "STORM-contig\t" << n_alts[a] << "\t" ;
                 b.PrintPretty();
@@ -913,10 +888,10 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
             {
                 // for (int i = 0; i < block_range.size(); ++i) {
-                    LINUX_PRE
+                    PERF_PRE
                     // Call argument subroutine pointer.
                     uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
-                    LINUX_POST
+                    PERF_POST
                     std::string name = "STORM-contig-" + std::to_string(optimal_b);
                     // LINUX_PRINT(name.c_str())
                     std::cout << name << "\t" << n_alts[a] << "\t" ;
@@ -926,9 +901,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             }
 
             // {
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont2.intersect_cont_auto();
-            //     LINUX_POST
+            //     PERF_POST
             //     // PRINT("automatic",b);
             //     // LINUX_PRINT("automatic")
             //     std::cout << "automatic\t" << n_alts[a] << "\t" ;
@@ -940,9 +915,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // // for (int z = 0; z < 5; ++z) {
             // {
             //     uint32_t cutoff = ceil(n_ints_sample*64 / 200.0);
-            //     LINUX_PRE
+            //     PERF_PRE
             //     uint64_t total = bcont2.intersect_cont_blocked_auto(optimal_b);
-            //     LINUX_POST
+            //     PERF_POST
             //     // std::cerr << "[cnt] count=" << cont_count << std::endl;
             //     std::string name = "automatic-list-" + std::to_string(cutoff);
             //     // LINUX_PRINT(name.c_str())

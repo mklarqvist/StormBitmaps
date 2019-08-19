@@ -28,8 +28,11 @@ The core algorithms are described in the papers:
 * [Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/abs/1603.06549) by D. Lemire, G. Ssi-Yan-Kai,
   and O. Kaser (21 Mar 2016).
 
-Compile test suite with: `make` and run `./benchmark`
+### Compilation
 
+Compile test suite with: `cmake .; make` and run `./benchmark`. For better
+performance, pass optimization flags to CMAKE: `cmake -DCMAKE_CXX_FLAGS="-O3
+-march=native" -DCMAKE_C_FLAGS="-O3 -march=native" .`
 
 ### Note
 
