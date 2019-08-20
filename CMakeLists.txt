@@ -39,7 +39,7 @@ elseif(GLM_TEST_ENABLE_SIMD_SSE4_2)
 	elseif(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
 		add_compile_options(/QxSSE4.2)
 	elseif((CMAKE_CXX_COMPILER_ID MATCHES "MSVC") AND NOT CMAKE_CL_64)
-		add_compile_options(/arch:SSE2) # VC doesn't support SSE4.2
+		add_compile_options(/arch:AVX) # VC doesn't support SSE4.2
 	endif()
 	message(STATUS "GLM: SSE4.2 instruction set")
 endif()
@@ -51,6 +51,7 @@ if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clan
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     SET(CMAKE_FIND_LIBRARY_PREFIXES "")
     SET(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll")
+    add_compile_options((/O2))
     message(STATUS "Searching for .lib and .dll")
 endif()
 
