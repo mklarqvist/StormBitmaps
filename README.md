@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/mklarqvist/StormBitmaps.svg)](https://travis-ci.com/mklarqvist/StormBitmaps)
+[![Build Status](https://travis-ci.com/mklarqvist/FastIntersectCount.svg)](https://travis-ci.com/mklarqvist/FastIntersectCount)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/mklarqvist/StormBitmaps?branch=master&svg=true)](https://ci.appveyor.com/project/mklarqvist/StormBitmaps)
 [![Github Releases](https://img.shields.io/github/release/mklarqvist/StormBitmaps.svg)](https://github.com/mklarqvist/StormBitmaps/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -38,6 +38,28 @@ The core algorithms are described in the papers:
   by Marcus D. R. Klarqvist, Wojciech Muła, and Daniel Lemire (upcoming)
 * [Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/abs/1603.06549) by D. Lemire, G. Ssi-Yan-Kai,
   and O. Kaser (21 Mar 2016).
+
+## Performance
+
+Sample performance metrics (practical upper limit) on AVX512BW machine. We
+simulate many data arrays in aligned memory and compute the all-vs-all
+intersection cardinalities using the command `benchmark 65536 10000` (required
+Linux `perf` subsystem). The host architecture used is a 10 nm Cannon Lake Core
+i3-8121U with gcc (GCC) 8.2.1 20180905 (Red Hat 8.2.1-3).
+
+| Set bits | CPU cycles / 64-bit word | MB/s      |
+|----------|--------------------------|-----------|
+| 32768    | 0.209                    | 109915 |
+| 16384    | 0.21                     | 113591 |
+| 6553     | 0.21                     | 114524 |
+| 2621     | 0.21                     | 114256 |
+| 1310     | 0.21                     | 114625 |
+| 655      | 0.21                     | 114709 |
+| 262      | 0.21                     | 114659 |
+| 65       | 0.21                     | 114390 |
+| 13       | 0.21                     | 114726 |
+| 5        | 0.21                     | 114574 |
+| 1        | 0.21                     | 114457 |
 
 ### Compilation
 
