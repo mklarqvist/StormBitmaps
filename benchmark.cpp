@@ -24,21 +24,13 @@
 #include "experimental.h"
 
 #if defined(__AVX512F__)
-#define SIMD_AVAILABLE  1
 #define SIMD_VERSION    6
-#define SIMD_ALIGNMENT  64
 #elif defined(__AVX2__)
-#define SIMD_AVAILABLE  1
 #define SIMD_VERSION    5
-#define SIMD_ALIGNMENT  32
-#elif defined(__SSE4_2__)
-#define SIMD_AVAILABLE  1
+#elif defined(__SSE4_2__) || defined(__AVX__)
 #define SIMD_VERSION    3
-#define SIMD_ALIGNMENT  16
 #else
-#define SIMD_AVAILABLE  0
 #define SIMD_VERSION    0
-#define SIMD_ALIGNMENT  16
 #endif
 
 #if defined(_MSC_VER)
