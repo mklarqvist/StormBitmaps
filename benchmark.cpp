@@ -986,6 +986,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             m3_block3.PrintPretty();
 #endif
             // SIMD SSE4
+#ifndef _MSC_VER
 #if SIMD_VERSION >= 3
             // for (int k = 0; k < block_range.size(); ++k) {
             //     bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
@@ -999,6 +1000,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             std::string m2_block3_name = "bitmap-sse4-csa-blocked-" + std::to_string(optimal_b);
             std::cout << m2_block3_name << "\t" << n_alts[a] << "\t" ;
             m2_block3.PrintPretty();
+#endif
 #endif
 
             if (n_alts[a] <= 300) {
