@@ -66,7 +66,6 @@ find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
 
 message("LM_ROARING include dir = ${LM_ROARING_INCLUDE_DIR}")
 message("LM_ROARING lib = ${LM_ROARING_LIBRARY}")
-message("LM_LIBALGEBRA_INCLUDE_DIR = ${LM_LIBALGEBRA_INCLUDE_DIR}")
 
 add_executable(benchmark libalgebra/libalgebra.h storm.c experimental.c benchmark.cpp)
 target_link_libraries(benchmark PUBLIC ${LM_ROARING_LIBRARY})
