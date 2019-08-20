@@ -23,29 +23,17 @@
 // #include "classes.h"
 #include "experimental.h"
 
-#if defined(__AVX512F__) && __AVX512F__ == 1
+#if defined(__AVX512F__)
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    6
 #define SIMD_ALIGNMENT  64
-#elif defined(__AVX2__) && __AVX2__ == 1
+#elif defined(__AVX2__)
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    5
 #define SIMD_ALIGNMENT  32
-#elif defined(__AVX__) && __AVX__ == 1
-#define SIMD_AVAILABLE  1
-#define SIMD_VERSION    4
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE4_1__) && __SSE4_1__ == 1
+#elif defined(__SSE4_2__)
 #define SIMD_AVAILABLE  1
 #define SIMD_VERSION    3
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE2__) && __SSE2__ == 1
-#define SIMD_AVAILABLE  0 // unsupported version
-#define SIMD_VERSION    0
-#define SIMD_ALIGNMENT  16
-#elif defined(__SSE__) && __SSE__ == 1
-#define SIMD_AVAILABLE  0 // unsupported version
-#define SIMD_VERSION    0
 #define SIMD_ALIGNMENT  16
 #else
 #define SIMD_AVAILABLE  0
