@@ -59,8 +59,6 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     message(STATUS "Searching for .lib and .dll")
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR})
-
 find_path(LM_ROARING_INCLUDE_DIR NAMES REQUIRED roaring/roaring.h)
 find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
 
@@ -70,3 +68,5 @@ message("LM_ROARING lib = ${LM_ROARING_LIBRARY}")
 add_executable(benchmark libalgebra/libalgebra.h storm.c experimental.c benchmark.cpp)
 target_link_libraries(benchmark PUBLIC ${LM_ROARING_LIBRARY})
 target_include_directories(benchmark PUBLIC ${LM_ROARING_INCLUDE_DIR})
+target_include_directories(benchmark INTERFACE "${PROJECT_SOURCE_DIR}")
+message("target_include_directories = ${LM_ROARING_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}")
