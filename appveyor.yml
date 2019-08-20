@@ -34,4 +34,4 @@ build_script:
   - cmake --build . --config Release
 
 test_script:
-  - ps: C:\projects\%APPVEYOR_REPO_NAME%\Release\benchmark.exe 4096 100
+  - ps: C:\projects\StormBitmaps\Release\benchmark.exe 4096 100
