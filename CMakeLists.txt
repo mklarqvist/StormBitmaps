@@ -51,7 +51,7 @@ if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clan
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     SET(CMAKE_FIND_LIBRARY_PREFIXES "")
     SET(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll")
-    add_compile_options((/O2))
+    add_compile_options(/O2)
     message(STATUS "Searching for .lib and .dll")
 endif()
 
