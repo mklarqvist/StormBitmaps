@@ -2,9 +2,9 @@
 #include <stdlib.h> // EXIT_SUCCESS, EXIT_FAILURE
 
 uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, 
-                                        const uint16_t* STORM_RESTRICT v2, 
-                                        const uint32_t len1, 
-                                        const uint32_t len2) 
+                                              const uint16_t* STORM_RESTRICT v2, 
+                                              const uint32_t len1, 
+                                              const uint32_t len2) 
 {
     size_t count = 0;
     size_t i_a = 0, i_b = 0;

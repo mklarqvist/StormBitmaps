@@ -23,16 +23,6 @@
 // #include "classes.h"
 // #include "experimental.h"
 
-#if defined(__AVX512F__)
-#define SIMD_VERSION    6
-#elif defined(__AVX2__)
-#define SIMD_VERSION    5
-#elif defined(__SSE4_2__) || defined(__AVX__)
-#define SIMD_VERSION    3
-#else
-#define SIMD_VERSION    0
-#endif
-
 #if defined(_MSC_VER)
 inline
 uint64_t get_cpu_cycles() {
@@ -922,7 +912,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
 
 
-#if SIMD_VERSION >= 6
+#if defined(STORM_HAVE_AVX512BW)
             // SIMD AVX512
             // for (int k = 0; k < block_range.size(); ++k) {
             //     bench_t m8_2_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample,block_range[k]);
@@ -939,7 +929,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             m8_avx512_block.PrintPretty();
 #endif
 
-#ifdef USE_ROARING
+#if defined(USE_ROARING)
             // for (int k = 0; k < block_range.size(); ++k) {
             //     bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, block_range[k]);
             //     PRINT("roaring-blocked-" + std::to_string(block_range[k]),m8_2_block);
@@ -964,7 +954,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             m8_2_block.PrintPretty();
 #endif
 
-#if SIMD_VERSION >= 5
+#if defined(STORM_HAVE_AVX2)
             // uint64_t xx = c_fwrapper(n_variants, vals, n_ints_sample, &intersect_bitmaps_avx2);
             // std::cerr << "test output=" << xx << std::endl;
 
@@ -986,7 +976,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             m3_block3.PrintPretty();
 #endif
             // SIMD SSE4
-#if SIMD_VERSION >= 3
+#if defined(STORM_HAVE_SSE42)
             // for (int k = 0; k < block_range.size(); ++k) {
             //     bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
             //     PRINT("bitmap-sse4-csa-blocked-" + std::to_string(block_range[k]),m2_block3);
