@@ -56,7 +56,7 @@ struct bench_t {
         time_ms(0)
     {
     }
-    
+
     bench_t(std::vector<unsigned long long>& results, const uint64_t n_total_integer_cmps) :
         total(0), 
         instructions_cycle(double(results[1]) / results[0]), 
@@ -646,6 +646,25 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
     // uint64_t* a = nullptr;
     // intersect(a,0,0);
 
+#if defined(STORM_HAVE_CPUID)
+    #if defined(__cplusplus)
+    /* C++11 thread-safe singleton */
+    static const int cpuid = STORM_get_cpuid();
+    #else
+    static int cpuid_ = -1;
+    int cpuid = cpuid_;
+    if (cpuid == -1) {
+        cpuid = STORM_get_cpuid();
+
+    #if defined(_MSC_VER)
+        _InterlockedCompareExchange(&cpuid_, cpuid, -1);
+    #else
+        __sync_val_compare_and_swap(&cpuid_, -1, cpuid);
+    #endif
+    }
+    #endif
+#endif
+
     // Setup
     // std::vector<uint32_t> samples = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536,131072,262144,524288,1048576,2097152,4194304,8388608,16777216};
     // std::vector<uint32_t> samples = {131072, 196608, 589824};
@@ -926,21 +945,24 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 
 
 
-#if defined(STORM_HAVE_AVX512BW)
-            // SIMD AVX512
-            // for (int k = 0; k < block_range.size(); ++k) {
-            //     bench_t m8_2_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample,block_range[k]);
-            //     PRINT("bitmap-avx512-csa-blocked-" + std::to_string(block_range[k]),m8_2_block);
-            // }
+#if defined(STORM_HAVE_AVX512)
+            if ((cpuid & STORM_CPUID_runtime_bit_AVX512BW))
+            {
+                // SIMD AVX512
+                // for (int k = 0; k < block_range.size(); ++k) {
+                //     bench_t m8_2_block = fwrapper_blocked<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample,block_range[k]);
+                //     PRINT("bitmap-avx512-csa-blocked-" + std::to_string(block_range[k]),m8_2_block);
+                // }
 
-            // bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
-            // PRINT("bitmap-avx512-csa",m8_2);
+                // bench_t m8_2 = fwrapper<&intersect_bitmaps_avx512_csa>(n_variants, vals, n_ints_sample);
+                // PRINT("bitmap-avx512-csa",m8_2);
 
-            bench_t m8_avx512_block = fwrapper_blocked<&STORM_intersect_count_avx512>(n_variants, vals, n_ints_sample, optimal_b);
-            // PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
-            std::string m8_avx512_block_name = "bitmap-avx512-csa-blocked-" + std::to_string(optimal_b);
-            std::cout << m8_avx512_block_name << "\t" << n_alts[a] << "\t" ;
-            m8_avx512_block.PrintPretty();
+                bench_t m8_avx512_block = fwrapper_blocked<&STORM_intersect_count_avx512>(n_variants, vals, n_ints_sample, optimal_b);
+                // PRINT("bitmap-avx512-csa-blocked-" + std::to_string(optimal_b), m8_avx512_block );
+                std::string m8_avx512_block_name = "bitmap-avx512-csa-blocked-" + std::to_string(optimal_b);
+                std::cout << m8_avx512_block_name << "\t" << n_alts[a] << "\t" ;
+                m8_avx512_block.PrintPretty();
+            }
 #endif
 
 #if defined(USE_ROARING)
@@ -969,40 +991,46 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 #endif
 
 #if defined(STORM_HAVE_AVX2)
-            // uint64_t xx = c_fwrapper(n_variants, vals, n_ints_sample, &intersect_bitmaps_avx2);
-            // std::cerr << "test output=" << xx << std::endl;
+            if ((cpuid & STORM_CPUID_runtime_bit_AVX2))
+            {
+                // uint64_t xx = c_fwrapper(n_variants, vals, n_ints_sample, &intersect_bitmaps_avx2);
+                // std::cerr << "test output=" << xx << std::endl;
 
-            // uint64_t xxx = c_fwrapper_blocked(n_variants, vals, n_ints_sample, &intersect_bitmaps_avx2, 100);
-            // std::cerr << "test output blocked=" << xxx << std::endl;
+                // uint64_t xxx = c_fwrapper_blocked(n_variants, vals, n_ints_sample, &intersect_bitmaps_avx2, 100);
+                // std::cerr << "test output blocked=" << xxx << std::endl;
 
-            // // SIMD AVX256
-            // for (int k = 0; k < block_range.size(); ++k) {
-            //     bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,block_range[k]);
-            //     PRINT("bitmap-avx256-blocked-" + std::to_string(block_range[k]),m3_block3);
-            // }
-            // bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
-            // PRINT("bitmap-avx256",m3_0);
+                // // SIMD AVX256
+                // for (int k = 0; k < block_range.size(); ++k) {
+                //     bench_t m3_block3 = fwrapper_blocked<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample,block_range[k]);
+                //     PRINT("bitmap-avx256-blocked-" + std::to_string(block_range[k]),m3_block3);
+                // }
+                // bench_t m3_0 = fwrapper<&intersect_bitmaps_avx2>(n_variants, vals, n_ints_sample);
+                // PRINT("bitmap-avx256",m3_0);
 
-            bench_t m3_block3 = fwrapper_blocked<&STORM_intersect_count_avx2>(n_variants, vals, n_ints_sample, optimal_b);
-            // PRINT("bitmap-avx256-blocked-" + std::to_string(optimal_b), m3_block3);
-            std::string m3_block3_name = "bitmap-avx256-blocked-" + std::to_string(optimal_b);
-            std::cout << m3_block3_name << "\t" << n_alts[a] << "\t" ;
-            m3_block3.PrintPretty();
+                bench_t m3_block3 = fwrapper_blocked<&STORM_intersect_count_avx2>(n_variants, vals, n_ints_sample, optimal_b);
+                // PRINT("bitmap-avx256-blocked-" + std::to_string(optimal_b), m3_block3);
+                std::string m3_block3_name = "bitmap-avx256-blocked-" + std::to_string(optimal_b);
+                std::cout << m3_block3_name << "\t" << n_alts[a] << "\t" ;
+                m3_block3.PrintPretty();
+            }
 #endif
             // SIMD SSE4
 #if defined(STORM_HAVE_SSE42)
-            // for (int k = 0; k < block_range.size(); ++k) {
-            //     bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
-            //     PRINT("bitmap-sse4-csa-blocked-" + std::to_string(block_range[k]),m2_block3);
-            // }
-            // bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
-            // PRINT("bitmap-sse4-csa",m2);
+            if ((cpuid & STORM_CPUID_runtime_bit_SSE42))
+            {
+                // for (int k = 0; k < block_range.size(); ++k) {
+                //     bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
+                //     PRINT("bitmap-sse4-csa-blocked-" + std::to_string(block_range[k]),m2_block3);
+                // }
+                // bench_t m2 = fwrapper<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample);
+                // PRINT("bitmap-sse4-csa",m2);
 
-            bench_t m2_block3 = fwrapper_blocked<&STORM_intersect_count_sse4>(n_variants, vals, n_ints_sample, optimal_b);
-            // PRINT("bitmap-sse4-csa-blocked-" + std::to_string(optimal_b), m2_block3);
-            std::string m2_block3_name = "bitmap-sse4-csa-blocked-" + std::to_string(optimal_b);
-            std::cout << m2_block3_name << "\t" << n_alts[a] << "\t" ;
-            m2_block3.PrintPretty();
+                bench_t m2_block3 = fwrapper_blocked<&STORM_intersect_count_sse4>(n_variants, vals, n_ints_sample, optimal_b);
+                // PRINT("bitmap-sse4-csa-blocked-" + std::to_string(optimal_b), m2_block3);
+                std::string m2_block3_name = "bitmap-sse4-csa-blocked-" + std::to_string(optimal_b);
+                std::cout << m2_block3_name << "\t" << n_alts[a] << "\t" ;
+                m2_block3.PrintPretty();
+            }
 #endif
 
             if (n_alts[a] <= 300) {

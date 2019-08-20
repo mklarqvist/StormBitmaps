@@ -1,29 +1,34 @@
-[![Build Status](https://travis-ci.com/mklarqvist/FastIntersectCount.svg)](https://travis-ci.com/mklarqvist/FastIntersectCount)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/mklarqvist/FastIntersectCount?branch=master&svg=true)](https://ci.appveyor.com/project/mklarqvist/FastIntersectCount)
-[![Github Releases](https://img.shields.io/github/release/mklarqvist/FastIntersectCount.svg)](https://github.com/mklarqvist/FastIntersectCount/releases)
-[![License](https://img.shields.io/badge/Apache-2.0-blue.svg)](LICENSE)
+[![Build Status](https://travis-ci.com/mklarqvist/StormBitmaps.svg)](https://travis-ci.com/mklarqvist/StormBitmaps)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/mklarqvist/StormBitmaps?branch=master&svg=true)](https://ci.appveyor.com/project/mklarqvist/StormBitmaps)
+[![Github Releases](https://img.shields.io/github/release/mklarqvist/StormBitmaps.svg)](https://github.com/mklarqvist/StormBitmaps/releases)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 # Storm bitmaps
 
 These functions compute the set intersection count (|A \in B|) of pairs of
-_symmetric_ integer sets with equal upper bounds [0,N). Several of the
-functions presented here exploit set sparsity by using auxiliary information
-such as positional indices, bitmaps, or reduction preprocessors. Using large
-registers (AVX-512BW), contiguous and aligned memory, and cache-aware blocking,
-we can achieve ~114 GB/s (~0.2 CPU cycles / 64-bit word) of sustained throughput
-(~14 billion 64-bit bitmaps / second or up to ~912 billion implicit integers /
-second) using `STORM_contiguous_t` when the input data is small (N < 256000).
-When input data is large, we can achieve around 0.4-0.6 CPU cycles / 64-bit word
-using `STORM_t` while using considerably less memory. Both of these models make
-use of scalar-bitmap or scalar-scalar comparisons when the data density is
-small.
+_symmetric_ integer sets with equal upper bounds [0,N) using specialized CPU instructions i.e.
+[POPCNT](https://en.wikipedia.org/wiki/SSE4#POPCNT_and_LZCNT),
+[SSE4.2](https://en.wikipedia.org/wiki/SSE4#SSE4.2),
+[AVX2](https://en.wikipedia.org/wiki/Advanced_Vector_Extensions),
+[AVX512BW](https://en.wikipedia.org/wiki/Advanced_Vector_Extensions),
+[NEON](https://en.wikipedia.org/wiki/ARM_architecture#Advanced_SIMD_.28NEON.29). Storm bitmaps has been
+tested successfully using the GCC, Clang and MSVC compilers. 
 
 Storm bitmaps have several interesting properties:
-* Superior performance when the universe is small (M < 256000).
+* Superior performance when the universe is small (M < 256,000).
 * Parity in perormance to Roaring bitmaps when the unvierse is large.
 * Selects the optimal memory alignment and subroutines given the available SIMD
   instruction at run-time by using
   [libalgebra](https://github.com/mklarqvist/libalgebra).
+
+Using large registers (AVX-512BW), contiguous and aligned memory, and
+cache-aware blocking, we can achieve ~114 GB/s (~0.2 CPU cycles / 64-bit word)
+of sustained throughput (~14 billion 64-bit bitmaps / second or up to ~912
+billion implicit integers / second) using `STORM_contiguous_t` when the input
+data is small (N < 256,000). When input data is large, we can achieve around
+0.4-0.6 CPU cycles / 64-bit word using `STORM_t` while using considerably less
+memory. Both of these models make use of scalar-bitmap or scalar-scalar
+comparisons when the data density is small.
 
 The core algorithms are described in the papers:
 
@@ -36,9 +41,7 @@ The core algorithms are described in the papers:
 
 ### Compilation
 
-Compile test suite with: `cmake .; make` and run `./benchmark`. For better
-performance, pass optimization flags to CMAKE: 
-`cmake -DCMAKE_CXX_FLAGS="-march=native" -DCMAKE_C_FLAGS="-march=native" .`
+Compile test suite with: `cmake .; make` and run `./benchmark`.
 
 ### Note
 
