@@ -45,6 +45,9 @@ elseif(GLM_TEST_ENABLE_SIMD_SSE4_2)
 	message(STATUS "GLM: SSE4.2 instruction set")
 endif()
 
+message(STATUS "CXX_FLAGS=${CMAKE_CXX_FLAGS}")
+message(STATUS "C_FLAGS=${CMAKE_C_FLAGS}")
+
 if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
     SET(CMAKE_FIND_LIBRARY_PREFIXES "lib")
     SET(CMAKE_FIND_LIBRARY_SUFFIXES ".so" ".a" ".dylib")
@@ -56,7 +59,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     message(STATUS "Searching for .lib and .dll")
 endif()
 
-include_directories(.)
+include_directories(${CMAKE_SOURCE_DIR})
 
 find_path(LM_ROARING_INCLUDE_DIR NAMES REQUIRED roaring/roaring.h)
 find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
