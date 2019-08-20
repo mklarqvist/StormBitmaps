@@ -491,7 +491,7 @@ bench_t froarwrapper_blocked(const uint32_t n_variants, const uint32_t n_ints_sa
 
 void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_t>* loads) {
     std::cout << "Samples\tAlts\tMethod\tTime(ms)\tCPUCycles\tCount\tThroughput(MB/s)\tInts/s(1e6)\tIntersect/s(1e6)\tActualThroughput(MB/s)\tCycles/int\tCycles/intersect" << std::endl;
-    std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
+    // std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
 
     std::vector<uint32_t> n_alts;
     if (loads == nullptr) {
@@ -515,7 +515,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
                 if (n_alts[a-1] != 1) 
                     n_alts[a] = 1;
             } else {
-                std::cerr << "there are no alts..." << std::endl;
+                // std::cerr << "there are no alts..." << std::endl;
                 break;
             }
         }
@@ -544,7 +544,7 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         std::mt19937 eng(rd()); // seed the generator
 
         // Draw
-        std::cerr << "Constructing..."; std::cerr.flush();
+        // std::cerr << "Constructing..."; std::cerr.flush();
         
         // For each variant site.
         for (uint32_t j = 0; j < n_variants; ++j) {
@@ -566,12 +566,12 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
             STORM_add(twk2, &pos[0], pos.size());
             pos.clear();
         }
-        std::cerr << "Done!" << std::endl;
+        // std::cerr << "Done!" << std::endl;
 
         uint32_t n_ints_sample = std::ceil(n_samples / 64.0);
         const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
         const uint64_t n_total_integer_cmps = n_intersects * n_ints_sample;
-        std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
+        // std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
 
         uint64_t storm_size = STORM_serialized_size(twk2);
         // std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
@@ -647,9 +647,9 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
         // uint32_t n_variants = std::max(std::min((uint32_t)150000, (uint32_t)std::ceil(desired_mem/(n_ints_sample*sizeof(uint64_t)))), (uint32_t)64);
         // uint32_t n_variants = 10000;
 
-        std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
+        // std::cerr << "Generating: " << n_samples << " samples for " << n_variants << " variants" << std::endl;
         const uint64_t memory_used = n_ints_sample*n_variants*sizeof(uint64_t);
-        std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
+        // std::cerr << "Allocating: " << memory_used/(1024 * 1024.0) << "Mb" << std::endl;
 
         uint64_t* vals = (uint64_t*)STORM_aligned_malloc(STORM_get_alignment(), n_ints_sample*n_variants*sizeof(uint64_t));
         
@@ -686,7 +686,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                     if (n_alts[a-1] != 1) 
                         n_alts[a] = 1;
                 } else {
-                    std::cerr << "there are no alts..." << std::endl;
+                    // std::cerr << "there are no alts..." << std::endl;
                     break;
                 }
             }
@@ -725,7 +725,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             std::mt19937 eng(rd()); // seed the generator
 
             // Draw
-            std::cerr << "Constructing..."; std::cerr.flush();
+            // std::cerr << "Constructing..."; std::cerr.flush();
             uint64_t* vals2 = vals;
             for (uint32_t j = 0; j < n_variants; ++j) {
                 for (uint32_t i = 0; i < n_alts[a]; ++i) {
@@ -763,10 +763,10 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
 #endif
                 vals2 += n_ints_sample;
             }
-            std::cerr << "Done!" << std::endl;
+            // std::cerr << "Done!" << std::endl;
 
             uint64_t storm_size = STORM_serialized_size(twk2);
-            std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
+            // std::cerr << "[MEMORY][STORM][" << n_alts[a] << "] Memory for Storm=" << storm_size << "b" << std::endl;
 
 
             // uint32_t total_screech = 0;
@@ -781,11 +781,11 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                     int_comparisons += pos[k].size() + pos[p].size();
                 }
             }
-            std::cerr << "Size of intersections=" << int_comparisons << std::endl;
+            // std::cerr << "Size of intersections=" << int_comparisons << std::endl;
 
             const uint64_t n_intersects = ((n_variants * n_variants) - n_variants) / 2;
             const uint64_t n_total_integer_cmps = n_intersects * n_ints_sample;
-            std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
+            // std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
             //
 
             uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample*8);
@@ -942,7 +942,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             for (int k = 0; k < n_variants; ++k) {
                 roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
             }
-            std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
+            // std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
 
             uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
             roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;

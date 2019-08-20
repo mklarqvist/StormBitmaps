@@ -34,4 +34,4 @@ build_script:
   - cmake --build . --config Release
 
 test_script:
-  - ps: C:\projects\FastIntersectCount\Release\benchmark.exe 4092 100
+  - ps: C:\projects\FastIntersectCount\Release\benchmark.exe 4096 100
