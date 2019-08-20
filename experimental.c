@@ -306,8 +306,6 @@ uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, c
     }
     return (uint64_t)count;
 }
-#else
-uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return(0); }
 #endif
 
 #if SIMD_VERSION >= 3
@@ -371,8 +369,6 @@ uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1
     }
     return(count);
 }
-#else
-uint64_t EXP_intersect_raw_sse4_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return(0); }
 #endif
 
 #if SIMD_VERSION >= 5
@@ -419,8 +415,6 @@ uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, con
     }
     return(count);
 }
-#else
-uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return(0); }
 #endif
 
 
@@ -558,87 +552,7 @@ uint64_t EXP_intersect_raw_gallop(const uint16_t* STORM_RESTRICT v1, const uint1
     return(count);
 }
 
-uint64_t EXP_intersect_raw_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
-    uint64_t count = 0;
-
-    const __m128i one_mask = _mm_set1_epi16(1);
-
-    int low = 0;
-    if(len1 < len2) {
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] < v2[0]) {
-                // will never overlap
-                continue;
-            }
-
-            if(v1[i] > v2[len2-1]) {
-                // will never overlap
-                return count;
-            }
-
-            int diff = 1;
-            while(low + diff <= len2 && v2[low + diff] < v1[i])
-                diff <<= 1;
-
-            int high = UNSAFE_MIN((int)len2, low + diff);
-
-            const __m128i r = _mm_set1_epi16(v1[i]);
-            int j = low;
-            for(; j + 8 < len2; j += 8) {
-                const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j]);
-                const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = STORM_POPCOUNT(_mm_extract_epi64(x, 0)) + STORM_POPCOUNT(_mm_extract_epi64(x, 1));
-                if(l) {
-                    count += l;
-                    j = len2;
-                    low = j;
-                    break;
-                }
-            }
-
-            for(; j < len2; ++j) {
-                count += (v1[i] == v2[j]);
-            }
-        }
-    } else {
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] < v1[0]) {
-                // will never overlap
-                continue;
-            }
-
-            if(v2[i] > v1[len1-1]) {
-                // will never overlap
-                return count;
-            }
-
-            int diff = 1;
-            while(low + diff <= len1 && v1[low + diff] < v2[i])
-                diff <<= 1;
-
-            int high = UNSAFE_MIN((int)len1, low + diff);
-            const __m128i r = _mm_set1_epi16(v2[i]);
-            int j = low;
-            for(; j + 8 < len1; j += 8) {
-                const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j]);
-                const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = STORM_POPCOUNT(_mm_extract_epi64(x, 0)) + STORM_POPCOUNT(_mm_extract_epi64(x, 1));
-                if(l) {
-                    count += l;
-                    j = len1;
-                    low = j;
-                    break;
-                }
-            }
-
-            for(; j < len1; ++j) {
-                count += (v2[i] == v1[j]);
-            }
-        }
-    }
-    return(count);
-}
-
+#if SIMD_VERSION >= 3
 uint64_t EXP_intersect_roaring_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
@@ -778,3 +692,4 @@ uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT 
     }
     return (uint64_t)count;
 }
+#endif
