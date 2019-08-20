@@ -226,6 +226,9 @@ uint64_t EXP_intersect_raw_rotl_gallop_sse4(const uint16_t* STORM_RESTRICT v1, c
     }
     return (uint64_t)count;
 }
+#else
+uint64_t EXP_intersect_raw_sse4_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
+uint64_t EXP_intersect_raw_rotl_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 5
@@ -306,6 +309,8 @@ uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, c
     }
     return (uint64_t)count;
 }
+#else
+uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 3
@@ -369,6 +374,8 @@ uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1
     }
     return(count);
 }
+#else
+uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 5
@@ -415,6 +422,8 @@ uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, con
     }
     return(count);
 }
+#else
+uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 
@@ -692,4 +701,7 @@ uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT 
     }
     return (uint64_t)count;
 }
+#else
+uint64_t EXP_intersect_roaring_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
+uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
