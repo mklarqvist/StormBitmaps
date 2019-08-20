@@ -1,9 +1,12 @@
+
 #include "classes.h"
+
+// cpp
 
 uint64_t bitmap_container_t::intersect_blocked(uint32_t bsize) const {
     uint64_t count = 0;
     uint32_t i = 0;
-    const TWK_intersect_func func = TWK_get_intersect_func(n_bitmaps_sample);
+    const STORM_compute_func func = STORM_get_intersect_count_func(n_bitmaps_sample);
 
     for (/**/; i + bsize <= n_bitmaps; i += bsize) {
         // diagonal component
@@ -43,7 +46,7 @@ uint64_t bitmap_container_t::intersect_blocked(uint32_t bsize) const {
 
 uint64_t bitmap_container_t::intersect() const {
     uint64_t count = 0;
-    const TWK_intersect_func func = TWK_get_intersect_func(n_bitmaps_sample);
+    const STORM_compute_func func = STORM_get_intersect_count_func(n_bitmaps_sample);
 
     for (int i = 0; i < n_bitmaps; ++i) {
         for (int j = i+1; j < n_bitmaps; ++j) {
@@ -54,17 +57,17 @@ uint64_t bitmap_container_t::intersect() const {
 }
 
 uint64_t bitmap_container_t::intersect_cont() const {
-    return TWK_wrapper_diag(n_bitmaps, bmaps, n_bitmaps_sample, TWK_get_intersect_func(n_bitmaps_sample));
+    return STORM_wrapper_diag(n_bitmaps, bmaps, n_bitmaps_sample, STORM_get_intersect_count_func(n_bitmaps_sample));
 }
 
 uint64_t bitmap_container_t::intersect_blocked_cont(uint32_t bsize) const {
-    return TWK_wrapper_diag_blocked(n_bitmaps, bmaps, n_bitmaps_sample, TWK_get_intersect_func(n_bitmaps_sample), bsize);
+    return STORM_wrapper_diag_blocked(n_bitmaps, bmaps, n_bitmaps_sample, STORM_get_intersect_count_func(n_bitmaps_sample), bsize);
 }
 
 uint64_t bitmap_container_t::intersect_cont_auto() const {
-    return TWK_wrapper_diag_list(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, TWK_get_intersect_func(n_bitmaps_sample), &TWK_intersect_scalar_list, n_alt_cutoff);
+    return STORM_wrapper_diag_list(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, STORM_get_intersect_count_func(n_bitmaps_sample), &STORM_intersect_count_scalar_list, n_alt_cutoff);
 }
 
 uint64_t bitmap_container_t::intersect_cont_blocked_auto(uint32_t bsize) const {
-    return TWK_wrapper_diag_list_blocked(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, TWK_get_intersect_func(n_bitmaps_sample), &TWK_intersect_scalar_list, n_alt_cutoff, bsize);
+    return STORM_wrapper_diag_list_blocked(n_bitmaps, bmaps, n_bitmaps_sample, n_alts, alt_positions, alt_offsets, STORM_get_intersect_count_func(n_bitmaps_sample), &STORM_intersect_count_scalar_list, n_alt_cutoff, bsize);
 }

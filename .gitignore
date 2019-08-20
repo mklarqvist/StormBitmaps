@@ -30,4 +30,13 @@
 *.exe
 *.out
 *.app
+
+# Executable
 benchmark
+# VSCode
+settings.json
+# CMake
+CMakeFiles
+cmake_*
+Makefile
+CMakeCache.txt

@@ -18,44 +18,68 @@
 #ifndef FAST_INTERSECT_EXPERIMENTAL_H_
 #define FAST_INTERSECT_EXPERIMENTAL_H_
 
-#include <vector>
-#include <memory> //unique_ptr
-#include <iostream>//debug
-#include <bitset> //
+#include "libalgebra/libalgebra.h"
 
-#include "fast_intersect_count.h"
+#if defined(__AVX512F__)
+#define SIMD_VERSION    6
+#elif defined(__AVX2__)
+#define SIMD_VERSION    5
+#elif defined(__SSE4_2__) || defined(__AVX__)
+#define SIMD_VERSION    3
+#else
+#define SIMD_VERSION    0
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if SIMD_VERSION >= 5
+#ifndef STORM_POPCOUNT_AVX2
+#define STORM_POPCOUNT_AVX2(A, B) {                  \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 0)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 1)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 2)); \
+    A += STORM_POPCOUNT(_mm256_extract_epi64(B, 3)); \
+}
+#endif
+#endif
 
 /****************************
-*  Intersect vectors of values directly
+*  Intersect vectors of scalars directly
 ****************************/
 /**<
  * Compare pairs of uncompressed 16-bit integers from two sets pairwise.
- * Naive: This function compares values from the two lists pairwise in
+ * Naive: This function compares scalars from the two lists pairwise in
  *    O(n*m)-time.
  * Broadcast: Vectorized approach where a value from the smaller vector is broadcast
- *    to a reference vector and compared against N values from the other vector.
+ *    to a reference vector and compared against N scalars from the other vector.
  * @param v1
  * @param v2
  * @return
  */
-uint64_t intersect_raw_naive(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_avx2_broadcast(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_gallop_sse4(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_raw_binary(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_roaring_cardinality(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
-uint64_t intersect_vector16_cardinality_roar(const uint16_t* FIC_RESTRICT v1, const uint16_t* FIC_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_naive(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_naive_roaring(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_naive_roaring_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_sse4_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_rotl_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_gallop(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_raw_binary(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_roaring_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
+uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 /****************************
 *  Run-length encoding
 ****************************/
+/*
 template <class int_t>
 std::vector<int_t> construct_rle(const uint64_t* input, const uint32_t n_vals) {
     uint32_t n_runs = 0;
@@ -142,6 +166,7 @@ uint64_t intersect_rle_branchless(const std::vector<int_t>& rle1, const std::vec
 
     return(ltot);
 }
+*/
 
 
 #endif /* FAST_INTERSECT_COUNT_H_ */

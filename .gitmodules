@@ -1,0 +1,3 @@
+[submodule "libalgebra"]
+	path = libalgebra
+	url = https://github.com/mklarqvist/libalgebra

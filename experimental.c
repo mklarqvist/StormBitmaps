@@ -15,7 +15,7 @@
 * specific language governing permissions and limitations
 * under the License.
 */
-#include "fast_intersect_count.h"
+#include "experimental.h"
 
 #ifndef UNSAFE_MAX
 #define UNSAFE_MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -25,17 +25,17 @@
 #endif
 
 //
-uint64_t intersect_raw_naive(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_naive(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
-    for(int i = 0; i < len1; ++i) {
-        for(int j = 0; j < len2; ++j) {
+    for (int i = 0; i < len1; ++i) {
+        for (int j = 0; j < len2; ++j) {
             count += (v1[i] == v2[j]);
         }
     }
     return(count);
 }
 
-uint64_t intersect_raw_naive_roaring(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_naive_roaring(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t answer = 0;
     if (len1 == 0 || len2 == 0) return 0;
     const uint16_t *A = v1;
@@ -61,7 +61,7 @@ uint64_t intersect_raw_naive_roaring(const uint16_t* __restrict__ v1, const uint
     return answer; // NOTREACHED
 }
 
-uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_naive_roaring_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t answer = 0;
     if (len1 == 0 || len2 == 0) return 0;
     //const uint16_t *A = v1;
@@ -90,22 +90,22 @@ uint64_t intersect_raw_naive_roaring_sse4(const uint16_t* __restrict__ v1, const
 }
 
 #if SIMD_VERSION >= 3
-uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_sse4_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
     const __m128i one_mask = _mm_set1_epi8(255);
-    if(len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
-        if(v1[len1-1] < v2[0]) return 0;
+    if (len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
+        if (v1[len1-1] < v2[0]) return 0;
 
         const uint32_t n_cycles = len2 / 8;
        // const __m128i* y = (const __m128i*)(&v2[0]);
         int i = 0;
         while (v1[i] < v2[0]) {
-            if(v1[++i] == len1) return 0;
+            if (v1[++i] == len1) return 0;
         }
 
-        for(; i < len1; ++i) {
-            if(v1[i] < v2[0]) continue;
-            if(v1[i] > v2[len2-1]) {
+        for (/**/; i < len1; ++i) {
+            if (v1[i] < v2[0]) continue;
+            if (v1[i] > v2[len2-1]) {
                 // will never overlap
                 return count;
             }
@@ -113,47 +113,47 @@ uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uin
             const __m128i r = _mm_set1_epi16(v1[i]);
 
             int j = 0;
-            for(; j < n_cycles; ++j) {
+            for (/**/; j < n_cycles; ++j) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j*8]);
                 count += _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //FIC_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+                //STORM_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
             }
             j *= 8;
-            for(; j < len2; ++j) count += (v1[i] == v2[j]);
+            for (/**/; j < len2; ++j) count += (v1[i] == v2[j]);
         }
     } else {
-        if(v2[len2-1] < v1[0]) return 0;
+        if (v2[len2-1] < v1[0]) return 0;
         const uint32_t n_cycles = len1 / 8;
 
         int i = 0;
         while (v2[i] < v1[0]) {
-            if(v2[++i] == len2) return 0;
+            if (v2[++i] == len2) return 0;
         }
 
-        for(; i < len2; ++i) {
-            if(v2[i] < v1[0]) continue;
-            if(v2[i] > v1[len1-1]) {
+        for (/**/; i < len2; ++i) {
+            if (v2[i] < v1[0]) continue;
+            if (v2[i] > v1[len1-1]) {
                 // will never overlap
                 return count;
             }
             const __m128i r = _mm_set1_epi16(v2[i]);
 
             int j = 0;
-            for(; j < n_cycles; ++j) {
+            for (/**/; j < n_cycles; ++j) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j*8]);
-                //FIC_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
+                //STORM_POPCOUNT_SSE4(count, _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask));
                 count += _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
             }
             j *= 8;
-            for(; j < len1; ++j) count += (v1[j] == v2[i]);
+            for (/**/; j < len1; ++j) count += (v1[j] == v2[i]);
         }
     }
     return(count);
 }
 
-uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
-    if(len1 == 0 || len2 == 0) return 0;
-    if(v1[0] > v2[len2-1] || v2[0] > v1[len1-1]) return 0;
+uint64_t EXP_intersect_raw_rotl_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
+    if (len1 == 0 || len2 == 0) return 0;
+    if (v1[0] > v2[len2-1] || v2[0] > v1[len1-1]) return 0;
 
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
@@ -165,6 +165,7 @@ uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const u
     const __m128i rotl_mask = _mm_set_epi8(13, 12, 11, 10, 9, 8,  7,  6,
                                             5,  4,  3,  2, 1, 0, 15, 14);
     __m128i rcount = _mm_setzero_si128();
+    uint16_t buffer[8];
 
     if ((i_a < st_a) && (i_b < st_b)) {
         v_a = _mm_lddqu_si128((__m128i *)&v1[i_a]);
@@ -172,11 +173,12 @@ uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const u
 
         while (1) {
 
-#define UPDATE {                                            \
-        v_b = _mm_shuffle_epi8(v_b, rotl_mask);             \
-        res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, v_b)); \
+#define UPDATE {                                        \
+    v_b = _mm_shuffle_epi8(v_b, rotl_mask);             \
+    res = _mm_or_si128(res, _mm_cmpeq_epi16(v_a, v_b)); \
 }
             __m128i res = _mm_cmpeq_epi16(v_a, v_b);
+            // 7 rotation comparisons
             UPDATE UPDATE UPDATE UPDATE
             UPDATE UPDATE UPDATE
 
@@ -201,9 +203,13 @@ uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const u
             }
         } // end while
 
-        uint16_t* c = (uint16_t*)&rcount;
-        for(int i = 0; i < vectorlength; ++i) count += c[i];
+        // uint16_t* c = (uint16_t*)&rcount;
+        // for (int i = 0; i < vectorlength; ++i) count += c[i];
+        _mm_storeu_si128((__m128i*)buffer, rcount);
+        // uint16_t* c = (uint16_t*)&rcount;
+        for (int i = 0; i < vectorlength; ++i) count += buffer[i];
     }
+
     // intersect the tail using scalar intersection
     while (i_a < len1 && i_b < len2) {
         uint16_t a = v1[i_a];
@@ -220,12 +226,15 @@ uint64_t intersect_raw_rotl_gallop_sse4(const uint16_t* __restrict__ v1, const u
     }
     return (uint64_t)count;
 }
+#else
+uint64_t EXP_intersect_raw_sse4_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
+uint64_t EXP_intersect_raw_rotl_gallop_sse4(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 5
-uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
-    if(len1 == 0 || len2 == 0) return 0;
-    if(v1[0] > v2[len2 - 1] || v2[0] > v1[len1 - 1]) return 0;
+uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
+    if (len1 == 0 || len2 == 0) return 0;
+    if (v1[0] > v2[len2-1] || v2[0] > v1[len1-1]) return 0;
 
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
@@ -238,28 +247,27 @@ uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const u
                                               21, 20, 19, 18, 17, 16, 15, 14,
                                               13, 12, 11, 10,  9,  8,  7,  6,
                                                5,  4,  3,  2,  1,  0, 31, 30);
-
     __m256i rcount = _mm256_setzero_si256();
+    uint16_t buffer[16];
 
     if ((i_a < st_a) && (i_b < st_b)) {
         v_a = _mm256_lddqu_si256((__m256i *)&v1[i_a]);
         v_b = _mm256_lddqu_si256((__m256i *)&v2[i_b]);
 
         while (1) {
-
-#define UPDATE {                                                  \
-        v_b = _mm256_shuffle_epi8(v_b, rotl_mask);                \
-        res = _mm256_or_si256(res, _mm256_cmpeq_epi16(v_a, v_b)); \
+#define UPDATE {                                              \
+    v_b = _mm256_shuffle_epi8(v_b, rotl_mask);                \
+    res = _mm256_or_si256(res, _mm256_cmpeq_epi16(v_a, v_b)); \
 }
             __m256i res = _mm256_cmpeq_epi16(v_a, v_b);
-            UPDATE UPDATE UPDATE UPDATE
-            UPDATE UPDATE UPDATE UPDATE
-            UPDATE UPDATE UPDATE UPDATE
-            UPDATE UPDATE UPDATE
+            // 15 rotation comparisons
+            UPDATE UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE UPDATE UPDATE
+            UPDATE UPDATE UPDATE UPDATE UPDATE
 
 #undef UPDATE
 
-            //count += ((_mm_popcnt_u32(_mm256_movemask_epi8(res))) >> 1); // option 1: popcnt of bit-mask
+            //count += ((_mm_popcnt_u32(_mm_movemask_epi8(res))) >> 1); // option 1: popcnt of bit-mask
             rcount = _mm256_add_epi16(rcount, _mm256_and_si256(res, one_mask)); // option 2: horizontal accumulator
 
             const uint16_t a_max = v1[i_a + vectorlength - 1];
@@ -278,9 +286,13 @@ uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const u
             }
         } // end while
 
-        uint16_t* c = (uint16_t*)&rcount;
-        for(int i = 0; i < vectorlength; ++i) count += c[i];
+        // uint16_t* c = (uint16_t*)&rcount;
+        // for (int i = 0; i < vectorlength; ++i) count += c[i];
+        _mm256_storeu_si256((__m256i*)buffer, rcount);
+        // uint16_t* c = (uint16_t*)&rcount;
+        for (int i = 0; i < vectorlength; ++i) count += buffer[i];
     }
+
     // intersect the tail using scalar intersection
     while (i_a < len1 && i_b < len2) {
         uint16_t a = v1[i_a];
@@ -298,21 +310,21 @@ uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const u
     return (uint64_t)count;
 }
 #else
-uint64_t intersect_raw_rotl_gallop_avx2(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) { return(0); }
+uint64_t EXP_intersect_raw_rotl_gallop_avx2(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 3
-uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
     const __m128i one_mask = _mm_set1_epi8(255);
-    if(len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
-        if(v1[len1-1] < v2[0]) return 0;
+    if (len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
+        if (v1[len1-1] < v2[0]) return 0;
         int from = 0;
 
         __m128i r;
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] < v2[0]) continue;
-            if(v1[i] > v2[len2-1]) {
+        for (int i = 0; i < len1; ++i) {
+            if (v1[i] < v2[0]) continue;
+            if (v1[i] > v2[len2-1]) {
                 // will never overlap
                 return count;
             }
@@ -320,26 +332,26 @@ uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, cons
 
             uint32_t loc = 0;
             int j = from;
-            for(; j + 8 < len2; j += 8) {
+            for (/**/; j + 8 < len2; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j]);
                 loc = _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //loc = FIC_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
+                //loc = STORM_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
                 from = (loc ? j + 1 : from);
                 count += loc;
             }
-            for(; j < len2; ++j) {
+            for (/**/; j < len2; ++j) {
                 count += (v1[i] == v2[j]);
                 from = (v1[i] == v2[j] ? j + 1 : from);
             }
         }
     } else {
-        if(v2[len2-1] < v1[0]) return 0;
+        if (v2[len2-1] < v1[0]) return 0;
 
         int from = 0;
         __m128i r;
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] < v1[0]) continue;
-            if(v2[i] > v1[len1-1]) {
+        for (int i = 0; i < len2; ++i) {
+            if (v2[i] < v1[0]) continue;
+            if (v2[i] > v1[len1-1]) {
                 // will never overlap
                 return count;
             }
@@ -347,14 +359,14 @@ uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, cons
 
             uint32_t loc = 0;
             int j = from;
-            for(; j + 8 < len1; j += 8) {
+            for (/**/; j + 8 < len1; j += 8) {
                 const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j]);
                 loc = _mm_testnzc_si128(_mm_cmpeq_epi16(r, y), one_mask);
-                //loc = FIC_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
+                //loc = STORM_POPCOUNT((_mm_extract_epi64(res, 0) << 1) | _mm_extract_epi64(res, 1));
                 from = (loc ? j + 1 : from);
                 count += loc;
             }
-            for(; j < len1; ++j) {
+            for (/**/; j < len1; ++j) {
                 count += (v2[i] == v1[j]);
                 from = (v2[i] == v1[j] ? j + 1 : from);
             }
@@ -363,36 +375,36 @@ uint64_t intersect_raw_sse4_broadcast_skip(const uint16_t* __restrict__ v1, cons
     return(count);
 }
 #else
-uint64_t intersect_raw_sse4_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) { return(0); }
+uint64_t EXP_intersect_raw_sse4_broadcast_skip(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 #if SIMD_VERSION >= 5
-uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
     const __m256i one_mask = _mm256_set1_epi16(1);
-    if(len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
+    if (len1 < len2) { // broadcast-compare V1-values to vectors of V2 values
         const uint32_t n_cycles = len2 / 16;
 
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] > v2[len2-1]) {
+        for (int i = 0; i < len1; ++i) {
+            if (v1[i] > v2[len2-1]) {
                 // will never overlap
                 return count;
             }
             __m256i r = _mm256_set1_epi16(v1[i]);
 
             int j = 0;
-            for(; j < n_cycles; ++j) {
+            for (/**/; j < n_cycles; ++j) {
                 const __m256i y = _mm256_loadu_si256((const __m256i*)&v2[j*16]);
-                FIC_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+                STORM_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
             }
             j *= 16;
-            for(; j < len2; ++j) count += (v1[i] == v2[j]);
+            for (/**/; j < len2; ++j) count += (v1[i] == v2[j]);
         }
     } else {
         const uint32_t n_cycles = len1 / 16;
 
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] > v1[len1-1]) {
+        for (int i = 0; i < len2; ++i) {
+            if (v2[i] > v1[len1-1]) {
                 // will never overlap
                 return count;
             }
@@ -400,35 +412,36 @@ uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uin
             __m256i r = _mm256_set1_epi16(v2[i]);
 
             int j = 0;
-            for(; j < n_cycles; ++j) {
+            for (/**/; j < n_cycles; ++j) {
                 const __m256i y = _mm256_loadu_si256((const __m256i*)&v1[j*16]);
-                FIC_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
+                STORM_POPCOUNT_AVX2(count, _mm256_and_si256(_mm256_cmpeq_epi16(r, y), one_mask));
             }
             j *= 16;
-            for(; j < len1; ++j)  count += (v1[j] == v2[i]);
+            for (/**/; j < len1; ++j)  count += (v1[j] == v2[i]);
         }
     }
     return(count);
 }
 #else
-uint64_t intersect_raw_avx2_broadcast(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) { return(0); }
+uint64_t EXP_intersect_raw_avx2_broadcast(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
 #endif
 
 
 static int BinarySearch(const uint16_t* array, int n_a, uint16_t key) {
-    if(n_a == 0) return -1;
+    if (n_a == 0) return -1;
     int low = 0, high = n_a-1, mid;
-    while(low <= high) {
+    while (low <= high) {
         mid = (low + high)/2;
 
         // low path
+#if defined (__builtin_prefetch)
         __builtin_prefetch(&array[(mid + 1 + high)/2], 0, 1);
         // high path
         __builtin_prefetch(&array[(low + mid - 1)/2], 0, 1);
-
-        if(array[mid] < key) low = mid + 1;
-        else if(array[mid] == key) return mid;
-        else if(array[mid] > key) high = mid - 1;
+#endif
+        if (array[mid] < key) low = mid + 1;
+        else if (array[mid] == key) return mid;
+        else if (array[mid] > key) high = mid - 1;
     }
     return -1;
  }
@@ -447,17 +460,17 @@ static void BinarySearch2(const uint16_t* array, int32_t n, uint16_t target1, ui
     *index2 = (int32_t)((*base2 < target2) + base2 - array);
 }
 
-uint64_t intersect_raw_binary(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_binary(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
 
-    if(len1 < len2) {
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] < v2[0]) {
+    if (len1 < len2) {
+        for (int i = 0; i < len1; ++i) {
+            if (v1[i] < v2[0]) {
                 // will never overlap
                 continue;
             }
 
-            if(v1[i] > v2[len2-1]) {
+            if (v1[i] > v2[len2-1]) {
                 // will never overlap
                 return count;
             }
@@ -465,13 +478,13 @@ uint64_t intersect_raw_binary(const uint16_t* __restrict__ v1, const uint16_t* _
             count += (BinarySearch(v2, len2, v1[i]) != -1);
         }
     } else {
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] < v1[0]) {
+        for (int i = 0; i < len2; ++i) {
+            if (v2[i] < v1[0]) {
                 // will never overlap
                 continue;
             }
 
-            if(v2[i] > v1[len1-1]) {
+            if (v2[i] > v1[len1-1]) {
                 // will never overlap
                 return count;
             }
@@ -496,24 +509,24 @@ for i := 1 to m:
 
     low = k
  */
-uint64_t intersect_raw_gallop(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_raw_gallop(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     uint64_t count = 0;
 
     int low = 0;
-    if(len1 < len2) {
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] < v2[0]) {
+    if (len1 < len2) {
+        for (int i = 0; i < len1; ++i) {
+            if (v1[i] < v2[0]) {
                 // will never overlap
                 continue;
             }
 
-            if(v1[i] > v2[len2-1]) {
+            if (v1[i] > v2[len2-1]) {
                 // will never overlap
                 return count;
             }
 
             int diff = 1;
-            while(low + diff <= len2 && v2[low + diff] < v1[i])
+            while (low + diff <= len2 && v2[low + diff] < v1[i])
                 diff <<= 1;
 
             int high = UNSAFE_MIN((int)len2, low + diff);
@@ -523,19 +536,19 @@ uint64_t intersect_raw_gallop(const uint16_t* __restrict__ v1, const uint16_t* _
             low = (k == -1 ? low : k);
         }
     } else {
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] < v1[0]) {
+        for (int i = 0; i < len2; ++i) {
+            if (v2[i] < v1[0]) {
                 // will never overlap
                 continue;
             }
 
-            if(v2[i] > v1[len1-1]) {
+            if (v2[i] > v1[len1-1]) {
                 // will never overlap
                 return count;
             }
 
             int diff = 1;
-            while(low + diff <= len1 && v1[low + diff] < v2[i])
+            while (low + diff <= len1 && v1[low + diff] < v2[i])
                 diff <<= 1;
 
             int high = UNSAFE_MIN((int)len1, low + diff);
@@ -548,88 +561,8 @@ uint64_t intersect_raw_gallop(const uint16_t* __restrict__ v1, const uint16_t* _
     return(count);
 }
 
-uint64_t intersect_raw_gallop_sse4(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
-    uint64_t count = 0;
-
-    const __m128i one_mask = _mm_set1_epi16(1);
-
-    int low = 0;
-    if(len1 < len2) {
-        for(int i = 0; i < len1; ++i) {
-            if(v1[i] < v2[0]) {
-                // will never overlap
-                continue;
-            }
-
-            if(v1[i] > v2[len2-1]) {
-                // will never overlap
-                return count;
-            }
-
-            int diff = 1;
-            while(low + diff <= len2 && v2[low + diff] < v1[i])
-                diff <<= 1;
-
-            int high = UNSAFE_MIN((int)len2, low + diff);
-
-            const __m128i r = _mm_set1_epi16(v1[i]);
-            int j = low;
-            for(; j + 8 < len2; j += 8) {
-                const __m128i y = _mm_loadu_si128((const __m128i*)&v2[j]);
-                const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = FIC_POPCOUNT(_mm_extract_epi64(x, 0)) + FIC_POPCOUNT(_mm_extract_epi64(x, 1));
-                if(l) {
-                    count += l;
-                    j = len2;
-                    low = j;
-                    break;
-                }
-            }
-
-            for(; j < len2; ++j) {
-                count += (v1[i] == v2[j]);
-            }
-        }
-    } else {
-        for(int i = 0; i < len2; ++i) {
-            if(v2[i] < v1[0]) {
-                // will never overlap
-                continue;
-            }
-
-            if(v2[i] > v1[len1-1]) {
-                // will never overlap
-                return count;
-            }
-
-            int diff = 1;
-            while(low + diff <= len1 && v1[low + diff] < v2[i])
-                diff <<= 1;
-
-            int high = UNSAFE_MIN((int)len1, low + diff);
-            const __m128i r = _mm_set1_epi16(v2[i]);
-            int j = low;
-            for(; j + 8 < len1; j += 8) {
-                const __m128i y = _mm_loadu_si128((const __m128i*)&v1[j]);
-                const __m128i x = _mm_and_si128(_mm_cmpeq_epi16(r, y),one_mask);
-                uint32_t l = FIC_POPCOUNT(_mm_extract_epi64(x, 0)) + FIC_POPCOUNT(_mm_extract_epi64(x, 1));
-                if(l) {
-                    count += l;
-                    j = len1;
-                    low = j;
-                    break;
-                }
-            }
-
-            for(; j < len1; ++j) {
-                count += (v2[i] == v1[j]);
-            }
-        }
-    }
-    return(count);
-}
-
-uint64_t intersect_roaring_cardinality(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+#if SIMD_VERSION >= 3
+uint64_t EXP_intersect_roaring_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
     const int vectorlength = sizeof(__m128i) / sizeof(uint16_t);
@@ -702,7 +635,7 @@ uint64_t intersect_roaring_cardinality(const uint16_t* __restrict__ v1, const ui
     return (uint64_t)count;
 }
 
-uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, const uint16_t* __restrict__ v2, const uint32_t len1, const uint32_t len2) {
+uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) {
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
     const int vectorlength = sizeof(__m128i) / sizeof(uint16_t);
@@ -768,3 +701,7 @@ uint64_t intersect_vector16_cardinality_roar(const uint16_t* __restrict__ v1, co
     }
     return (uint64_t)count;
 }
+#else
+uint64_t EXP_intersect_roaring_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
+uint64_t EXP_intersect_vector16_cardinality_roar(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2) { return 0; }
+#endif
