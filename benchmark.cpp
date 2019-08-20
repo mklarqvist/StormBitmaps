@@ -42,7 +42,21 @@ uint64_t get_cpu_cycles() {
 
 // Convenience wrapper
 struct bench_t {
-    bench_t() {}
+    bench_t() :
+        total(0), 
+        instructions_cycle(0), 
+        cycles_word(0), 
+        instructions_word(0),
+        cycles(0), 
+        instructions(0), 
+        MinBranchMiss(0),
+        MinCacheRef(0), 
+        MinCacheMiss(0),
+        throughput(0),
+        time_ms(0)
+    {
+    }
+    
     bench_t(std::vector<unsigned long long>& results, const uint64_t n_total_integer_cmps) :
         total(0), 
         instructions_cycle(double(results[1]) / results[0]), 
