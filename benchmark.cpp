@@ -21,7 +21,7 @@
 #include "libalgebra/libalgebra.h"
 #include "storm.h"
 // #include "classes.h"
-#include "experimental.h"
+// #include "experimental.h"
 
 #if defined(__AVX512F__)
 #define SIMD_VERSION    6
@@ -413,20 +413,20 @@ bench_t frlewrapper(const std::vector< std::vector<int_t> >& rle, const size_t n
     return(b);
 }
 
-template <uint64_t (f)(const uint16_t* v1, const uint16_t* v2, const uint32_t len1, const uint32_t len2)>
-bench_t frawwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, const std::vector< std::vector<uint16_t> >& pos) {
-    uint64_t total = 0;
+// template <uint64_t (f)(const uint16_t* v1, const uint16_t* v2, const uint32_t len1, const uint32_t len2)>
+// bench_t frawwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, const std::vector< std::vector<uint16_t> >& pos) {
+//     uint64_t total = 0;
     
-    PERF_PRE
-    for (int k = 0; k < n_variants; ++k) {
-        for (int p = k + 1; p < n_variants; ++p) {
-            total += (*f)(&pos[k][0], &pos[p][0], pos[k].size(), pos[p].size());
-        }
-    }
-    PERF_POST
+//     PERF_PRE
+//     for (int k = 0; k < n_variants; ++k) {
+//         for (int p = k + 1; p < n_variants; ++p) {
+//             total += (*f)(&pos[k][0], &pos[p][0], pos[k].size(), pos[p].size());
+//         }
+//     }
+//     PERF_POST
 
-    return(b);
-}
+//     return(b);
+// }
 
 #ifdef USE_ROARING
 bench_t froarwrapper(const uint32_t n_variants, const uint32_t n_ints_sample, roaring_bitmap_t** bitmaps) {
@@ -986,7 +986,6 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             m3_block3.PrintPretty();
 #endif
             // SIMD SSE4
-#ifndef _MSC_VER
 #if SIMD_VERSION >= 3
             // for (int k = 0; k < block_range.size(); ++k) {
             //     bench_t m2_block3 = fwrapper_blocked<&intersect_bitmaps_sse4>(n_variants, vals, n_ints_sample,block_range[k]);
@@ -1001,7 +1000,6 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             std::cout << m2_block3_name << "\t" << n_alts[a] << "\t" ;
             m2_block3.PrintPretty();
 #endif
-#endif
 
             if (n_alts[a] <= 300) {
                 bench_t m4 = flwrapper<&STORM_intersect_count_scalar_list>(n_variants, vals, n_ints_sample, pos);
@@ -1011,85 +1009,85 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 m4.PrintPretty();
             }
 
-            if (n_samples <= 4096) {
+            // if (n_samples <= 4096) {
                 
-                // bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
-                // PRINT("bitmap-scalar-popcnt",m1);
+            //     // bench_t m1 = fwrapper<&intersect_bitmaps_scalar>(n_variants, vals, n_ints_sample);
+            //     // PRINT("bitmap-scalar-popcnt",m1);
 
-                // bench_t raw1 = frawwrapper<&EXP_intersect_raw_naive>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-naive",raw1);
+            //     // bench_t raw1 = frawwrapper<&EXP_intersect_raw_naive>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-naive",raw1);
 
-                // bench_t raw2 = frawwrapper<&EXP_intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-broadcast-sse4",raw2);
+            //     // bench_t raw2 = frawwrapper<&EXP_intersect_raw_sse4_broadcast>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-broadcast-sse4",raw2);
 
-                // bench_t raw3 = frawwrapper<&EXP_intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-broadcast-avx2",raw3);
+            //     // bench_t raw3 = frawwrapper<&EXP_intersect_raw_avx2_broadcast>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-broadcast-avx2",raw3);
 
-                // bench_t raw2_skip = frawwrapper<&EXP_intersect_raw_sse4_broadcast_skip>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-broadcast-sse4-skip",raw2_skip);
+            //     // bench_t raw2_skip = frawwrapper<&EXP_intersect_raw_sse4_broadcast_skip>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-broadcast-sse4-skip",raw2_skip);
 
-                // bench_t raw_gallop = frawwrapper<&EXP_intersect_raw_gallop>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-gallop",raw_gallop);
+            //     // bench_t raw_gallop = frawwrapper<&EXP_intersect_raw_gallop>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-gallop",raw_gallop);
 
-                // bench_t raw_gallop_sse = frawwrapper<&EXP_intersect_raw_gallop_sse4>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-gallop-sse4",raw_gallop_sse);
+            //     // bench_t raw_gallop_sse = frawwrapper<&EXP_intersect_raw_gallop_sse4>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-gallop-sse4",raw_gallop_sse);
 
-                // bench_t raw_binary = frawwrapper<&EXP_intersect_raw_binary>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-binary",raw_binary);
+            //     // bench_t raw_binary = frawwrapper<&EXP_intersect_raw_binary>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-binary",raw_binary);
 
-                bench_t raw_roaring = frawwrapper<&EXP_intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-roaring",raw_roaring);
-                std::cout << "raw-roaring" << "\t" << n_alts[a] << "\t" ;
-                raw_roaring.PrintPretty();
+            //     bench_t raw_roaring = frawwrapper<&EXP_intersect_roaring_cardinality>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-roaring",raw_roaring);
+            //     std::cout << "raw-roaring" << "\t" << n_alts[a] << "\t" ;
+            //     raw_roaring.PrintPretty();
 
-                bench_t raw_roaring2 = frawwrapper<&EXP_intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-roaring2",raw_roaring2);
-                std::cout << "raw-roaring2" << "\t" << n_alts[a] << "\t" ;
-                raw_roaring2.PrintPretty();
+            //     bench_t raw_roaring2 = frawwrapper<&EXP_intersect_vector16_cardinality_roar>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-roaring2",raw_roaring2);
+            //     std::cout << "raw-roaring2" << "\t" << n_alts[a] << "\t" ;
+            //     raw_roaring2.PrintPretty();
 
-                
-
-                bench_t raw1_roaring_sse4 = frawwrapper<&EXP_intersect_raw_rotl_gallop_sse4>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-rotl-gallop-sse4",raw1_roaring_sse4);
-                std::cout << "raw-rotl-gallop-sse4" << "\t" << n_alts[a] << "\t" ;
-                raw1_roaring_sse4.PrintPretty();
-
-                bench_t raw1_roaring_avx2= frawwrapper<&EXP_intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
-                // PRINT("raw-rotl-gallop-avx2",raw1_roaring_avx2);
-                std::cout << "raw-rotl-gallop-avx2" << "\t" << n_alts[a] << "\t" ;
-                raw1_roaring_sse4.PrintPretty();
                 
 
-                /*
-                std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
-                std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
+            //     bench_t raw1_roaring_sse4 = frawwrapper<&EXP_intersect_raw_rotl_gallop_sse4>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-rotl-gallop-sse4",raw1_roaring_sse4);
+            //     std::cout << "raw-rotl-gallop-sse4" << "\t" << n_alts[a] << "\t" ;
+            //     raw1_roaring_sse4.PrintPretty();
 
-                uint32_t offset = 0;
-                for (int i = 0; i < n_variants; ++i) {
-                    rle_32[i] = construct_rle<uint32_t>(&vals[offset], n_ints_sample);
-                    rle_64[i] = construct_rle<uint64_t>(&vals[offset], n_ints_sample);
-                    offset += n_ints_sample;
-                }
+            //     bench_t raw1_roaring_avx2= frawwrapper<&EXP_intersect_raw_rotl_gallop_avx2>(n_variants, n_ints_sample, pos16);
+            //     // PRINT("raw-rotl-gallop-avx2",raw1_roaring_avx2);
+            //     std::cout << "raw-rotl-gallop-avx2" << "\t" << n_alts[a] << "\t" ;
+            //     raw1_roaring_sse4.PrintPretty();
+                
 
-                bench_t mrle32 = frlewrapper< uint32_t, &intersect_rle<uint32_t> >(rle_32, n_ints_sample);
-                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
-                PRINT("rle-32",mrle32);
+            //     /*
+            //     std::vector< std::vector<uint32_t> > rle_32(n_variants, std::vector<uint32_t>());
+            //     std::vector< std::vector<uint64_t> > rle_64(n_variants, std::vector<uint64_t>());
 
-                bench_t mrle32_b = frlewrapper< uint32_t, &intersect_rle_branchless<uint32_t> >(rle_32, n_ints_sample);
-                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.time_ms << "\t" << mrle32_b.total << "\t" << mrle32_b.throughput << std::endl;
-                PRINT("rle-32-branchless",mrle32_b);
+            //     uint32_t offset = 0;
+            //     for (int i = 0; i < n_variants; ++i) {
+            //         rle_32[i] = construct_rle<uint32_t>(&vals[offset], n_ints_sample);
+            //         rle_64[i] = construct_rle<uint64_t>(&vals[offset], n_ints_sample);
+            //         offset += n_ints_sample;
+            //     }
 
-                bench_t mrle64 = frlewrapper< uint64_t, &intersect_rle<uint64_t> >(rle_64, n_ints_sample);
-                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
-                PRINT("rle-64",mrle64);
+            //     bench_t mrle32 = frlewrapper< uint32_t, &intersect_rle<uint32_t> >(rle_32, n_ints_sample);
+            //     //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32\t" << mrle32.milliseconds << "\t" << mrle32.count << "\t" << mrle32.throughput << std::endl;
+            //     PRINT("rle-32",mrle32);
 
-                bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
-                //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.time_ms << "\t" << mrle64_b.total << "\t" << mrle64_b.throughput << std::endl;
-                PRINT("rle-64-branchless",mrle64_b);
+            //     bench_t mrle32_b = frlewrapper< uint32_t, &intersect_rle_branchless<uint32_t> >(rle_32, n_ints_sample);
+            //     //std::cout << n_samples << "\t" << n_alts[a] << "\trle-32-branchless\t" << mrle32_b.time_ms << "\t" << mrle32_b.total << "\t" << mrle32_b.throughput << std::endl;
+            //     PRINT("rle-32-branchless",mrle32_b);
 
-                rle_32.clear(); rle_64.clear();
-                */
-            }
+            //     bench_t mrle64 = frlewrapper< uint64_t, &intersect_rle<uint64_t> >(rle_64, n_ints_sample);
+            //     //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64\t" << mrle64.milliseconds << "\t" << mrle64.count << "\t" << mrle64.throughput << std::endl;
+            //     PRINT("rle-64",mrle64);
+
+            //     bench_t mrle64_b = frlewrapper< uint64_t, &intersect_rle_branchless<uint64_t> >(rle_64, n_ints_sample);
+            //     //std::cout << n_samples << "\t" << n_alts[a] << "\trle-64-branchless\t" << mrle64_b.time_ms << "\t" << mrle64_b.total << "\t" << mrle64_b.throughput << std::endl;
+            //     PRINT("rle-64-branchless",mrle64_b);
+
+            //     rle_32.clear(); rle_64.clear();
+            //     */
+            // }
              
         
 #ifdef USE_ROARING

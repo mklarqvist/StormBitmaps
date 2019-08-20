@@ -41,7 +41,9 @@ elseif(STORM_ENABLE_SIMD_SSE4_2)
 	elseif(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
 		add_compile_options(/QxSSE4.2)
 	elseif((CMAKE_CXX_COMPILER_ID MATCHES "MSVC") AND NOT CMAKE_CL_64)
-		add_compile_options(/arch:AVX) # VC doesn't support SSE4.2
+		# VC doesn't support SSE4.2
+    # See https://docs.microsoft.com/en-us/cpp/build/reference/arch-x64
+    add_compile_options(/arch:AVX)
 	endif()
 	message(STATUS "STORM: SSE4.2 instruction set")
 endif()
@@ -75,7 +77,7 @@ find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
 message("LM_ROARING include dir = ${LM_ROARING_INCLUDE_DIR}")
 message("LM_ROARING lib = ${LM_ROARING_LIBRARY}")
 
-add_executable(benchmark storm.c experimental.c benchmark.cpp)
+add_executable(benchmark storm.c benchmark.cpp)
 target_link_libraries(benchmark PUBLIC ${LM_ROARING_LIBRARY})
 target_include_directories(benchmark PUBLIC ${LM_ROARING_INCLUDE_DIR} "${PROJECT_SOURCE_DIR}")
 message("target_include_directories = ${LM_ROARING_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}")
