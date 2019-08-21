@@ -1083,6 +1083,7 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
     // Add scalar values if the total number of values does not exceed
     // the threshold scalar_cutoff.
     if (n_values < bitmap->scalar_cutoff) {
+        bitmap->bitmaps[bitmap->n_data].scalar = &bitmap->scalar[bitmap->tot_scalar];
         // printf("adding scalar: %u @ %u\n",n_values,bitmap->tot_scalar);
         for (int i = 0; i < n_values; ++i) {
             bitmap->bitmaps[bitmap->n_data].scalar[i] = values[i];
