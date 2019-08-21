@@ -55,6 +55,11 @@ extern "C" {
 // Credit: Lemire et. al (Roaring bitmaps)
 uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1, const uint16_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2);
 uint64_t STORM_intersect_vector32_unsafe(const uint32_t* STORM_RESTRICT v1, const uint32_t* STORM_RESTRICT v2, const uint32_t len1, const uint32_t len2, uint32_t* STORM_RESTRICT out);
+uint64_t STORM_intersect_bitmaps_scalar_list(const uint64_t* STORM_RESTRICT b1, 
+    const uint64_t* STORM_RESTRICT b2, 
+    const uint32_t* l1, const uint32_t* l2,
+    const uint32_t  n1, const uint32_t  n2);
+
 
 /*======   Wrappers   ======*/
 // Function pointer definitions.
@@ -233,7 +238,8 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
 int STORM_contig_clear(STORM_contiguous_t* bitmap);
 uint64_t STORM_contig_pairw_intersect_cardinality(STORM_contiguous_t* bitmap);
 uint64_t STORM_contig_pairw_intersect_cardinality_blocked(STORM_contiguous_t* bitmap, uint32_t bsize);
-
+uint64_t STORM_contig_pairw_intersect_cardinality_list(STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked_list(STORM_contiguous_t* bitmap, uint32_t bsize);
 
 #ifdef __cplusplus
 } /* extern "C" */
