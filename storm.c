@@ -952,17 +952,45 @@ uint64_t STORM_serialized_size(const STORM_t* bitmap) {
 uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
 
 // contig
+
+// Contiguous memory bitmaps
+// struct STORM_contiguous_bitmap_s {
+//     uint64_t* data; // not owner of this data
+//     uint32_t* scalar; // not owner of this data
+//     // width of data is described outside
+//     uint32_t n_scalar; // copy from outside
+// };
+
+// struct STORM_contiguous_s {
+//     uint64_t* data; // bitmaps
+//     uint32_t* scalar; // scalar values
+//     uint32_t* n_scalar; // scalar values per bitmap
+//     STORM_contiguous_bitmap_t* bitmaps; // interpret of data
+//     uint64_t n_data, m_data; // m_data is reported per _VECTOR_ not per machine word
+//     uint64_t vector_length;
+//     uint32_t n_bitmaps_vector; // _MUST_ be divisible by largest alignment!
+//     STORM_compute_func intsec_func; // determined during ctor
+//     uint32_t alignment; // determined during ctor
+//     uint32_t scalar_cutoff; // cutoff for storing scalars
+// };
+
+
 STORM_contiguous_t* STORM_contig_new(size_t vector_length) {
     STORM_contiguous_t* all = (STORM_contiguous_t*)malloc(sizeof(STORM_contiguous_t));
     if (all == NULL) return NULL;
     all->data = NULL;
+    all->scalar = NULL;
+    all->n_scalar = NULL;
     all->bitmaps = NULL;
     all->n_data = 0;
     all->m_data = 0;
+    all->tot_scalar = 0;
+    all->m_scalar = 0;
     all->vector_length = vector_length;
     all->n_bitmaps_vector = ceil(vector_length / 64.0);
     all->alignment = STORM_get_alignment();
     all->intsec_func = STORM_get_intersect_count_func(all->n_bitmaps_vector);
+    all->scalar_cutoff = 100;
     return all;
 }
 
@@ -973,35 +1001,77 @@ void STORM_contig_free(STORM_contiguous_t* bitmap) {
     // }
     STORM_aligned_free(bitmap->data);
     free(bitmap->bitmaps);
+    STORM_aligned_free(bitmap->scalar);
+    STORM_aligned_free(bitmap->n_scalar);
 }
 
 int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const uint32_t n_values) {
     if (bitmap == NULL) return -1;
     if (values == NULL) return -2;
-    if (n_values == 0) return 0;
+    if (n_values == 0)  return 0;
 
+    // If scalar is not set then allocate some memory
+    if (bitmap->scalar == NULL) {
+        bitmap->m_scalar   = 512*32;
+        bitmap->tot_scalar = 0;
+        bitmap->scalar     = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_scalar*sizeof(uint32_t));
+    }
+
+    // If data is not set then allocate some memory
+    // Coupled with n_scalar through m_data
     if (bitmap->data == NULL) {
-        bitmap->m_data = 512;
-        bitmap->data = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
+        bitmap->m_data   = 512;
+        bitmap->data     = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
+        bitmap->n_scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_data*sizeof(uint32_t));
         memset(bitmap->data, 0, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
         bitmap->bitmaps = (STORM_contiguous_bitmap_t*)malloc(bitmap->m_data*sizeof(STORM_contiguous_bitmap_t));
         for (int i = 0; i < bitmap->m_data; ++i) {
-            bitmap->bitmaps[i].data = &bitmap->data[bitmap->n_bitmaps_vector*i];
+            bitmap->bitmaps[i].data     = &bitmap->data[bitmap->n_bitmaps_vector*i];
+            bitmap->bitmaps[i].scalar   = NULL;
+            bitmap->bitmaps[i].n_scalar = 0;
         }
     }
 
+    // If number of added values plus current values exceeds the allocated
+    // number then allocate more memory.
+    if (bitmap->tot_scalar + n_values >= bitmap->m_scalar) {
+        uint32_t add = 5*n_values < 65535 ? 65535 : 5*n_values;
+        // printf("resizing scalar: %u/%u->%u\n",bitmap->tot_scalar,bitmap->m_scalar,bitmap->m_scalar+add);
+        bitmap->m_scalar += add;
+        uint32_t* old = bitmap->scalar;
+        bitmap->scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_scalar*sizeof(uint32_t));
+        memcpy(bitmap->scalar, old, bitmap->tot_scalar);
+        STORM_aligned_free(old);
+        // Update pointers.
+        for (int i = 0, j = 0; i < bitmap->n_data; ++i) {
+            bitmap->bitmaps[i].scalar = &bitmap->scalar[j];
+            j += bitmap->n_scalar[j];
+        }
+    }
+
+    // If data needs resizing we will:
+    //   resize data and n_scalar
+    //   update pointer references in bitmapsto bitmaps->data, and bitmaps->n_scalar, and bitmaps->scalar
     if (bitmap->n_data >= bitmap->m_data) {
         // printf("realloc %u->%u\n",bitmap->m_data,bitmap->m_data+512);
         uint64_t* old = bitmap->data;
+        uint32_t* old_n_scalar = bitmap->n_scalar;
         bitmap->m_data += 512;
-        bitmap->data = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
+        bitmap->data     = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
+        bitmap->n_scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_data*sizeof(uint32_t));
         // memset(bitmap->data, 0, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
+        memcpy(bitmap->n_scalar, old_n_scalar, bitmap->n_data*sizeof(uint32_t));
         memcpy(bitmap->data, old, bitmap->n_bitmaps_vector*bitmap->n_data*sizeof(uint64_t));
-        memset(&bitmap->data[bitmap->n_bitmaps_vector*bitmap->n_data], 0, (bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t)) - (bitmap->n_bitmaps_vector*bitmap->n_data*sizeof(uint64_t)));
+        memset(&bitmap->data[bitmap->n_bitmaps_vector*bitmap->n_data], 0, 
+                (bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t)) - (bitmap->n_bitmaps_vector*bitmap->n_data*sizeof(uint64_t)));
         STORM_aligned_free(old);
+        STORM_aligned_free(old_n_scalar);
         bitmap->bitmaps = (STORM_contiguous_bitmap_t*)realloc(bitmap->bitmaps, bitmap->m_data*sizeof(STORM_contiguous_bitmap_t));
-        for (int i = 0; i < bitmap->m_data; ++i) {
-            bitmap->bitmaps[i].data = &bitmap->data[bitmap->n_bitmaps_vector*i];
+        for (int i = 0, j = 0; i < bitmap->m_data; ++i) {
+            bitmap->bitmaps[i].data     = &bitmap->data[bitmap->n_bitmaps_vector*i];
+            bitmap->bitmaps[i].n_scalar = bitmap->n_scalar[i];
+            bitmap->bitmaps[i].scalar   = &bitmap->scalar[j];
+            j += bitmap->n_scalar[j];
         }
     }
 
@@ -1009,8 +1079,20 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
     for (int i = 0; i < n_values; ++i) {
         bitmap->bitmaps[bitmap->n_data].data[values[i] / 64] |= 1ULL << (values[i] % 64);
     }
-    ++bitmap->n_data;
-    // printf("after adding\n");
+
+    // Add scalar values if the total number of values does not exceed
+    // the threshold scalar_cutoff.
+    if (n_values < bitmap->scalar_cutoff) {
+        // printf("adding scalar: %u @ %u\n",n_values,bitmap->tot_scalar);
+        for (int i = 0; i < n_values; ++i) {
+            bitmap->bitmaps[bitmap->n_data].scalar[i] = values[i];
+        }
+        bitmap->tot_scalar += n_values;
+    }
+
+    // Store number of set bits (n_values)
+    bitmap->bitmaps[bitmap->n_data].n_scalar = n_values;
+    ++bitmap->n_data; // Advance data pointer
 
     return n_values;
 }
@@ -1020,6 +1102,8 @@ int STORM_contig_clear(STORM_contiguous_t* bitmap) {
     if (bitmap->data == NULL) return 0;
     memset(bitmap->data, 0, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
     bitmap->n_data = 0;
+    bitmap->tot_scalar = 0;
+    
     return 1;
 }
 

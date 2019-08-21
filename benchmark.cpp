@@ -110,7 +110,7 @@ struct bench_t {
 #include <cstring> // for memset
 #include <stdexcept>
 
-#define PERF_PRE std::vector<int> evts;       \
+#define PERF_PRE std::vector<int> evts;        \
 evts.push_back(PERF_COUNT_HW_CPU_CYCLES);      \
 evts.push_back(PERF_COUNT_HW_INSTRUCTIONS);    \
 evts.push_back(PERF_COUNT_HW_BRANCH_MISSES);   \
@@ -130,7 +130,7 @@ uint64_t n_comps = (n_variants*n_variants - n_variants) / 2; \
 bench_t b(results, n_comps * 2*n_ints_sample); \
 b.total = total; b.time_ms = time_span.count(); \
 b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
-#else
+#else // not linux
 #define PERF_PRE uint64_t cycles_before = get_cpu_cycles(); \
 std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 #define PERF_POST uint64_t cycles_after = get_cpu_cycles(); \
@@ -593,15 +593,15 @@ void benchmark_large(uint32_t n_samples, uint32_t n_variants, std::vector<uint32
         // Debug
         std::chrono::high_resolution_clock::time_point t1_blocked = std::chrono::high_resolution_clock::now();
         // uint64_t d = 0, diag = 0;
-        {
-            PERF_PRE
-            uint64_t total = STORM_pairw_intersect_cardinality(twk2);
-            PERF_POST
-            std::cout << "storm\t" << n_alts[a] << "\t" << storm_size << "\t" ;
-            b.PrintPretty();
-            // LINUX_PRINT("storm")
-            // PRINT("storm",b);
-        }
+        // {
+        //     PERF_PRE
+        //     uint64_t total = STORM_pairw_intersect_cardinality(twk2);
+        //     PERF_POST
+        //     std::cout << "storm\t" << n_alts[a] << "\t" << storm_size << "\t" ;
+        //     b.PrintPretty();
+        //     // LINUX_PRINT("storm")
+        //     // PRINT("storm",b);
+        // }
 
         {
             PERF_PRE
