@@ -18,7 +18,6 @@
 #include <roaring/roaring.h>
 #endif
 
-#include "libalgebra/libalgebra.h"
 #include "storm.h"
 // #include "classes.h"
 // #include "experimental.h"

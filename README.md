@@ -79,9 +79,80 @@ represent CPU cycles / 64-bit word equivalent if the analysis was run in uncompr
 | 5        | 0.017            | 0.029              |
 | 1        | 0.003            | 0.004              |
 
-### Compilation
+## API
 
-Compile test suite with: `cmake .; make` and run `./benchmark`.
+The interface is found in the file `storm.h`.
+
+```c
+#include "storm.h"
+
+int intcmp(const void* aa, const void* bb) {
+    const uint32_t* a = aa, *b = bb;
+    return (*a < *b) ? 0 : (*a > *b);
+}
+
+int main() {
+    uint32_t n_vectors = 10000; // number of rows
+    uint32_t n_width = 1000; // number of columns
+    uint32_t n_bits_set = 128; // number of bits set per row
+
+    STORM_t* storm = STORM_new(); // STORM model
+    STORM_contiguous_t* storm_cont = STORM_contig_new(n_width); // STORM contiguous memory
+    uint32_t* vals = malloc(n_bits_set*sizeof(uint32_t)); // array for random values
+
+    // Foreach vector (row)
+    for (int i = 0; i < n_vectors; ++i) {
+        // Generate random bits for each row
+        for (int j = 0; j < n_bits_set; ++j) {
+            vals[j] = rand() % n_width; // draw random number
+        }
+        // Input data must be sorted.
+        qsort(vals, n_bits_set, sizeof(uint32_t), intcmp);
+        
+        // Add data to either model.
+        STORM_add(storm, &vals[0], n_bits_set);
+        STORM_contig_add(storm_cont, &vals[0], n_bits_set);
+    }
+
+    uint64_t cstorm      = STORM_pairw_intersect_cardinality(storm);
+    uint64_t cstorm_cont = STORM_contig_pairw_intersect_cardinality(storm_cont);
+
+    printf("contig=%llu storm=%llu\n",cstorm_cont,cstorm);
+
+    free(vals);
+    STORM_free(storm);
+    STORM_contig_free(storm_cont);
+    return 1;
+}
+```
+
+## Compilation
+
+StormBitmaps can be compiled using the standard `cmake` workflow:
+```bash
+cmake .
+make
+```
+
+As with all `cmake` projects, you can specify the compilers you wish to use by
+adding (for example) `-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++` to the
+`cmake` command line. We tell the compiler to target the architecture of the
+build machine by using the `-march=native` flag. This can be disabled by passing
+the `-DSTORM_DISABLE_NATIVE=ON` argument to `cmake`.
+
+On Linux and MacOSX, and when running with the native compilation flag, we do
+not need to specify the target hardware instructions set. This is not the case
+on Windows where we need to set these flags:
+
+| `CMake` Flag               | Description                |
+|--------------------------|----------------------------|
+| `STORM_ENABLE_SIMD_AVX512` | Enable AVX512 instructions |
+| `STORM_ENABLE_SIMD_AVX2` | Enable AVX256 instructions |
+| `STORM_ENABLE_SIMD_SSE4_2` | Enable SSE4.2 instructions |
+
+For example, we can run `cmake -DSTORM_ENABLE_SIMD_SSE4_2="ON" .` to enable SSE4.2 instructions.
+
+and run `./benchmark`.
 
 ### Note
 
