@@ -157,7 +157,7 @@ and run `./benchmark`.
 ### Note
 
 This is a collaborative effort between Marcus D. R. Klarqvist
-([@klarqvist](https://github.com/mklarqvist/)) and Daniel Lemire
+([@mklarqvist](https://github.com/mklarqvist/)) and Daniel Lemire
 ([@lemire](https://github.com/lemire/)).
 
 ### History
