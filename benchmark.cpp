@@ -917,6 +917,20 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // }
             }
 
+            {
+                // for (int i = 0; i < block_range.size(); ++i) {
+                    PERF_PRE
+                    // Call argument subroutine pointer.
+                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont);
+                    PERF_POST
+                    std::string name = "STORM-contig-2d";
+                    // LINUX_PRINT(name.c_str())
+                    std::cout << name << "\t" << n_alts[a] << "\t" ;
+                    b.PrintPretty();
+                    // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
+                // }
+            }
+
             // {
             //     PERF_PRE
             //     uint64_t total = bcont2.intersect_cont_auto();
