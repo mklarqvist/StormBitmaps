@@ -238,7 +238,7 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
 int STORM_contig_clear(STORM_contiguous_t* bitmap);
 uint64_t STORM_contig_pairw_intersect_cardinality(STORM_contiguous_t* bitmap);
 uint64_t STORM_contig_pairw_intersect_cardinality_blocked(STORM_contiguous_t* bitmap, uint32_t bsize);
-uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t* bitmap, uint32_t bsize);
 uint64_t STORM_contig_pairw_intersect_cardinality_list(STORM_contiguous_t* bitmap);
 uint64_t STORM_contig_pairw_intersect_cardinality_blocked_list(STORM_contiguous_t* bitmap, uint32_t bsize);
 

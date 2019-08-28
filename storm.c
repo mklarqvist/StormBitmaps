@@ -758,7 +758,7 @@ int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, c
 }
 
 uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, 
-                                               const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2)
+                                                 const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
@@ -769,10 +769,10 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
     uint32_t* out = (uint32_t*)malloc(8192*sizeof(uint32_t));
 
     uint32_t ret = STORM_intersect_vector32_unsafe(bitmap1->block_ids, 
-                                                 bitmap2->block_ids, 
-                                                 bitmap1->n_bitmaps, 
-                                                 bitmap2->n_bitmaps, 
-                                                 out);
+                                                   bitmap2->block_ids, 
+                                                   bitmap1->n_bitmaps, 
+                                                   bitmap2->n_bitmaps, 
+                                                   out);
     // Retrieve optimal intersect function.
     const STORM_compute_func f = STORM_get_intersect_count_func(bitmap1->n_bitmaps);
 
@@ -788,9 +788,9 @@ uint64_t STORM_bitmap_cont_intersect_cardinality(const STORM_bitmap_cont_t* STOR
 }
 
 uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont_t* STORM_RESTRICT bitmap1, 
-                                                       const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, 
-                                                       const STORM_compute_func func, 
-                                                       uint32_t* out)
+                                                         const STORM_bitmap_cont_t* STORM_RESTRICT bitmap2, 
+                                                         const STORM_compute_func func, 
+                                                         uint32_t* out)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
@@ -878,7 +878,7 @@ uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap) {
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const STORM_compute_func f = STORM_get_intersect_count_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_compute_func f = STORM_get_intersect_count_func(65536);
 
     // printf("running for: %u vectors\n", bitmap->n_conts);
 
@@ -898,7 +898,7 @@ uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsi
     if (bitmap == NULL) return -1;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
-    const STORM_compute_func f = STORM_get_intersect_count_func(ceil(STORM_DEFAULT_BLOCK_SIZE/64.0));
+    const STORM_compute_func f = STORM_get_intersect_count_func(65536);
     
     if (bsize == 0) {
         uint64_t tot = 0;
@@ -1218,11 +1218,11 @@ uint64_t STORM_contig_pairw_intersect_cardinality_blocked(STORM_contiguous_t* bi
     return count;
 }
 
-uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t* bitmap) {
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t* bitmap, uint32_t bsize) {
     if (bitmap == NULL) return -1;
 
     uint32_t stride_s = 128;
-    uint32_t bsize = 20;
+    // uint32_t bsize = 20;
     const uint32_t lbsize = bitmap->n_bitmaps_vector / stride_s;
     const uint32_t lresidual = bitmap->n_bitmaps_vector % stride_s;
     const uint32_t start_residual = lbsize * stride_s;
@@ -1283,12 +1283,12 @@ uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t*
         // residual
         for (/**/; j < bitmap->n_data; ++j) {
             for (uint32_t k = 0; k < lbsize; ++k) {
-                for (uint32_t jj = 0; jj + 4 <= bsize; jj += 4) {
-                    count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+0].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
-                    count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+1].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
-                    count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+2].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
-                    count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+3].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
-                }
+                // for (uint32_t jj = 0; jj + 4 <= bsize; jj += 4) {
+                //     count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+0].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
+                //     count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+1].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
+                //     count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+2].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
+                //     count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj+3].data + (k*stride_s), bitmap->bitmaps[j].data + (k*stride_s), stride_s);
+                // }
                 // count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj].data + start_residual, bitmap->bitmaps[j].data + start_residual, lresidual);
                 
                 // count += (*bitmap->intsec_func)(bitmap->bitmaps[curi+jj].data, bitmap->bitmaps[j].data, bitmap->n_bitmaps_vector);

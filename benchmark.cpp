@@ -917,18 +917,20 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // }
             }
 
+            for (uint32_t kk = 5; kk < 50; ++kk) {
             {
                 // for (int i = 0; i < block_range.size(); ++i) {
                     PERF_PRE
                     // Call argument subroutine pointer.
-                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont);
+                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont, kk);
                     PERF_POST
-                    std::string name = "STORM-contig-2d";
+                    std::string name = "STORM-contig-2d-" + std::to_string(kk);
                     // LINUX_PRINT(name.c_str())
                     std::cout << name << "\t" << n_alts[a] << "\t" ;
                     b.PrintPretty();
                     // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
                 // }
+            }
             }
 
             // {
