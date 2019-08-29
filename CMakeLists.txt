@@ -83,11 +83,16 @@ endif()
 
 find_path(LM_ROARING_INCLUDE_DIR NAMES REQUIRED roaring/roaring.h)
 find_library(LM_ROARING_LIBRARY NAMES REQUIRED libroaring roaring)
+find_path(LM_HTSLIB_INCLUDE_DIR NAMES REQUIRED htslib/vcf.h)
+find_library(LM_HTSLIB_LIBRARY NAMES REQUIRED lhts libhts hts)
+
 
 message("LM_ROARING include dir = ${LM_ROARING_INCLUDE_DIR}")
 message("LM_ROARING lib = ${LM_ROARING_LIBRARY}")
+message("LM_HTSLIB_INCLUDE_DIR include dir = ${LM_HTSLIB_INCLUDE_DIR}")
+message("LM_HTSLIB_LIBRARY lib = ${LM_HTSLIB_LIBRARY}")
 
 add_executable(benchmark storm.c benchmark.cpp)
-target_link_libraries(benchmark PUBLIC ${LM_ROARING_LIBRARY})
-target_include_directories(benchmark PUBLIC ${LM_ROARING_INCLUDE_DIR} "${PROJECT_SOURCE_DIR}")
+target_link_libraries(benchmark PUBLIC ${LM_ROARING_LIBRARY} ${LM_HTSLIB_LIBRARY})
+target_include_directories(benchmark PUBLIC ${LM_ROARING_INCLUDE_DIR} ${LM_HTSLIB_INCLUDE_DIR} "${PROJECT_SOURCE_DIR}")
 message("target_include_directories = ${LM_ROARING_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}")

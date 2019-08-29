@@ -13,9 +13,14 @@
 
 #define USE_ROARING
 #define ALLOW_LINUX
+#define USE_HTSLIB
 
 #ifdef USE_ROARING
 #include <roaring/roaring.h>
+#endif
+
+#ifdef USE_HTSLIB
+#include "vcf_reader.h"
 #endif
 
 #include "storm.h"
@@ -820,10 +825,18 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
             // std::cerr << "Total integer comparisons=" << n_total_integer_cmps << std::endl;
             //
 
-            uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample*8);
+            // Optimal cache size is computed as MEMORY_LIMIT / (#bitmaps * 8)
+            uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
             optimal_b = optimal_b < 5 ? 5 : optimal_b;
 
-            const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, optimal_b }; // last one is auto
+            std::vector<uint32_t> block_range;
+            uint32_t block_step_size = 4*optimal_b > 25 ? 4*optimal_b/25 : 4*optimal_b;
+
+            for (int i = 1; i < 4*optimal_b; i += block_step_size) {
+                block_range.push_back(i);
+            }
+
+            // const std::vector<uint32_t> block_range = {3,5,10,25,50,100,200,400,600,800, optimal_b }; // last one is auto
 
 
             // Debug
@@ -840,15 +853,17 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                     // PRINT("storm",b);
                 }
 
+                // for (int i = 0; i < block_range.size(); ++i) {
                 {
                     PERF_PRE
                     uint64_t total = STORM_pairw_intersect_cardinality_blocked(twk2,0);
                     PERF_POST
                     // LINUX_PRINT("storm-blocked")
-                    std::cout << "storm-blocked\t" << n_alts[a] << "\t" ;
+                    std::cout << "storm-blocked" << "\t" << n_alts[a] << "\t" ;
                     b.PrintPretty();
                     // PRINT("storm-blocked",b);
                 }
+                // }
             }
 
             // {
@@ -917,21 +932,21 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // }
             }
 
-            for (uint32_t kk = 5; kk < 50; ++kk) {
-            {
-                // for (int i = 0; i < block_range.size(); ++i) {
+            // for (uint32_t kk = 200; kk < 500; kk += 25) {
+            // {
+                for (int i = 0; i < block_range.size(); ++i) {
                     PERF_PRE
                     // Call argument subroutine pointer.
-                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont, kk);
+                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont, block_range[i]);
                     PERF_POST
-                    std::string name = "STORM-contig-2d-" + std::to_string(kk);
+                    std::string name = "STORM-contig-2d-" + std::to_string(block_range[i]);
                     // LINUX_PRINT(name.c_str())
                     std::cout << name << "\t" << n_alts[a] << "\t" ;
                     b.PrintPretty();
                     // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
-                // }
-            }
-            }
+                }
+            // }
+            // }
 
             // {
             //     PERF_PRE
@@ -1074,6 +1089,115 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
     // }
 }
 
+int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
+    // function to get the instance.
+    std::unique_ptr<djinn::VcfReader> reader = djinn::VcfReader::FromFile(input_file);
+    
+    // If the file or stream could not be opened we exit here.
+    if (reader.get() == nullptr) {
+        std::cerr << "Could not open input handle \"" << input_file << "\"!" << std::endl;
+        return -1;
+    }
+
+    uint32_t* vals = new uint32_t[2*reader->n_samples_];
+    uint32_t n_vals;
+    STORM_contiguous_t* twk_cont = STORM_contig_new(2*reader->n_samples_);
+    uint32_t n_variants_read = 0;
+    uint32_t n_variants_loaded = 0;
+
+#ifdef USE_ROARING
+    roaring_bitmap_t** roaring = new roaring_bitmap_t*[cutoff];
+    for (int i = 0; i < cutoff; ++i) roaring[i] = roaring_bitmap_create();
+#endif
+
+
+    while (reader->Next()) {
+        // Error handling: if either bcf1_t or bcf_hdr_t pointers are NULL then
+        // a problem has occured.
+        if (reader->bcf1_   == NULL) return -2;
+        if (reader->header_ == NULL) return -3;
+
+        // Retrieve pointer to FORMAT field that holds GT data.
+        const bcf_fmt_t* fmt = bcf_get_fmt(reader->header_, reader->bcf1_, "GT");
+        if (fmt == NULL) continue;
+        ++n_variants_read;
+
+        n_vals = 0;
+        for (int i = 0; i < fmt->p_len; ++i) {
+            if (((fmt->p[i] >> 1) - 1) != 0) {
+                vals[n_vals++] = i;
+            }
+        }
+
+        if (n_vals == 0) continue;
+
+        // std::cerr << "variants=" << twk_cont->n_data << " n_vals=" << n_vals << std::endl;
+        STORM_contig_add(twk_cont, vals, n_vals);
+#ifdef USE_ROARING
+        roaring_bitmap_add_many(roaring[n_variants_loaded++], n_vals, vals);
+#endif
+
+
+
+        if (twk_cont->n_data >= cutoff) break;
+
+        // Encode from htslib Bcf encoding by passing the arguments:
+        // p: pointer to genotype data array
+        // p_len: length of data
+        // n: stride size (number of bytes per individual = base ploidy)
+        // n_allele: number of alleles
+        
+        // int ret = djn_ctx->EncodeBcf(fmt->p, fmt->p_len, fmt->n, reader->bcf1_->n_allele);
+        // assert(ret>0);
+    }
+    uint32_t n_variants = twk_cont->n_data;
+
+    uint32_t n_ints_sample = ceil((2*reader->n_samples_)/64.0);
+    uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
+    optimal_b = optimal_b < 5 ? 5 : optimal_b;
+
+    {
+        // for (int i = 0; i < block_range.size(); ++i) {
+            PERF_PRE
+            // Call argument subroutine pointer.
+            uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
+            PERF_POST
+            std::string name = "STORM-contig-" + std::to_string(optimal_b);
+            // LINUX_PRINT(name.c_str())
+            std::cout << name << "\t";
+            b.PrintPretty();
+            // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
+        // }
+    }
+
+    {
+        uint64_t roaring_bytes_used = 0;
+        for (int k = 0; k < n_variants; ++k) {
+            roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
+        }
+        // std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
+
+        uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+        roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
+
+        bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
+        // PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
+        std::string m8_2_block_name = "roaring-blocked-" + std::to_string(roaring_optimal_b);
+        std::cout << m8_2_block_name << "\t" ;
+        m8_2_block.PrintPretty();
+    }
+
+#ifdef USE_ROARING
+    for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
+    delete[] roaring;
+#endif
+    
+    delete[] vals;
+    STORM_contig_free(twk_cont);
+
+    return 1;
+}
+
 const char* usage(void) {
     return
         "\n"
@@ -1099,6 +1223,9 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
 }
 
 int main(int argc, char **argv) { 
+
+    return benchmark_hts("/home/mk819/Downloads/1kgp3_chr6_hg38_10e6.bcf", atoi(argv[1]));
+
     if (argc == 1) {
         printf("%s",usage());
         return EXIT_FAILURE;
