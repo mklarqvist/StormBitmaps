@@ -932,22 +932,6 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
                 // }
             }
 
-            // for (uint32_t kk = 200; kk < 500; kk += 25) {
-            // {
-                for (int i = 0; i < block_range.size(); ++i) {
-                    PERF_PRE
-                    // Call argument subroutine pointer.
-                    uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked_2d(twk_cont, block_range[i]);
-                    PERF_POST
-                    std::string name = "STORM-contig-2d-" + std::to_string(block_range[i]);
-                    // LINUX_PRINT(name.c_str())
-                    std::cout << name << "\t" << n_alts[a] << "\t" ;
-                    b.PrintPretty();
-                    // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
-                }
-            // }
-            // }
-
             // {
             //     PERF_PRE
             //     uint64_t total = bcont2.intersect_cont_auto();
@@ -1105,6 +1089,16 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
     uint32_t n_variants_read = 0;
     uint32_t n_variants_loaded = 0;
 
+    // debug
+    STORM_contiguous_t* twk_cont_vec = new STORM_contiguous_t[100];
+    for (int i = 0; i < 100; ++i) STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
+    STORM_contiguous_t* twk_cont_vec_tgt = &twk_cont_vec[0];
+    uint32_t n_cont_vec = 0;
+
+    STORM_contiguous_t* twk_cont_block1 = STORM_contig_new(2*reader->n_samples_);
+    STORM_contiguous_t* twk_cont_block2 = STORM_contig_new(2*reader->n_samples_);
+    STORM_contiguous_t* twk_cont_tgt = twk_cont_block1;
+
 #ifdef USE_ROARING
     roaring_bitmap_t** roaring = new roaring_bitmap_t*[cutoff];
     for (int i = 0; i < cutoff; ++i) roaring[i] = roaring_bitmap_create();
@@ -1119,8 +1113,9 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 
         // Retrieve pointer to FORMAT field that holds GT data.
         const bcf_fmt_t* fmt = bcf_get_fmt(reader->header_, reader->bcf1_, "GT");
-        if (fmt == NULL) continue;
-        ++n_variants_read;
+        if (fmt == NULL) continue; // if not found
+        if (reader->bcf1_->n_allele != 2) continue; // bi-allelic only
+        if (fmt->n != 2) continue; // diplod only
 
         n_vals = 0;
         for (int i = 0; i < fmt->p_len; ++i) {
@@ -1133,10 +1128,21 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 
         // std::cerr << "variants=" << twk_cont->n_data << " n_vals=" << n_vals << std::endl;
         STORM_contig_add(twk_cont, vals, n_vals);
+        STORM_contig_add(twk_cont_tgt, vals, n_vals);
+        STORM_contig_add(twk_cont_vec_tgt, vals, n_vals); // vec add
 #ifdef USE_ROARING
         roaring_bitmap_add_many(roaring[n_variants_loaded++], n_vals, vals);
 #endif
 
+        ++n_variants_read;
+
+        if (n_variants_read == 250000) {
+            ++n_cont_vec;
+            twk_cont_vec_tgt = &twk_cont_vec[n_cont_vec];
+            n_variants_read = 0;
+        }
+        
+        if (twk_cont->n_data >= 50000) twk_cont_tgt = twk_cont_block2;
 
 
         if (twk_cont->n_data >= cutoff) break;
@@ -1146,11 +1152,9 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
         // p_len: length of data
         // n: stride size (number of bytes per individual = base ploidy)
         // n_allele: number of alleles
-        
-        // int ret = djn_ctx->EncodeBcf(fmt->p, fmt->p_len, fmt->n, reader->bcf1_->n_allele);
-        // assert(ret>0);
     }
     uint32_t n_variants = twk_cont->n_data;
+    std::cerr << "Number of blocks=" << n_cont_vec << " for variants=" << n_variants << std::endl;
 
     uint32_t n_ints_sample = ceil((2*reader->n_samples_)/64.0);
     uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
@@ -1170,21 +1174,65 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
         // }
     }
 
+    // {
+    //     uint64_t roaring_bytes_used = 0;
+    //     for (int k = 0; k < n_variants; ++k) {
+    //         roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
+    //     }
+    //     // std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
+
+    //     uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
+    //     roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
+
+    //     bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
+    //     // PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
+    //     std::string m8_2_block_name = "roaring-blocked-" + std::to_string(roaring_optimal_b);
+    //     std::cout << m8_2_block_name << "\t" ;
+    //     m8_2_block.PrintPretty();
+    // }
+
+    // for (int i = 10; i < 800; i += 10) {
+    //     PERF_PRE
+    //      uint64_t total = STORM_contig_pairw_sq_intersect_cardinality_blocked(twk_cont_block1, twk_cont_block2, optimal_b >> 1);
+    //     unified.end(results); 
+    //     std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now(); 
+    //     auto time_span = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1); 
+    //     uint64_t n_comps = twk_cont_block1->n_data * twk_cont_block2->n_data; 
+    //     bench_t b(results, n_comps * 2*n_ints_sample); 
+    //     b.total = total; 
+    //     b.time_ms = time_span.count(); 
+    //     b.throughput = (( ( n_comps * 2*n_ints_sample ) * sizeof(uint64_t)) / (1024*1024.0)) / (b.time_ms / 1000.0);
+        
+    //     std::string name = "STORM-contig-parts-" + std::to_string(i);
+    //     // LINUX_PRINT(name.c_str())
+    //     std::cout << name << "\t";
+    //     b.PrintPretty();
+    // }
+
     {
-        uint64_t roaring_bytes_used = 0;
-        for (int k = 0; k < n_variants; ++k) {
-            roaring_bytes_used += roaring_bitmap_portable_size_in_bytes(roaring[k]);
-        }
-        // std::cerr << "[MEMORY][ROARING][" << n_alts[a] << "] Memory for Roaring=" << roaring_bytes_used << "b" << std::endl;
+        std::cerr << "test: " << twk_cont_block1->n_data << " and " << twk_cont_block2->n_data << std::endl;
+        PERF_PRE
+        uint64_t total_b1 = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont_block1, optimal_b);
+        uint64_t total_b2 = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont_block2, optimal_b);
+        uint64_t total_b1b2 = STORM_contig_pairw_sq_intersect_cardinality_blocked(twk_cont_block1, twk_cont_block2, optimal_b >> 1);
+        uint64_t total = total_b1 + total_b2 + total_b1b2;
+        PERF_POST
+        std::string name = "STORM-contig-parts-" + std::to_string(optimal_b);
+        // LINUX_PRINT(name.c_str())
+        std::cout << name << "\t";
+        b.PrintPretty();
 
-        uint32_t roaring_optimal_b = STORM_CACHE_BLOCK_SIZE / (roaring_bytes_used / n_variants);
-        roaring_optimal_b = roaring_optimal_b < 5 ? 5 : roaring_optimal_b;
+        std::cerr << total_b1  << " + " << total_b2 << " + " << total_b1b2 << " = " << (total_b1 + total_b2 + total_b1b2) << std::endl;
+    }
 
-        bench_t m8_2_block = froarwrapper_blocked(n_variants, n_ints_sample, roaring, roaring_optimal_b);
-        // PRINT("roaring-blocked-" + std::to_string(roaring_optimal_b),m8_2_block);
-        std::string m8_2_block_name = "roaring-blocked-" + std::to_string(roaring_optimal_b);
-        std::cout << m8_2_block_name << "\t" ;
-        m8_2_block.PrintPretty();
+    {
+        PERF_PRE
+        uint64_t total = STORM_contig_pairw_intersect_cardinality_many2(twk_cont_vec, n_cont_vec + 1);
+        PERF_POST
+        std::string name = "STORM-contig-blocks-" + std::to_string(optimal_b);
+        // LINUX_PRINT(name.c_str())
+        std::cout << name << "\t";
+        b.PrintPretty();
     }
 
 #ifdef USE_ROARING
@@ -1194,6 +1242,12 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
     
     delete[] vals;
     STORM_contig_free(twk_cont);
+
+    // debug
+    STORM_contig_free(twk_cont_block1);
+    STORM_contig_free(twk_cont_block2);
+    for (int i = 0; i < 100; ++i) STORM_contig_free(&twk_cont_vec[i]);
+    delete[] twk_cont_vec;
 
     return 1;
 }
@@ -1224,7 +1278,7 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
 
 int main(int argc, char **argv) { 
 
-    return benchmark_hts("/home/mk819/Downloads/1kgp3_chr6_hg38_10e6.bcf", atoi(argv[1]));
+    return benchmark_hts(std::string(argv[1]), atoi(argv[2]));
 
     if (argc == 1) {
         printf("%s",usage());

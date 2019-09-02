@@ -233,14 +233,24 @@ uint64_t STORM_serialized_size(const STORM_t* bitmap);
 
 // contig
 STORM_contiguous_t* STORM_contig_new(size_t vector_length);
+void STORM_contig_init(STORM_contiguous_t* bitmap, size_t vector_length);
 void STORM_contig_free(STORM_contiguous_t* bitmap);
 int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_contig_clear(STORM_contiguous_t* bitmap);
-uint64_t STORM_contig_pairw_intersect_cardinality(STORM_contiguous_t* bitmap);
-uint64_t STORM_contig_pairw_intersect_cardinality_blocked(STORM_contiguous_t* bitmap, uint32_t bsize);
-uint64_t STORM_contig_pairw_intersect_cardinality_blocked_2d(STORM_contiguous_t* bitmap, uint32_t bsize);
-uint64_t STORM_contig_pairw_intersect_cardinality_list(STORM_contiguous_t* bitmap);
-uint64_t STORM_contig_pairw_intersect_cardinality_blocked_list(STORM_contiguous_t* bitmap, uint32_t bsize);
+// pairwise functions for diagonal
+uint64_t STORM_contig_pairw_intersect_cardinality(const STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked(const STORM_contiguous_t* bitmap, uint32_t bsize);
+uint64_t STORM_contig_pairw_intersect_cardinality_list(const STORM_contiguous_t* bitmap);
+uint64_t STORM_contig_pairw_intersect_cardinality_blocked_list(const STORM_contiguous_t* bitmap, uint32_t bsize);
+// pairwise functions for square
+uint64_t STORM_contig_pairw_sq_intersect_cardinality(const STORM_contiguous_t* bitmap1, const STORM_contiguous_t* bitmap2);
+uint64_t STORM_contig_pairw_sq_intersect_cardinality_blocked(const STORM_contiguous_t* bitmap1, const STORM_contiguous_t* bitmap2, uint32_t bsize);
+uint64_t STORM_contig_pairw_sq_intersect_cardinality_list(const STORM_contiguous_t* bitmap1, const STORM_contiguous_t* bitmap2);
+uint64_t STORM_contig_pairw_sq_intersect_cardinality_blocked_list(const STORM_contiguous_t* bitmap1, const STORM_contiguous_t* bitmap2, uint32_t bsize);
+
+// higher
+uint64_t STORM_contig_pairw_intersect_cardinality_many(STORM_contiguous_t** bitmaps, size_t n_bitmaps);
+uint64_t STORM_contig_pairw_intersect_cardinality_many2(STORM_contiguous_t* bitmaps, size_t n_bitmaps);
 
 #ifdef __cplusplus
 } /* extern "C" */
