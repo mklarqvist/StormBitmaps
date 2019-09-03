@@ -1070,7 +1070,7 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
         // printf("realloc %u->%u\n",bitmap->m_data,bitmap->m_data+512);
         uint64_t* old = bitmap->data;
         uint32_t* old_n_scalar = bitmap->n_scalar;
-        bitmap->m_data += 512;
+        bitmap->m_data += 512*32;
         bitmap->data     = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
         bitmap->n_scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_data*sizeof(uint32_t));
         memcpy(bitmap->n_scalar, old_n_scalar, bitmap->n_data*sizeof(uint32_t));
