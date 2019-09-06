@@ -1075,7 +1075,7 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
     // }
 }
 
-int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
+int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_threads = std::thread::hardware_concurrency()) {
     // function to get the instance.
     std::unique_ptr<djinn::VcfReader> reader = djinn::VcfReader::FromFile(input_file);
     
@@ -1087,15 +1087,17 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 
     uint32_t* vals = new uint32_t[2*reader->n_samples_];
     uint32_t n_vals;
-    STORM_contiguous_t* twk_cont = STORM_contig_new(2*reader->n_samples_);
+    // STORM_contiguous_t* twk_cont = STORM_contig_new(2*reader->n_samples_);
     uint32_t n_variants_read = 0;
     uint32_t n_variants_loaded = 0;
 
     // debug
-    STORM_contiguous_t* twk_cont_vec = new STORM_contiguous_t[100];
-    for (int i = 0; i < 100; ++i) STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
+    uint32_t m_vec = 100;
+    STORM_contiguous_t* twk_cont_vec = (STORM_contiguous_t*)malloc(m_vec * sizeof(STORM_contiguous_t));
+    // STORM_contiguous_t* twk_cont_vec = new STORM_contiguous_t[m_vec];
+    for (int i = 0; i < m_vec; ++i) STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
     STORM_contiguous_t* twk_cont_vec_tgt = &twk_cont_vec[0];
-    uint32_t n_cont_vec = 0;
+    uint32_t n_cont_vec = 1;
 
     // STORM_contiguous_t* twk_cont_block1 = STORM_contig_new(2*reader->n_samples_);
     // STORM_contiguous_t* twk_cont_block2 = STORM_contig_new(2*reader->n_samples_);
@@ -1106,6 +1108,10 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 //     for (int i = 0; i < cutoff; ++i) roaring[i] = roaring_bitmap_create();
 // #endif
 
+    // 32 MB total memory in 2*n_threads
+    uint32_t variants_block = 8e6 / (ceil((2*reader->n_samples_) / 64.0) * 8);
+    std::cerr << "variants block=" << variants_block << std::endl;
+    uint64_t mem_used = 0;
 
     while (reader->Next()) {
         // Error handling: if either bcf1_t or bcf_hdr_t pointers are NULL then
@@ -1128,9 +1134,8 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 
         if (n_vals == 0) continue;
 
-        std::cerr << "variants=" << twk_cont->n_data << " n_vals=" << n_vals << std::endl;
         
-        STORM_contig_add(twk_cont, vals, n_vals);
+        // STORM_contig_add(twk_cont, vals, n_vals);
         // STORM_contig_add(twk_cont_tgt, vals, n_vals);
         STORM_contig_add(twk_cont_vec_tgt, vals, n_vals); // vec add
 // #ifdef USE_ROARING
@@ -1138,17 +1143,36 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 // #endif
 
         ++n_variants_read;
+        ++n_variants_loaded;
+        
 
-        if (n_variants_read == 10000) {
-            ++n_cont_vec;
-            twk_cont_vec_tgt = &twk_cont_vec[n_cont_vec];
+        if (n_variants_read == variants_block) {
+            // std::cerr << "block=" << n_cont_vec << std::endl;
+            // std::cerr << "variants=" << n_variants_read << "," << n_variants_loaded << "@" << n_cont_vec << "/" << m_vec << " n_vals=" << n_vals << std::endl;
+            // std::cerr << "scalars=" << twk_cont_vec_tgt->m_scalar << " for size=" << twk_cont_vec_tgt->m_data*sizeof(uint32_t) << std::endl;
+            // std::cerr << "bitmaps=" << twk_cont_vec_tgt->m_data << "," << twk_cont_vec_tgt->n_bitmaps_vector << " for size=" << twk_cont_vec_tgt->m_data*twk_cont_vec_tgt->n_bitmaps_vector*sizeof(uint64_t) << std::endl;
+            mem_used += twk_cont_vec_tgt->m_data*twk_cont_vec_tgt->n_bitmaps_vector*sizeof(uint64_t);
+            mem_used += twk_cont_vec_tgt->m_scalar*sizeof(uint32_t);
+            // std::cerr << "[mem] " << mem_used << std::endl;
+
+            if (n_cont_vec == m_vec) {
+                m_vec += 100;
+                // std::cerr << "reallocating: " << n_cont_vec << "->" << m_vec << std::endl;
+                twk_cont_vec = (STORM_contiguous_t*)realloc(twk_cont_vec, m_vec * sizeof(STORM_contiguous_t));
+                for (int i = n_cont_vec; i < m_vec; ++i) {
+                    STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
+                }
+            }
             n_variants_read = 0;
+            
+            twk_cont_vec_tgt = &twk_cont_vec[n_cont_vec];
+            ++n_cont_vec;
         }
         
         // if (twk_cont->n_data >= 50000) twk_cont_tgt = twk_cont_block2;
 
 
-        if (twk_cont->n_data >= cutoff) break;
+        if (n_variants_loaded >= cutoff) break;
 
         // Encode from htslib Bcf encoding by passing the arguments:
         // p: pointer to genotype data array
@@ -1156,7 +1180,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
         // n: stride size (number of bytes per individual = base ploidy)
         // n_allele: number of alleles
     }
-    uint32_t n_variants = twk_cont->n_data;
+    uint32_t n_variants = n_variants_loaded;
     std::cerr << "Number of blocks=" << n_cont_vec << " for variants=" << n_variants << std::endl;
 
     uint32_t n_ints_sample = ceil((2*reader->n_samples_)/64.0);
@@ -1168,19 +1192,28 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
         uint64_t total = 0;
         twk_ld_dynamic_balancer test;
         test.tR = n_cont_vec;
-        std::vector<twk_ld_slave> slaves(std::thread::hardware_concurrency());
+        twk_ld_progress progress;
+        progress.n_s = 2*reader->n_samples_;
+        progress.n_cmps = (uint64_t)n_variants * (n_variants - 1) / 2;
+        // std::cerr << "settings cmps=" << progress.n_cmps << std::endl;
+
+        n_threads = n_cont_vec < n_threads ? n_cont_vec : n_threads;
+        std::cerr << "spawning threads=" << n_threads << std::endl;
+        std::vector<twk_ld_slave> slaves(n_threads);
         std::vector<std::thread*> threads(slaves.size(), nullptr);
         for (int i = 0; i < slaves.size(); ++i) {
             slaves[i].optimal_b = optimal_b;
             slaves[i].ticker = &test;
             slaves[i].twk_cont_vec = twk_cont_vec;
+            slaves[i].progress = &progress;
         }
         
         uint32_t from = 0, to = 0, total_comps = 0; uint8_t type = 0;
+        progress.Start();
+
         for (int i = 0; i < slaves.size(); ++i)
             threads[i] = slaves[i].Start();
-        
-        std::chrono::high_resolution_clock::time_point t1_debug = std::chrono::high_resolution_clock::now();
+
         PERF_PRE
         // while (test.GetBlockPair(from, to, type)) {
         //     std::cerr << from << "," << to << " type=" << (int)type << " total=" << total_comps << std::endl;
@@ -1195,33 +1228,36 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
         for (int i = 0; i < slaves.size(); ++i)
             threads[i]->join();
 
-        for (int i = 0; i < slaves.size(); ++i)
+        uint64_t comps = 0;
+        for (int i = 0; i < slaves.size(); ++i) {
             total += slaves[i].count;
+            comps += slaves[i].comps;
+        }
 
         PERF_POST
-        std::chrono::high_resolution_clock::time_point t2_debug = std::chrono::high_resolution_clock::now();
-        auto time_span_debug = std::chrono::duration_cast<std::chrono::milliseconds>(t2_debug - t1_debug); 
-        std::cerr << "time span debug=" << time_span_debug.count() << std::endl;
 
         std::string name = "STORM-dist-" + std::to_string(optimal_b);
         // LINUX_PRINT(name.c_str())
         std::cout << name << "\t";
         b.PrintPretty();
+        progress.PrintFinal();
+
+        std::cerr << "comps=" << comps << std::endl;
     }
 
-    {
-        // for (int i = 0; i < block_range.size(); ++i) {
-            PERF_PRE
-            // Call argument subroutine pointer.
-            uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
-            PERF_POST
-            std::string name = "STORM-contig-" + std::to_string(optimal_b);
-            // LINUX_PRINT(name.c_str())
-            std::cout << name << "\t";
-            b.PrintPretty();
-            // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
-        // }
-    }
+    // {
+    //     // for (int i = 0; i < block_range.size(); ++i) {
+    //         PERF_PRE
+    //         // Call argument subroutine pointer.
+    //         uint64_t total = STORM_contig_pairw_intersect_cardinality_blocked(twk_cont, optimal_b);
+    //         PERF_POST
+    //         std::string name = "STORM-contig-" + std::to_string(optimal_b);
+    //         // LINUX_PRINT(name.c_str())
+    //         std::cout << name << "\t";
+    //         b.PrintPretty();
+    //         // PRINT("STORM-contig-" + std::to_string(optimal_b),b);
+    //     // }
+    // }
 
     // {
     //     uint64_t roaring_bytes_used = 0;
@@ -1274,15 +1310,15 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
     //     std::cerr << total_b1  << " + " << total_b2 << " + " << total_b1b2 << " = " << (total_b1 + total_b2 + total_b1b2) << std::endl;
     // }
 
-    {
-        PERF_PRE
-        uint64_t total = STORM_contig_pairw_intersect_cardinality_many2(twk_cont_vec, n_cont_vec + 1);
-        PERF_POST
-        std::string name = "STORM-contig-blocks-" + std::to_string(optimal_b);
-        // LINUX_PRINT(name.c_str())
-        std::cout << name << "\t";
-        b.PrintPretty();
-    }
+    // {
+    //     PERF_PRE
+    //     uint64_t total = STORM_contig_pairw_intersect_cardinality_many2(twk_cont_vec, n_cont_vec + 1);
+    //     PERF_POST
+    //     std::string name = "STORM-contig-blocks-" + std::to_string(optimal_b);
+    //     // LINUX_PRINT(name.c_str())
+    //     std::cout << name << "\t";
+    //     b.PrintPretty();
+    // }
 
 // #ifdef USE_ROARING
 //     for (int i = 0; i < n_variants; ++i) roaring_bitmap_free(roaring[i]);
@@ -1290,15 +1326,15 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000) {
 // #endif
     
     delete[] vals;
-    STORM_contig_free(twk_cont);
+    // STORM_contig_free(twk_cont);
 
     // debug
     // STORM_contig_free(twk_cont_block1);
     // STORM_contig_free(twk_cont_block2);
-    for (int i = 0; i < 100; ++i) STORM_contig_free(&twk_cont_vec[i]);
+    for (int i = 0; i < m_vec; ++i) STORM_contig_free(&twk_cont_vec[i]);
     delete[] twk_cont_vec;
 
-    return 1;
+    return EXIT_SUCCESS;
 }
 
 const char* usage(void) {
@@ -1327,7 +1363,7 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
 
 int main(int argc, char **argv) { 
 
-    return benchmark_hts(std::string(argv[1]), atoi(argv[2]));
+    return benchmark_hts(std::string(argv[1]), atoi(argv[2]), atoi(argv[3]));
 
     if (argc == 1) {
         printf("%s",usage());

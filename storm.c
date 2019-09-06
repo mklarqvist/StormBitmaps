@@ -1010,8 +1010,8 @@ void STORM_contig_init(STORM_contiguous_t* bitmap, size_t vector_length) {
 
 void STORM_contig_free(STORM_contiguous_t* bitmap) {
     if (bitmap == NULL) return;
-    // for (uint32_t i = 0; i < bitmap->m_conts; ++i) {
-    //     STORM_bitmap_cont_free(&bitmap->conts[i]);
+    // for (uint32_t i = 0; i < bitmap->m_data; ++i) {
+    //     STORM_bitmap_cont_free(&bitmap->data[i]);
     // }
     STORM_aligned_free(bitmap->data);
     free(bitmap->bitmaps);
@@ -1049,7 +1049,7 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
     // If number of added values plus current values exceeds the allocated
     // number then allocate more memory.
     if (bitmap->tot_scalar + n_values >= bitmap->m_scalar) {
-        uint32_t add = 5*n_values < 65536 ? 65536 : 5*n_values;
+        uint32_t add = n_values*1.2 < 65536 ? 65536 : n_values*1.2;
         bitmap->m_scalar += add;
         uint32_t* old = bitmap->scalar;
         bitmap->scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_scalar*sizeof(uint32_t));
@@ -1070,7 +1070,7 @@ int STORM_contig_add(STORM_contiguous_t* bitmap, const uint32_t* values, const u
         // printf("realloc %u->%u\n",bitmap->m_data,bitmap->m_data+512);
         uint64_t* old = bitmap->data;
         uint32_t* old_n_scalar = bitmap->n_scalar;
-        bitmap->m_data += 512*32;
+        bitmap->m_data += 64;
         bitmap->data     = (uint64_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->n_bitmaps_vector*bitmap->m_data*sizeof(uint64_t));
         bitmap->n_scalar = (uint32_t*)STORM_aligned_malloc(bitmap->alignment, bitmap->m_data*sizeof(uint32_t));
         memcpy(bitmap->n_scalar, old_n_scalar, bitmap->n_data*sizeof(uint32_t));
