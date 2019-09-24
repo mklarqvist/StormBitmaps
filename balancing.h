@@ -370,6 +370,14 @@ struct twk_ld_slave {
         return(thread);
     }
 
+	std::thread* StartSparse() {
+        delete thread; thread = nullptr;
+
+        thread = new std::thread(&twk_ld_slave::CalculateSparse, this);
+
+        return(thread);
+    }
+
     bool Calculate() {
         uint32_t from = 0, to = 0;
         uint8_t type = 0;
@@ -395,12 +403,40 @@ struct twk_ld_slave {
 
         std::cerr << "total=" << count << " comps=" << comps << std::endl;
     }
+	
+	bool CalculateSparse() {
+        uint32_t from = 0, to = 0;
+        uint8_t type = 0;
+
+        count = 0;
+        comps = 0;
+        while (true) {
+		    if (!ticker->GetBlockPair(from, to, type)) break;
+            ++comps;
+            // std::cerr << "tick: " << from << "," << to << " type=" << (int)type << " sizes=" << twk_vec[to].n_conts << "," << twk_vec[from].n_conts << std::endl;
+
+            if (from == to) {
+
+                count += STORM_pairw_intersect_cardinality_blocked(&twk_vec[to], 0);
+                // std::cerr << "adding: " << (twk_cont_vec[to].n_data * (twk_cont_vec[to].n_data - 1) / 2) << " for " << twk_cont_vec[to].n_data << std::endl;
+                progress->n_var += twk_vec[to].n_conts * (twk_vec[to].n_conts - 1) / 2;
+            }  else {
+                count += STORM_pairw_sq_intersect_cardinality_blocked(&twk_vec[to], &twk_vec[from], 0);
+                // std::cerr << "adding: " << (twk_cont_vec[to].n_data * twk_cont_vec[from].n_data) << " for " << twk_cont_vec[from].n_data << "*" << twk_cont_vec[from].n_data << std::endl;
+                
+                progress->n_var += twk_vec[to].n_conts * twk_vec[from].n_conts;
+            }
+        }
+
+        std::cerr << "total=" << count << " comps=" << comps << std::endl;
+    }
 
 public:
     twk_ld_dynamic_balancer* ticker;
     std::thread* thread;
     twk_ld_progress* progress;
     STORM_contiguous_t* twk_cont_vec;
+	STORM_t* twk_vec;
     uint32_t optimal_b;
     uint64_t count, comps;
 };

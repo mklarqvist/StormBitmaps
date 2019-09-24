@@ -92,17 +92,17 @@ typedef uint64_t (*STORM_compute_lfunc)(const uint64_t*, const uint64_t*,
  * @param f         Function pointer
  * @return uint64_t Returns the sum total POPCNT(A & B).
  */
-uint64_t STORM_wrapper_diag(const uint32_t n_vectors, 
-                            const uint64_t* vals, 
-                            const uint32_t n_ints, 
-                            const STORM_compute_func f);
+// uint64_t STORM_wrapper_diag(const uint32_t n_vectors, 
+//                             const uint64_t* vals, 
+//                             const uint32_t n_ints, 
+//                             const STORM_compute_func f);
 
-uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
-                              const uint64_t* STORM_RESTRICT vals1, 
-                              const uint32_t n_vectors2,
-                              const uint64_t* STORM_RESTRICT vals2, 
-                              const uint32_t n_ints, 
-                              const STORM_compute_func f);
+// uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
+//                               const uint64_t* STORM_RESTRICT vals1, 
+//                               const uint32_t n_vectors2,
+//                               const uint64_t* STORM_RESTRICT vals2, 
+//                               const uint32_t n_ints, 
+//                               const STORM_compute_func f);
 
 /**
  * This within-block function is identical to c_fwrapper but additionally
@@ -120,32 +120,32 @@ uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
  * @param cutoff 
  * @return uint64_t 
  */
-uint64_t STORM_wrapper_diag_list(const uint32_t n_vectors, 
-                                 const uint64_t* STORM_RESTRICT vals,
-                                 const uint32_t n_ints,
-                                 const uint32_t* STORM_RESTRICT n_alts,
-                                 const uint32_t* STORM_RESTRICT alt_positions,
-                                 const uint32_t* STORM_RESTRICT alt_offsets, 
-                                 const STORM_compute_func f, 
-                                 const STORM_compute_lfunc fl, 
-                                 const uint32_t cutoff);
+// uint64_t STORM_wrapper_diag_list(const uint32_t n_vectors, 
+//                                  const uint64_t* STORM_RESTRICT vals,
+//                                  const uint32_t n_ints,
+//                                  const uint32_t* STORM_RESTRICT n_alts,
+//                                  const uint32_t* STORM_RESTRICT alt_positions,
+//                                  const uint32_t* STORM_RESTRICT alt_offsets, 
+//                                  const STORM_compute_func f, 
+//                                  const STORM_compute_lfunc fl, 
+//                                  const uint32_t cutoff);
 
-uint64_t STORM_wrapper_diag_blocked(const uint32_t n_vectors, 
-                                    const uint64_t* vals, 
-                                    const uint32_t n_ints, 
-                                    const STORM_compute_func f,
-                                    uint32_t block_size);
+// uint64_t STORM_wrapper_diag_blocked(const uint32_t n_vectors, 
+//                                     const uint64_t* vals, 
+//                                     const uint32_t n_ints, 
+//                                     const STORM_compute_func f,
+//                                     uint32_t block_size);
 
-uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors, 
-                             const uint64_t* STORM_RESTRICT vals,
-                             const uint32_t n_ints,
-                             const uint32_t* STORM_RESTRICT n_alts,
-                             const uint32_t* STORM_RESTRICT alt_positions,
-                             const uint32_t* STORM_RESTRICT alt_offsets, 
-                             const STORM_compute_func f, 
-                             const STORM_compute_lfunc fl, 
-                             const uint32_t cutoff,
-                             uint32_t block_size);
+// uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors, 
+//                              const uint64_t* STORM_RESTRICT vals,
+//                              const uint32_t n_ints,
+//                              const uint32_t* STORM_RESTRICT n_alts,
+//                              const uint32_t* STORM_RESTRICT alt_positions,
+//                              const uint32_t* STORM_RESTRICT alt_offsets, 
+//                              const STORM_compute_func f, 
+//                              const STORM_compute_lfunc fl, 
+//                              const uint32_t cutoff,
+//                              uint32_t block_size);
 
 /*======   Canonical representation   ======*/
 typedef struct STORM_bitmap_s STORM_bitmap_t;
@@ -223,12 +223,13 @@ uint32_t STORM_bitmap_cont_serialized_size(STORM_bitmap_cont_t* bitmap);
 
 // container
 STORM_t* STORM_new();
+STORM_t* STORM_init(STORM_t* bitmap);
 void STORM_free(STORM_t* bitmap);
 int STORM_add(STORM_t* bitmap, const uint32_t* values, const uint32_t n_values);
 int STORM_clear(STORM_t* bitmap);
 uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap);
 uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsize);
-uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_pairw_sq_intersect_cardinality_blocked(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2, uint32_t bsize);
 uint64_t STORM_serialized_size(const STORM_t* bitmap);
 
 // contig

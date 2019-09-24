@@ -73,10 +73,10 @@ uint64_t STORM_intersect_vector16_cardinality(const uint16_t* STORM_RESTRICT v1,
 }
 
 uint64_t STORM_intersect_vector32_unsafe(const uint32_t* STORM_RESTRICT v1, 
-                                   const uint32_t* STORM_RESTRICT v2, 
-                                   const uint32_t len1, 
-                                   const uint32_t len2, 
-                                   uint32_t* STORM_RESTRICT out)
+                                         const uint32_t* STORM_RESTRICT v2, 
+                                         const uint32_t len1, 
+                                         const uint32_t len2, 
+                                         uint32_t* STORM_RESTRICT out)
 {
     if (out == NULL) return 0;
     if (v1  == NULL) return 0;
@@ -129,244 +129,244 @@ uint64_t STORM_intersect_bitmaps_scalar_list(const uint64_t* STORM_RESTRICT b1,
 }
 //
 
-uint64_t STORM_wrapper_diag(const uint32_t n_vectors, 
-                            const uint64_t* vals, 
-                            const uint32_t n_ints, 
-                            const STORM_compute_func f)
-{
-    uint32_t offset = 0;
-    uint32_t inner_offset = 0;
-    uint64_t total = 0;
+// uint64_t STORM_wrapper_diag(const uint32_t n_vectors, 
+//                             const uint64_t* vals, 
+//                             const uint32_t n_ints, 
+//                             const STORM_compute_func f)
+// {
+//     uint32_t offset = 0;
+//     uint32_t inner_offset = 0;
+//     uint64_t total = 0;
     
-    for (int i = 0; i < n_vectors; ++i) {
-        inner_offset = offset + n_ints;
-        for (int j = i + 1; j < n_vectors; ++j, inner_offset += n_ints) {
-            total += (*f)(&vals[offset], &vals[inner_offset], n_ints);
-        }
-        offset += n_ints;
-    }
+//     for (int i = 0; i < n_vectors; ++i) {
+//         inner_offset = offset + n_ints;
+//         for (int j = i + 1; j < n_vectors; ++j, inner_offset += n_ints) {
+//             total += (*f)(&vals[offset], &vals[inner_offset], n_ints);
+//         }
+//         offset += n_ints;
+//     }
 
-    return total;
-}
+//     return total;
+// }
 
 
-uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
-                              const uint64_t* STORM_RESTRICT vals1, 
-                              const uint32_t n_vectors2,
-                              const uint64_t* STORM_RESTRICT vals2, 
-                              const uint32_t n_ints, 
-                              const STORM_compute_func f)
-{
-    uint32_t offset1 = 0;
-    uint32_t offset2 = 0;
-    uint64_t total   = 0;
+// uint64_t STORM_wrapper_square(const uint32_t n_vectors1,
+//                               const uint64_t* STORM_RESTRICT vals1, 
+//                               const uint32_t n_vectors2,
+//                               const uint64_t* STORM_RESTRICT vals2, 
+//                               const uint32_t n_ints, 
+//                               const STORM_compute_func f)
+// {
+//     uint32_t offset1 = 0;
+//     uint32_t offset2 = 0;
+//     uint64_t total   = 0;
     
-    for (int i = 0; i < n_vectors1; ++i, offset1 += n_ints) {
-        for (int j = 0; j < n_vectors2; ++j, offset2 += n_ints) {
-            total += (*f)(&vals1[offset1], &vals2[offset2], n_ints);
-        }
-    }
+//     for (int i = 0; i < n_vectors1; ++i, offset1 += n_ints) {
+//         for (int j = 0; j < n_vectors2; ++j, offset2 += n_ints) {
+//             total += (*f)(&vals1[offset1], &vals2[offset2], n_ints);
+//         }
+//     }
 
-    return total;
-}
+//     return total;
+// }
 
-/**
- * This within-block function is identical to c_fwrapper but additionally
- * make use of an auxilliary positional vector to accelerate compute in
- * the sparse case. This function is mostly used as reference.
- * 
- * @param n_vectors 
- * @param vals 
- * @param n_ints 
- * @param n_alts 
- * @param alt_positions 
- * @param alt_offsets 
- * @param f 
- * @param fl 
- * @param cutoff 
- * @return uint64_t 
- */
+// /**
+//  * This within-block function is identical to c_fwrapper but additionally
+//  * make use of an auxilliary positional vector to accelerate compute in
+//  * the sparse case. This function is mostly used as reference.
+//  * 
+//  * @param n_vectors 
+//  * @param vals 
+//  * @param n_ints 
+//  * @param n_alts 
+//  * @param alt_positions 
+//  * @param alt_offsets 
+//  * @param f 
+//  * @param fl 
+//  * @param cutoff 
+//  * @return uint64_t 
+//  */
 
-uint64_t STORM_wrapper_diag_list(const uint32_t n_vectors, 
-                                 const uint64_t* STORM_RESTRICT vals,
-                                 const uint32_t n_ints,
-                                 const uint32_t* STORM_RESTRICT n_alts,
-                                 const uint32_t* STORM_RESTRICT alt_positions,
-                                 const uint32_t* STORM_RESTRICT alt_offsets, 
-                                 const STORM_compute_func f, 
-                                 const STORM_compute_lfunc fl, 
-                                 const uint32_t cutoff)
-{
-    uint64_t offset1 = 0;
-    uint64_t offset2 = n_ints;
-    uint64_t count = 0;
+// uint64_t STORM_wrapper_diag_list(const uint32_t n_vectors, 
+//                                  const uint64_t* STORM_RESTRICT vals,
+//                                  const uint32_t n_ints,
+//                                  const uint32_t* STORM_RESTRICT n_alts,
+//                                  const uint32_t* STORM_RESTRICT alt_positions,
+//                                  const uint32_t* STORM_RESTRICT alt_offsets, 
+//                                  const STORM_compute_func f, 
+//                                  const STORM_compute_lfunc fl, 
+//                                  const uint32_t cutoff)
+// {
+//     uint64_t offset1 = 0;
+//     uint64_t offset2 = n_ints;
+//     uint64_t count = 0;
 
-    for (int i = 0; i < n_vectors; ++i, offset1 += n_ints) {
-        offset2 = offset1 + n_ints;
-        for (int j = i+1; j < n_vectors; ++j, offset2 += n_ints) {
-            if (n_alts[i] <= cutoff || n_alts[j] <= cutoff) {
-                count += (*fl)(&vals[offset1], 
-                               &vals[offset2], 
-                               &alt_positions[alt_offsets[i]], 
-                               &alt_positions[alt_offsets[j]], 
-                               n_alts[i], n_alts[j]);
-            } else {
-                count += (*f)(&vals[offset1], &vals[offset2], n_ints);
-            }
-        }
-    }
-    return count;
-}
-
-
-uint64_t STORM_wrapper_diag_blocked(const uint32_t n_vectors, 
-                                    const uint64_t* vals, 
-                                    const uint32_t n_ints, 
-                                    const STORM_compute_func f,
-                                    uint32_t block_size)
-{
-    uint64_t total = 0;
-
-    block_size = (block_size == 0 ? 3 : block_size);
-    const uint32_t n_blocks1 = n_vectors / block_size;
-    const uint32_t n_blocks2 = n_vectors / block_size;
-
-    uint32_t i  = 0;
-    uint32_t tt = 0;
-    for (/**/; i + block_size <= n_vectors; i += block_size) {
-        // diagonal component
-        uint32_t left = i*n_ints;
-        uint32_t right = 0;
-        for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
-            right = left + n_ints;
-            for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
-                total += (*f)(&vals[left], &vals[right], n_ints);
-            }
-        }
-
-        // square component
-        uint32_t curi = i;
-        uint32_t j = curi + block_size;
-        for (/**/; j + block_size <= n_vectors; j += block_size) {
-            left = curi*n_ints;
-            for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
-                right = j*n_ints;
-                for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
-                    total += (*f)(&vals[left], &vals[right], n_ints);
-                }
-            }
-        }
-
-        // residual
-        right = j*n_ints;
-        for (/**/; j < n_vectors; ++j, right += n_ints) {
-            left = curi*n_ints;
-            for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
-                total += (*f)(&vals[left], &vals[right], n_ints);
-            }
-        }
-    }
-    // residual tail
-    uint32_t left = i*n_ints;
-    for (/**/; i < n_vectors; ++i, left += n_ints) {
-        uint32_t right = left + n_ints;
-        for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
-            total += (*f)(&vals[left], &vals[right], n_ints);
-        }
-    }
-
-    return total;
-}
+//     for (int i = 0; i < n_vectors; ++i, offset1 += n_ints) {
+//         offset2 = offset1 + n_ints;
+//         for (int j = i+1; j < n_vectors; ++j, offset2 += n_ints) {
+//             if (n_alts[i] <= cutoff || n_alts[j] <= cutoff) {
+//                 count += (*fl)(&vals[offset1], 
+//                                &vals[offset2], 
+//                                &alt_positions[alt_offsets[i]], 
+//                                &alt_positions[alt_offsets[j]], 
+//                                n_alts[i], n_alts[j]);
+//             } else {
+//                 count += (*f)(&vals[offset1], &vals[offset2], n_ints);
+//             }
+//         }
+//     }
+//     return count;
+// }
 
 
-uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors, 
-                             const uint64_t* STORM_RESTRICT vals,
-                             const uint32_t n_ints,
-                             const uint32_t* STORM_RESTRICT n_alts,
-                             const uint32_t* STORM_RESTRICT alt_positions,
-                             const uint32_t* STORM_RESTRICT alt_offsets, 
-                             const STORM_compute_func f, 
-                             const STORM_compute_lfunc fl, 
-                             const uint32_t cutoff,
-                             uint32_t block_size)
-{
-    uint64_t total = 0;
+// uint64_t STORM_wrapper_diag_blocked(const uint32_t n_vectors, 
+//                                     const uint64_t* vals, 
+//                                     const uint32_t n_ints, 
+//                                     const STORM_compute_func f,
+//                                     uint32_t block_size)
+// {
+//     uint64_t total = 0;
 
-    block_size = (block_size == 0 ? 3 : block_size);
-    const uint32_t n_blocks1 = n_vectors / block_size;
-    const uint32_t n_blocks2 = n_vectors / block_size;
+//     block_size = (block_size == 0 ? 3 : block_size);
+//     const uint32_t n_blocks1 = n_vectors / block_size;
+//     const uint32_t n_blocks2 = n_vectors / block_size;
 
-    uint32_t i  = 0;
-    uint32_t tt = 0;
+//     uint32_t i  = 0;
+//     uint32_t tt = 0;
+//     for (/**/; i + block_size <= n_vectors; i += block_size) {
+//         // diagonal component
+//         uint32_t left = i*n_ints;
+//         uint32_t right = 0;
+//         for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
+//             right = left + n_ints;
+//             for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
+//                 total += (*f)(&vals[left], &vals[right], n_ints);
+//             }
+//         }
 
-    for (/**/; i + block_size <= n_vectors; i += block_size) {
-        // diagonal component
-        uint32_t left = i*n_ints;
-        uint32_t right = 0;
-        for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
-            right = left + n_ints;
-            for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
-                if (n_alts[i+j] < cutoff || n_alts[i+jj] < cutoff) {
-                    total += (*fl)(&vals[left], &vals[right], 
-                        &alt_positions[alt_offsets[i+j]], &alt_positions[alt_offsets[i+jj]], 
-                        n_alts[i+j], n_alts[i+jj]);
-                } else {
-                    total += (*f)(&vals[left], &vals[right], n_ints);
-                }
-            }
-        }
+//         // square component
+//         uint32_t curi = i;
+//         uint32_t j = curi + block_size;
+//         for (/**/; j + block_size <= n_vectors; j += block_size) {
+//             left = curi*n_ints;
+//             for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
+//                 right = j*n_ints;
+//                 for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
+//                     total += (*f)(&vals[left], &vals[right], n_ints);
+//                 }
+//             }
+//         }
 
-        // square component
-        uint32_t curi = i;
-        uint32_t j = curi + block_size;
-        for (/**/; j + block_size <= n_vectors; j += block_size) {
-            left = curi*n_ints;
-            for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
-                right = j*n_ints;
-                for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
-                    if (n_alts[curi+ii] < cutoff || n_alts[j+jj] < cutoff) {
-                        total += (*fl)(&vals[left], &vals[right], 
-                            &alt_positions[alt_offsets[curi+ii]], &alt_positions[alt_offsets[j+jj]], 
-                            n_alts[curi+ii], n_alts[j+jj]);
-                    } else {
-                        total += (*f)(&vals[left], &vals[right], n_ints);
-                    }
-                }
-            }
-        }
+//         // residual
+//         right = j*n_ints;
+//         for (/**/; j < n_vectors; ++j, right += n_ints) {
+//             left = curi*n_ints;
+//             for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
+//                 total += (*f)(&vals[left], &vals[right], n_ints);
+//             }
+//         }
+//     }
+//     // residual tail
+//     uint32_t left = i*n_ints;
+//     for (/**/; i < n_vectors; ++i, left += n_ints) {
+//         uint32_t right = left + n_ints;
+//         for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
+//             total += (*f)(&vals[left], &vals[right], n_ints);
+//         }
+//     }
 
-        // residual
-        right = j*n_ints;
-        for (/**/; j < n_vectors; ++j, right += n_ints) {
-            left = curi*n_ints;
-            for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
-                if (n_alts[curi+jj] < cutoff || n_alts[j] < cutoff) {
-                    total += (*fl)(&vals[left], &vals[right], 
-                        &alt_positions[alt_offsets[curi+jj]], &alt_positions[alt_offsets[j]], 
-                        n_alts[curi+jj], n_alts[j]);
-                } else {
-                    total += (*f)(&vals[left], &vals[right], n_ints);
-                }
-            }
-        }
-    }
-    // residual tail
-    uint32_t left = i*n_ints;
-    for (/**/; i < n_vectors; ++i, left += n_ints) {
-        uint32_t right = left + n_ints;
-        for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
-            if (n_alts[i] < cutoff || n_alts[j] < cutoff) {
-                total += (*fl)(&vals[left], &vals[right], 
-                    &alt_positions[alt_offsets[i]], &alt_positions[alt_offsets[j]], 
-                    n_alts[i], n_alts[j]);
-            } else {
-                total += (*f)(&vals[left], &vals[right], n_ints);
-            }
-        }
-    }
+//     return total;
+// }
 
-    return total;
-}
+
+// uint64_t STORM_wrapper_diag_list_blocked(const uint32_t n_vectors, 
+//                              const uint64_t* STORM_RESTRICT vals,
+//                              const uint32_t n_ints,
+//                              const uint32_t* STORM_RESTRICT n_alts,
+//                              const uint32_t* STORM_RESTRICT alt_positions,
+//                              const uint32_t* STORM_RESTRICT alt_offsets, 
+//                              const STORM_compute_func f, 
+//                              const STORM_compute_lfunc fl, 
+//                              const uint32_t cutoff,
+//                              uint32_t block_size)
+// {
+//     uint64_t total = 0;
+
+//     block_size = (block_size == 0 ? 3 : block_size);
+//     const uint32_t n_blocks1 = n_vectors / block_size;
+//     const uint32_t n_blocks2 = n_vectors / block_size;
+
+//     uint32_t i  = 0;
+//     uint32_t tt = 0;
+
+//     for (/**/; i + block_size <= n_vectors; i += block_size) {
+//         // diagonal component
+//         uint32_t left = i*n_ints;
+//         uint32_t right = 0;
+//         for (uint32_t j = 0; j < block_size; ++j, left += n_ints) {
+//             right = left + n_ints;
+//             for (uint32_t jj = j + 1; jj < block_size; ++jj, right += n_ints) {
+//                 if (n_alts[i+j] < cutoff || n_alts[i+jj] < cutoff) {
+//                     total += (*fl)(&vals[left], &vals[right], 
+//                         &alt_positions[alt_offsets[i+j]], &alt_positions[alt_offsets[i+jj]], 
+//                         n_alts[i+j], n_alts[i+jj]);
+//                 } else {
+//                     total += (*f)(&vals[left], &vals[right], n_ints);
+//                 }
+//             }
+//         }
+
+//         // square component
+//         uint32_t curi = i;
+//         uint32_t j = curi + block_size;
+//         for (/**/; j + block_size <= n_vectors; j += block_size) {
+//             left = curi*n_ints;
+//             for (uint32_t ii = 0; ii < block_size; ++ii, left += n_ints) {
+//                 right = j*n_ints;
+//                 for (uint32_t jj = 0; jj < block_size; ++jj, right += n_ints) {
+//                     if (n_alts[curi+ii] < cutoff || n_alts[j+jj] < cutoff) {
+//                         total += (*fl)(&vals[left], &vals[right], 
+//                             &alt_positions[alt_offsets[curi+ii]], &alt_positions[alt_offsets[j+jj]], 
+//                             n_alts[curi+ii], n_alts[j+jj]);
+//                     } else {
+//                         total += (*f)(&vals[left], &vals[right], n_ints);
+//                     }
+//                 }
+//             }
+//         }
+
+//         // residual
+//         right = j*n_ints;
+//         for (/**/; j < n_vectors; ++j, right += n_ints) {
+//             left = curi*n_ints;
+//             for (uint32_t jj = 0; jj < block_size; ++jj, left += n_ints) {
+//                 if (n_alts[curi+jj] < cutoff || n_alts[j] < cutoff) {
+//                     total += (*fl)(&vals[left], &vals[right], 
+//                         &alt_positions[alt_offsets[curi+jj]], &alt_positions[alt_offsets[j]], 
+//                         n_alts[curi+jj], n_alts[j]);
+//                 } else {
+//                     total += (*f)(&vals[left], &vals[right], n_ints);
+//                 }
+//             }
+//         }
+//     }
+//     // residual tail
+//     uint32_t left = i*n_ints;
+//     for (/**/; i < n_vectors; ++i, left += n_ints) {
+//         uint32_t right = left + n_ints;
+//         for (uint32_t j = i + 1; j < n_vectors; ++j, right += n_ints) {
+//             if (n_alts[i] < cutoff || n_alts[j] < cutoff) {
+//                 total += (*fl)(&vals[left], &vals[right], 
+//                     &alt_positions[alt_offsets[i]], &alt_positions[alt_offsets[j]], 
+//                     n_alts[i], n_alts[j]);
+//             } else {
+//                 total += (*f)(&vals[left], &vals[right], n_ints);
+//             }
+//         }
+//     }
+
+//     return total;
+// }
 //
  
 uint32_t STORM_bitmap_serialized_size(STORM_bitmap_t* bitmap) {
@@ -444,15 +444,14 @@ int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint3
     if (values == NULL) return -2;
     if (n_values == 0)  return -3;
 
-    uint32_t adjust = bitmap->id * STORM_DEFAULT_BLOCK_SIZE;
-
     if (bitmap->data == NULL) {
-        uint32_t n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
+        uint32_t n_bitmap  = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
         uint32_t alignment = STORM_get_alignment();
-        bitmap->data = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
+        bitmap->data       = (uint64_t*)STORM_aligned_malloc(alignment, n_bitmap*sizeof(uint64_t));
         memset(bitmap->data, 0, n_bitmap*sizeof(uint64_t));
     }
     bitmap->n_bitmap = ceil(STORM_DEFAULT_BLOCK_SIZE / 64.0);
+    uint32_t adjust = bitmap->id * STORM_DEFAULT_BLOCK_SIZE;
 
     for (int i = 0; i < n_values; ++i) {
         assert(adjust <= values[i]);
@@ -463,7 +462,6 @@ int STORM_bitmap_add(STORM_bitmap_t* bitmap, const uint32_t* values, const uint3
     }
     return n_values;
 }
-
  
 int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values) {
     if (bitmap == NULL) return -1;
@@ -521,27 +519,29 @@ int STORM_bitmap_add_with_scalar(STORM_bitmap_t* bitmap, const uint32_t* values,
 int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values, const uint32_t n_values) {
     if (bitmap == NULL) return -1;
     if (values == NULL) return -3;
-    if (n_values == 0) return -4;
+    if (n_values == 0)  return -4;
 
     if (bitmap->scalar == NULL) {
-        uint32_t new_m = 256 < n_values ? n_values + 256 : 256;
+        uint32_t new_m     = 256 < n_values ? n_values + 256 : 256;
         uint32_t alignment = STORM_get_alignment();
-        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
-        bitmap->m_scalar = new_m;
+        bitmap->scalar     = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        bitmap->m_scalar   = new_m;
         bitmap->own_scalar = 1;
     }
 
-    if (bitmap->n_scalar >= bitmap->m_scalar) {
-        uint32_t new_m = bitmap->n_scalar + n_values + 1024;
-        bitmap->m_scalar = new_m;
-        uint16_t* old = bitmap->scalar;
+    if (bitmap->n_scalar + n_values >= bitmap->m_scalar) {
+        // printf("resizing: %u -> %u\n", bitmap->n_scalar, bitmap->m_scalar + n_values + 1024);
+        uint32_t new_m     = bitmap->m_scalar + n_values + 1024;
+        bitmap->m_scalar   = new_m;
+        uint16_t* old      = bitmap->scalar;
         uint32_t alignment = STORM_get_alignment();
-        bitmap->scalar = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
+        bitmap->scalar     = (uint16_t*)STORM_aligned_malloc(alignment, new_m*sizeof(uint16_t));
         memcpy(bitmap->scalar, old, bitmap->n_scalar*sizeof(uint16_t));
         STORM_aligned_free(old);
         bitmap->own_scalar = 1;
     }
 
+    bitmap->n_bitmap = 0;
     uint32_t adjust = bitmap->id * STORM_DEFAULT_BLOCK_SIZE;
     bitmap->n_scalar_set = 1;
 
@@ -549,11 +549,10 @@ int STORM_bitmap_add_scalar_only(STORM_bitmap_t* bitmap, const uint32_t* values,
         assert(adjust <= values[i]);
         uint32_t v = values[i] - adjust;
         assert(v < STORM_DEFAULT_BLOCK_SIZE);
-
-        bitmap->scalar[bitmap->n_scalar] = v;
-        ++bitmap->n_scalar;
+        bitmap->scalar[bitmap->n_scalar++] = v;
         ++bitmap->n_bits_set;
     }
+
     return n_values;
 }
 
@@ -570,7 +569,7 @@ int STORM_bitmap_clear(STORM_bitmap_t* bitmap) {
 
 
 uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitmap1, 
-                                          STORM_bitmap_t* STORM_RESTRICT bitmap2)
+                                            STORM_bitmap_t* STORM_RESTRICT bitmap2)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
@@ -578,20 +577,20 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
     // printf("blocks %u and %u\n",bitmap1->id,bitmap2->id);
 
     if (bitmap1->id != bitmap2->id) 
-        return 0;
+        exit(EXIT_FAILURE);
 
     if (bitmap1->n_bitmap == 0 && bitmap2->n_bitmap == 0) {
         // scalar-scalar comparison
-       return STORM_intersect_vector16_cardinality(bitmap1->scalar, 
-                                                 bitmap2->scalar, 
-                                                 bitmap1->n_scalar, 
-                                                 bitmap2->n_scalar);
+        return STORM_intersect_vector16_cardinality(bitmap1->scalar, 
+                                                    bitmap2->scalar, 
+                                                    bitmap1->n_scalar, 
+                                                    bitmap2->n_scalar);
         
     } else if (bitmap1->n_bitmap && bitmap2->n_bitmap == 0) {
         // bitmap-scalar comparison
         uint64_t count = 0;
         for (uint32_t i = 0; i < bitmap2->n_scalar; ++i) {
-            count += bitmap1->data[bitmap2->scalar[i] / 64] & (1ULL << (bitmap2->scalar[i] % 64)) != 0;
+            count += (bitmap1->data[bitmap2->scalar[i] / 64] & (1ULL << (bitmap2->scalar[i] % 64))) != 0;
         }
         return count;
 
@@ -599,7 +598,7 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
         // scalar-bitmap comparison
         uint64_t count = 0;
         for (uint32_t i = 0; i < bitmap1->n_scalar; ++i) {
-            count += bitmap2->data[bitmap1->scalar[i] / 64] & (1ULL << (bitmap1->scalar[i] % 64)) != 0;
+            count += (bitmap2->data[bitmap1->scalar[i] / 64] & (1ULL << (bitmap1->scalar[i] % 64))) != 0;
         }
         return count;
 
@@ -616,24 +615,27 @@ uint64_t STORM_bitmap_intersect_cardinality(STORM_bitmap_t* STORM_RESTRICT bitma
 }
 
 uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT bitmap1, 
-                                               STORM_bitmap_t* STORM_RESTRICT bitmap2, 
-                                               const STORM_compute_func func)
+                                                 STORM_bitmap_t* STORM_RESTRICT bitmap2, 
+                                                 const STORM_compute_func func)
 {
     if (bitmap1 == NULL) return 0;
     if (bitmap2 == NULL) return 0;
 
     if (bitmap1->id != bitmap2->id) 
-        return 0;
+        exit(EXIT_FAILURE);
 
     if (bitmap1->n_bitmap == 0 && bitmap2->n_bitmap == 0) {
         // scalar-scalar comparison
-        return STORM_intersect_vector16_cardinality(bitmap1->scalar, bitmap2->scalar, bitmap1->n_scalar, bitmap2->n_scalar);
+        return STORM_intersect_vector16_cardinality(bitmap1->scalar, 
+                                                    bitmap2->scalar, 
+                                                    bitmap1->n_scalar, 
+                                                    bitmap2->n_scalar);
         
     } else if (bitmap1->n_bitmap && bitmap2->n_bitmap == 0) {
         // bitmap-scalar comparison
         uint64_t count = 0;
         for (uint32_t i = 0; i < bitmap2->n_scalar; ++i) {
-            count += bitmap1->data[bitmap2->scalar[i] / 64] & (1ULL << (bitmap2->scalar[i] % 64)) != 0;
+            count += (bitmap1->data[bitmap2->scalar[i] / 64] & (1ULL << (bitmap2->scalar[i] % 64))) != 0;
         }
         return count;
 
@@ -641,7 +643,7 @@ uint64_t STORM_bitmap_intersect_cardinality_func(STORM_bitmap_t* STORM_RESTRICT 
         // scalar-bitmap comparison
         uint64_t count = 0;
         for (uint32_t i = 0; i < bitmap1->n_scalar; ++i) {
-            count += bitmap2->data[bitmap1->scalar[i] / 64] & (1ULL << (bitmap1->scalar[i] % 64)) != 0;
+            count += (bitmap2->data[bitmap1->scalar[i] / 64] & (1ULL << (bitmap1->scalar[i] % 64))) != 0;
         }
         return count;
 
@@ -694,6 +696,7 @@ int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, c
     if (values == NULL) return -2;
     if (n_values == 0)  return 0; 
 
+    // Intialize memory for bitmaps, if empty.
     if (bitmap->bitmaps == NULL) {
         bitmap->m_bitmaps = 2;
         bitmap->bitmaps = (STORM_bitmap_t*)malloc(sizeof(STORM_bitmap_t) * bitmap->m_bitmaps);
@@ -702,10 +705,12 @@ int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, c
         }
     }
 
+    // Intialize memory for block identifiers, if empty.
     if (bitmap->block_ids == NULL) {
         bitmap->block_ids = (uint32_t*)malloc(sizeof(uint32_t) * bitmap->m_bitmaps);
     }
 
+    // Critical unsafe:
     // Input data must be guaranteed to be in sorted order.
     uint32_t start = 0, stop = 0;
     uint32_t target_block = values[0] / STORM_DEFAULT_BLOCK_SIZE;
@@ -734,20 +739,27 @@ int STORM_bitmap_cont_add(STORM_bitmap_cont_t* bitmap, const uint32_t* values, c
             }
             bitmap->block_ids = (uint32_t*)realloc(bitmap->block_ids, sizeof(uint32_t) * bitmap->m_bitmaps);
         }
-        // printf("Adding new bitmap for value %u to %u\n", values[i], target_block);
+        // printf("Adding new bitmap for value %u to %u\n", values[start], target_block);
 
         assert(stop != start);
         assert(stop - start > 0);
+        
+        // Last bitmap in array.
         STORM_bitmap_t* x = (STORM_bitmap_t*)&bitmap->bitmaps[bitmap->n_bitmaps];
         x->id = target_block;
-        bitmap->block_ids[bitmap->n_bitmaps] = target_block;
+        bitmap->block_ids[bitmap->n_bitmaps] = target_block; // Store block id
 
-        if (stop - start < STORM_DEFAULT_SCALAR_THRESHOLD) {
-            STORM_bitmap_add_scalar_only(x, &values[start], stop - start);
+        if ((stop - start) < STORM_DEFAULT_SCALAR_THRESHOLD) {
+            // printf("scalar: %d\n", stop - start);
+            int ret = STORM_bitmap_add_scalar_only(x, &values[start], stop - start);
+            assert(ret == n_values);
         } else {
-            STORM_bitmap_add(x, &values[start], stop - start);
+            // printf("bitmap: %d\n", stop - start);
+            int ret = STORM_bitmap_add(x, &values[start], stop - start);
+            assert(ret == n_values);
         }
         
+        assert(stop != 0);
         ++bitmap->n_bitmaps;
         bitmap->prev_inserted_value = values[stop-1];
         target_block = new_block;
@@ -792,21 +804,23 @@ uint64_t STORM_bitmap_cont_intersect_cardinality_premade(const STORM_bitmap_cont
                                                          const STORM_compute_func func, 
                                                          uint32_t* out)
 {
-    if (bitmap1 == NULL) return 0;
-    if (bitmap2 == NULL) return 0;
-    if (bitmap1->n_bitmaps == 0) return 0;
-    if (bitmap2->n_bitmaps == 0) return 0;
-    if (out == NULL) return 0;
+    // if (bitmap1 == NULL) return 0;
+    // if (bitmap2 == NULL) return 0;
+    // if (bitmap1->n_bitmaps == 0) return 0;
+    // if (bitmap2->n_bitmaps == 0) return 0;
+    // if (out == NULL) return 0;
 
     uint32_t ret = STORM_intersect_vector32_unsafe(bitmap1->block_ids, 
-                                                 bitmap2->block_ids, 
-                                                 bitmap1->n_bitmaps, 
-                                                 bitmap2->n_bitmaps, 
-                                                 out);
+                                                   bitmap2->block_ids, 
+                                                   bitmap1->n_bitmaps, 
+                                                   bitmap2->n_bitmaps, 
+                                                   out);
+
+    // assert(ret % 2 == 0);
 
     uint64_t count = 0;
     for (uint32_t i = 0; i < ret; i += 2) {
-        assert(bitmap1->bitmaps[out[i+0]].id == bitmap2->bitmaps[out[i+1]].id);
+        // assert(bitmap1->bitmaps[out[i+0]].id == bitmap2->bitmaps[out[i+1]].id);
         count += STORM_bitmap_intersect_cardinality_func(&bitmap1->bitmaps[out[i+0]], &bitmap2->bitmaps[out[i+1]], func);
     }
     
@@ -831,6 +845,14 @@ STORM_t* STORM_new() {
     all->n_conts = 0;
     all->m_conts = 0;
     return all;
+}
+
+STORM_t* STORM_init(STORM_t* bitmap) {
+    if (bitmap == NULL) return NULL;
+    bitmap->conts = NULL;
+    bitmap->n_conts = 0;
+    bitmap->m_conts = 0;
+    return bitmap;
 }
 
 void STORM_free(STORM_t* bitmap) {
@@ -861,8 +883,7 @@ int STORM_add(STORM_t* bitmap, const uint32_t* values, const uint32_t n_values) 
         }
     }
 
-    STORM_bitmap_cont_add(&bitmap->conts[bitmap->n_conts++], values, n_values);
-    return 1;
+    return STORM_bitmap_cont_add(&bitmap->conts[bitmap->n_conts++], values, n_values);
 }
 
 int STORM_clear(STORM_t* bitmap) {
@@ -875,7 +896,7 @@ int STORM_clear(STORM_t* bitmap) {
 }
 
 uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap) {
-    if (bitmap == NULL) return -1;
+    if (bitmap == NULL) return 0;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
     const STORM_compute_func f = STORM_get_intersect_count_func(65536);
@@ -895,7 +916,7 @@ uint64_t STORM_pairw_intersect_cardinality(STORM_t* bitmap) {
 }
 
 uint64_t STORM_pairw_intersect_cardinality_blocked(STORM_t* bitmap, uint32_t bsize) {
-    if (bitmap == NULL) return -1;
+    if (bitmap == NULL) return 0;
 
     uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
     const STORM_compute_func f = STORM_get_intersect_count_func(65536);
@@ -968,7 +989,61 @@ uint64_t STORM_serialized_size(const STORM_t* bitmap) {
     return tot;
 }
 
-uint64_t STORM_intersect_cardinality_square(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2);
+uint64_t STORM_pairw_sq_intersect_cardinality_blocked(const STORM_t* STORM_RESTRICT bitmap1, const STORM_t* STORM_RESTRICT bitmap2, uint32_t bsize) {
+    if (bitmap1 == NULL) return 0;
+    if (bitmap2 == NULL) return 0;
+
+    uint32_t* out = (uint32_t*)malloc(sizeof(uint32_t)*2*STORM_DEFAULT_SCALAR_THRESHOLD);
+    const STORM_compute_func f = STORM_get_intersect_count_func(65536);
+    
+    if (bsize == 0) {
+        uint64_t tot = 0;
+        for (uint32_t i = 0; i < bitmap1->n_conts; ++i) {
+            tot += STORM_bitmap_cont_serialized_size(&bitmap1->conts[i]);
+        }
+        uint32_t average_size = tot / bitmap1->n_conts;
+        bsize = ceil((double)STORM_CACHE_BLOCK_SIZE / average_size);
+        // printf("guestimating block-size to %u\n", bsize);
+    }
+    
+    // Make sure block size is not <5.
+    bsize = bsize < 5 ? 5 : bsize;
+
+    // printf("running for: %u vectors\n", bitmap->n_conts);
+
+    uint64_t count = 0;
+    uint32_t i = 0, j = 0;
+
+    for (/**/; i + bsize <= bitmap1->n_conts; i += bsize) { // block1
+        j = 0;
+        for (/**/; j + bsize <= bitmap2->n_conts; j += bsize) { // block2
+            for (uint32_t ii = 0; ii < bsize; ++ii) {
+                for (uint32_t jj = 0; jj < bsize; ++jj) {
+                    count += STORM_bitmap_cont_intersect_cardinality_premade(&bitmap1->conts[i+ii], &bitmap2->conts[j+jj], f, out);
+                    // count += (*bitmap1->intsec_func)(bitmap1->bitmaps[i+ii].data, bitmap2->bitmaps[j+jj].data, bitmap1->n_bitmaps_vector);
+                }
+            }
+        }
+        for (/**/; j < bitmap2->n_conts; ++j) { // block2
+            for (uint32_t jj = 0; jj < bsize; ++jj) {
+                count += STORM_bitmap_cont_intersect_cardinality_premade(&bitmap1->conts[i+jj], &bitmap2->conts[j], f, out);
+                // count += (*bitmap1->intsec_func)(bitmap1->bitmaps[i+jj].data, bitmap2->bitmaps[j].data, bitmap1->n_bitmaps_vector);
+            }
+        }
+    }
+
+    // residual tail
+    for (/**/; i < bitmap1->n_conts; ++i) {
+        for (j = 0; j < bitmap2->n_conts; ++j) {
+            count += STORM_bitmap_cont_intersect_cardinality_premade(&bitmap1->conts[i], &bitmap2->conts[j], f, out);
+            // count += (*bitmap1->intsec_func)(bitmap1->bitmaps[i].data, bitmap2->bitmaps[j].data, bitmap1->n_bitmaps_vector);
+        }
+    }
+
+    free(out);
+
+    return count;
+}
 
 // contig
 

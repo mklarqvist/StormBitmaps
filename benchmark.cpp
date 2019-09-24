@@ -1075,9 +1075,266 @@ void intersect_test(uint32_t n_samples, uint32_t n_variants, std::vector<uint32_
     // }
 }
 
+int benchmark_hts_contiguous(std::unique_ptr<djinn::VcfReader>& reader, const uint64_t n_samples, uint32_t cutoff = 20000, uint32_t n_threads = std::thread::hardware_concurrency()) {
+    if (reader.get() == nullptr) {
+      std::cerr << "Illegal VcfReader in benchmark_hts_contiguous!" << std::endl;
+        return -1;
+    }
+
+    std::cerr << "constructing dense" << std::endl;
+
+    uint32_t* vals = new uint32_t[n_samples];
+    uint32_t n_vals;
+    uint32_t n_variants_read   = 0;
+    uint32_t n_variants_loaded = 0;
+
+    // debug
+    uint32_t m_vec = 100;
+    STORM_contiguous_t* twk_cont_vec = (STORM_contiguous_t*)malloc(m_vec * sizeof(STORM_contiguous_t));
+    for (int i = 0; i < m_vec; ++i) STORM_contig_init(&twk_cont_vec[i], n_samples);
+    STORM_contiguous_t* twk_cont_vec_tgt = &twk_cont_vec[0];
+    uint32_t n_cont_vec = 1;
+
+    // 32 MB total memory in 2*n_threads
+    uint32_t variants_block = 8e6 / (ceil((n_samples) / 64.0) * 8);
+    std::cerr << "variants block=" << variants_block << std::endl;
+    uint64_t mem_used = 0;
+
+    while (reader->Next()) {
+        // Error handling: if either bcf1_t or bcf_hdr_t pointers are NULL then
+        // a problem has occured.
+        if (reader->bcf1_   == NULL) return -2;
+        if (reader->header_ == NULL) return -3;
+
+        // Retrieve pointer to FORMAT field that holds GT data.
+        const bcf_fmt_t* fmt = bcf_get_fmt(reader->header_, reader->bcf1_, "GT");
+        if (fmt == NULL) continue; // if not found
+        if (reader->bcf1_->n_allele != 2) continue; // bi-allelic only
+        if (fmt->n != 2) continue; // diplod only
+
+        n_vals = 0;
+        for (int i = 0; i < fmt->p_len; ++i) {
+            if (((fmt->p[i] >> 1) - 1) != 0) {
+                vals[n_vals++] = i;
+            }
+        }
+
+        if (n_vals == 0) continue;
+        STORM_contig_add(twk_cont_vec_tgt, vals, n_vals); // vec add
+
+        ++n_variants_read;
+        ++n_variants_loaded;
+
+        if (n_variants_read == variants_block) {
+            mem_used += twk_cont_vec_tgt->m_data*twk_cont_vec_tgt->n_bitmaps_vector*sizeof(uint64_t);
+            mem_used += twk_cont_vec_tgt->m_scalar*sizeof(uint32_t);
+            
+            if (n_cont_vec == m_vec) {
+                m_vec += 100;
+                twk_cont_vec = (STORM_contiguous_t*)realloc(twk_cont_vec, m_vec * sizeof(STORM_contiguous_t));
+                for (int i = n_cont_vec; i < m_vec; ++i) {
+                    STORM_contig_init(&twk_cont_vec[i], n_samples);
+                }
+            }
+            n_variants_read = 0;
+            
+            twk_cont_vec_tgt = &twk_cont_vec[n_cont_vec];
+            ++n_cont_vec;
+        }
+        
+        if (n_variants_loaded >= cutoff) break;
+    }
+    uint32_t n_variants = n_variants_loaded;
+    std::cerr << "Number of blocks=" << n_cont_vec << " for variants=" << n_variants << std::endl;
+
+    uint32_t n_ints_sample = ceil((n_samples)/64.0);
+    uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
+    optimal_b = optimal_b < 5 ? 5 : optimal_b;
+
+    {
+        uint64_t total = 0;
+        twk_ld_dynamic_balancer test;
+        test.tR = n_cont_vec;
+        twk_ld_progress progress;
+        progress.n_s = n_samples;
+        progress.n_cmps = (uint64_t)n_variants * (n_variants - 1) / 2;
+        // std::cerr << "settings cmps=" << progress.n_cmps << std::endl;
+
+        n_threads = n_cont_vec < n_threads ? n_cont_vec : n_threads;
+        std::cerr << "spawning threads=" << n_threads << std::endl;
+        std::vector<twk_ld_slave> slaves(n_threads);
+        std::vector<std::thread*> threads(slaves.size(), nullptr);
+        for (int i = 0; i < slaves.size(); ++i) {
+            slaves[i].optimal_b = optimal_b;
+            slaves[i].ticker = &test;
+            slaves[i].twk_cont_vec = twk_cont_vec;
+            slaves[i].progress = &progress;
+        }
+        
+        uint32_t from = 0, to = 0, total_comps = 0; uint8_t type = 0;
+        progress.Start();
+
+        for (int i = 0; i < slaves.size(); ++i)
+            threads[i] = slaves[i].Start();
+
+        PERF_PRE
+        for (int i = 0; i < slaves.size(); ++i)
+            threads[i]->join();
+
+        uint64_t comps = 0;
+        for (int i = 0; i < slaves.size(); ++i) {
+            total += slaves[i].count;
+            comps += slaves[i].comps;
+        }
+        PERF_POST
+
+        std::string name = "STORM-dist-" + std::to_string(optimal_b);
+        std::cout << name << "\t";
+        b.PrintPretty();
+        progress.PrintFinal();
+
+        std::cerr << "comps=" << comps << std::endl;
+    }
+    
+    delete[] vals;
+    for (int i = 0; i < m_vec; ++i) STORM_contig_free(&twk_cont_vec[i]);
+    delete[] twk_cont_vec;
+
+    return EXIT_SUCCESS;
+}
+
+int benchmark_hts_sparse(std::unique_ptr<djinn::VcfReader>& reader, const uint64_t n_samples, uint32_t cutoff = 20000, uint32_t n_threads = std::thread::hardware_concurrency()) {
+    if (reader.get() == nullptr) {
+      std::cerr << "Illegal VcfReader in benchmark_hts_sparse!" << std::endl;
+        return -1;
+    }
+
+    std::cerr << "constructing sparse" << std::endl;
+
+    uint32_t* vals = new uint32_t[n_samples+65536];
+    uint32_t n_vals;
+    uint32_t n_variants_read = 0;
+    uint32_t n_variants_loaded = 0;
+
+    // debug
+    uint32_t m_vec = 100;
+    STORM_t* twk_cont_vec = (STORM_t*)malloc(m_vec * sizeof(STORM_t));
+    for (int i = 0; i < m_vec; ++i) STORM_init(&twk_cont_vec[i]);
+    STORM_t* twk_cont_vec_tgt = &twk_cont_vec[0];
+    uint32_t n_cont_vec = 1;
+    uint64_t mem_used = 0;
+
+    while (reader->Next()) {
+        // Error handling: if either bcf1_t or bcf_hdr_t pointers are NULL then
+        // a problem has occured.
+        if (reader->bcf1_   == NULL) return -2;
+        if (reader->header_ == NULL) return -3;
+
+        // Retrieve pointer to FORMAT field that holds GT data.
+        const bcf_fmt_t* fmt = bcf_get_fmt(reader->header_, reader->bcf1_, "GT");
+        if (fmt == NULL) continue; // if not found
+        if (reader->bcf1_->n_allele != 2) continue; // bi-allelic only
+        if (fmt->n != 2) continue; // diplod only
+
+        n_vals = 0;
+        for (int i = 0; i < fmt->p_len; ++i) {
+            if (((fmt->p[i] >> 1) - 1) != 0) {
+                vals[n_vals++] = i;
+            }
+        }
+
+        if (n_vals == 0) continue;
+        STORM_add(twk_cont_vec_tgt, vals, n_vals); // vec add
+
+        ++n_variants_read;
+        ++n_variants_loaded;
+        
+
+        mem_used = STORM_serialized_size(twk_cont_vec_tgt);
+        // std::cerr << "mem used=" << mem_used << std::endl;
+
+        if (mem_used > 3000000) {
+            std::cerr << "mem_used: " << mem_used << " -> " << " variants: " << n_variants_read << "/" << n_variants_loaded << std::endl;
+            // mem_used += twk_cont_vec_tgt->m_data*twk_cont_vec_tgt->n_bitmaps_vector*sizeof(uint64_t);
+            // mem_used += twk_cont_vec_tgt->m_scalar*sizeof(uint32_t);
+            
+            if (n_cont_vec == m_vec) {
+                m_vec += 100;
+                twk_cont_vec = (STORM_t*)realloc(twk_cont_vec, m_vec * sizeof(STORM_t));
+                for (int i = n_cont_vec; i < m_vec; ++i) {
+                    STORM_init(&twk_cont_vec[i]);
+                }
+            }
+            n_variants_read = 0;
+            
+            twk_cont_vec_tgt = &twk_cont_vec[n_cont_vec];
+            ++n_cont_vec;
+        }
+        
+        if (n_variants_loaded >= cutoff) break;
+    }
+    uint32_t n_variants = n_variants_loaded;
+    std::cerr << "Number of blocks=" << n_cont_vec << " for variants=" << n_variants << std::endl;
+
+    uint32_t n_ints_sample = ceil((n_samples)/64.0);
+    // uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
+    // optimal_b = optimal_b < 5 ? 5 : optimal_b;
+
+    {
+        uint64_t total = 0;
+        twk_ld_dynamic_balancer test;
+        test.tR = n_cont_vec;
+        twk_ld_progress progress;
+        progress.n_s = n_samples;
+        progress.n_cmps = (uint64_t)n_variants * (n_variants - 1) / 2;
+        // std::cerr << "settings cmps=" << progress.n_cmps << std::endl;
+
+        n_threads = n_cont_vec < n_threads ? n_cont_vec : n_threads;
+        std::cerr << "spawning threads=" << n_threads << std::endl;
+        std::vector<twk_ld_slave> slaves(n_threads);
+        std::vector<std::thread*> threads(slaves.size(), nullptr);
+        for (int i = 0; i < slaves.size(); ++i) {
+            slaves[i].optimal_b = 5;
+            slaves[i].ticker    = &test;
+            slaves[i].twk_vec   = twk_cont_vec;
+            slaves[i].progress  = &progress;
+        }
+        
+        uint32_t from = 0, to = 0, total_comps = 0; uint8_t type = 0;
+        progress.Start();
+
+        for (int i = 0; i < slaves.size(); ++i)
+            threads[i] = slaves[i].StartSparse();
+
+        PERF_PRE
+        for (int i = 0; i < slaves.size(); ++i)
+            threads[i]->join();
+
+        uint64_t comps = 0;
+        for (int i = 0; i < slaves.size(); ++i) {
+            total += slaves[i].count;
+            comps += slaves[i].comps;
+        }
+        PERF_POST
+
+        std::string name = "STORM-dist-" + std::to_string(5);
+        std::cout << name << "\t";
+        b.PrintPretty();
+        progress.PrintFinal();
+
+        std::cerr << "comps=" << comps << std::endl;
+    }
+    
+    delete[] vals;
+    for (int i = 0; i < m_vec; ++i) STORM_free(&twk_cont_vec[i]);
+    delete[] twk_cont_vec;
+
+    return EXIT_SUCCESS;
+}
+
 int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_threads = std::thread::hardware_concurrency()) {
     // function to get the instance.
-    std::unique_ptr<djinn::VcfReader> reader = djinn::VcfReader::FromFile(input_file);
+    std::unique_ptr<djinn::VcfReader> reader = djinn::VcfReader::FromFile(input_file, std::thread::hardware_concurrency());
     
     // If the file or stream could not be opened we exit here.
     if (reader.get() == nullptr) {
@@ -1085,9 +1342,16 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
         return -1;
     }
 
-    uint32_t* vals = new uint32_t[2*reader->n_samples_];
+    const uint64_t n_samples = 2*reader->n_samples_;
+    std::cerr << "n_samples = " << n_samples << std::endl;
+    // return benchmark_hts_contiguous(reader, n_samples, cutoff, n_threads);
+    // return benchmark_hts_sparse(reader, n_samples, cutoff, n_threads);
+    if (n_samples < 250000) return benchmark_hts_contiguous(reader, n_samples, cutoff, n_threads);
+    else return benchmark_hts_sparse(reader, n_samples, cutoff, n_threads);
+
+    uint32_t* vals = new uint32_t[n_samples];
     uint32_t n_vals;
-    // STORM_contiguous_t* twk_cont = STORM_contig_new(2*reader->n_samples_);
+    // STORM_contiguous_t* twk_cont = STORM_contig_new(n_samples);
     uint32_t n_variants_read = 0;
     uint32_t n_variants_loaded = 0;
 
@@ -1095,12 +1359,16 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
     uint32_t m_vec = 100;
     STORM_contiguous_t* twk_cont_vec = (STORM_contiguous_t*)malloc(m_vec * sizeof(STORM_contiguous_t));
     // STORM_contiguous_t* twk_cont_vec = new STORM_contiguous_t[m_vec];
-    for (int i = 0; i < m_vec; ++i) STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
+    for (int i = 0; i < m_vec; ++i) STORM_contig_init(&twk_cont_vec[i], n_samples);
     STORM_contiguous_t* twk_cont_vec_tgt = &twk_cont_vec[0];
     uint32_t n_cont_vec = 1;
 
-    // STORM_contiguous_t* twk_cont_block1 = STORM_contig_new(2*reader->n_samples_);
-    // STORM_contiguous_t* twk_cont_block2 = STORM_contig_new(2*reader->n_samples_);
+    // STORM_t* twk2 = STORM_new();
+
+    // uint64_t total = STORM_pairw_intersect_cardinality(twk2);
+
+    // STORM_contiguous_t* twk_cont_block1 = STORM_contig_new(n_samples);
+    // STORM_contiguous_t* twk_cont_block2 = STORM_contig_new(n_samples);
     // STORM_contiguous_t* twk_cont_tgt = twk_cont_block1;
 
 // #ifdef USE_ROARING
@@ -1109,7 +1377,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
 // #endif
 
     // 32 MB total memory in 2*n_threads
-    uint32_t variants_block = 8e6 / (ceil((2*reader->n_samples_) / 64.0) * 8);
+    uint32_t variants_block = 8e6 / (ceil((n_samples) / 64.0) * 8);
     std::cerr << "variants block=" << variants_block << std::endl;
     uint64_t mem_used = 0;
 
@@ -1160,7 +1428,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
                 // std::cerr << "reallocating: " << n_cont_vec << "->" << m_vec << std::endl;
                 twk_cont_vec = (STORM_contiguous_t*)realloc(twk_cont_vec, m_vec * sizeof(STORM_contiguous_t));
                 for (int i = n_cont_vec; i < m_vec; ++i) {
-                    STORM_contig_init(&twk_cont_vec[i], 2*reader->n_samples_);
+                    STORM_contig_init(&twk_cont_vec[i], n_samples);
                 }
             }
             n_variants_read = 0;
@@ -1183,7 +1451,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
     uint32_t n_variants = n_variants_loaded;
     std::cerr << "Number of blocks=" << n_cont_vec << " for variants=" << n_variants << std::endl;
 
-    uint32_t n_ints_sample = ceil((2*reader->n_samples_)/64.0);
+    uint32_t n_ints_sample = ceil((n_samples)/64.0);
     uint32_t optimal_b = STORM_CACHE_BLOCK_SIZE/(n_ints_sample * 8);
     optimal_b = optimal_b < 5 ? 5 : optimal_b;
 
@@ -1193,7 +1461,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
         twk_ld_dynamic_balancer test;
         test.tR = n_cont_vec;
         twk_ld_progress progress;
-        progress.n_s = 2*reader->n_samples_;
+        progress.n_s = n_samples;
         progress.n_cmps = (uint64_t)n_variants * (n_variants - 1) / 2;
         // std::cerr << "settings cmps=" << progress.n_cmps << std::endl;
 
@@ -1326,7 +1594,7 @@ int benchmark_hts(std::string input_file, uint32_t cutoff = 20000, uint32_t n_th
 // #endif
     
     delete[] vals;
-    // STORM_contig_free(twk_cont);
+    // STORM_contig_free(twk_cont);st
 
     // debug
     // STORM_contig_free(twk_cont_block1);
@@ -1396,11 +1664,11 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        if (n_samples < 256000) {
+        // if (n_samples < 256000) {
             intersect_test(n_samples, n_vals, loads);
-        } else {
-            benchmark_large(n_samples, n_vals, loads);
-        }
+        // } else {
+        //     benchmark_large(n_samples, n_vals, loads);
+        // }
     }
     delete loads;
     return EXIT_SUCCESS;
